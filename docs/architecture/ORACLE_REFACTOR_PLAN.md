@@ -230,6 +230,8 @@ reuse the saved sections.
 
 - Rotational and vibrational section contracts, DeltaVib/alpha bridge values,
   Coriolis and Q-cent compatibility.
+- Provides standalone `xyzin` readers/writers for `#ROTATIONAL` and
+  `#VIBRATIONAL`, plus summary tooling for existing Merlino containers.
 - Migrates Merlino `geometry/rotational_pipeline.py`, `vibrational.py`,
   `vib_anh.py`, `rovib_pipeline.py`, `coriolis.py` and `qcent.py`.
 - Treats external CeDiTT/alpha-resonances payloads as imported data that enrich

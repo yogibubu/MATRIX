@@ -85,6 +85,10 @@ Scientific tools also support standalone `xyzin` mode: a sufficiently populated
 enriched XYZ can be passed directly to SEFit/MORPHEUS, GF/PED, Thermo, DVR or
 anharmonic workflows without rerunning the whole ORACLE preprocessing pipeline.
 
+```bash
+python tools/oracle_run.py rovib summarize molecule.xyzin
+```
+
 ## Workspace Contract
 
 Project workspaces use:

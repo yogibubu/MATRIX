@@ -6,12 +6,16 @@ from oracle_core import (
     MERLINO_XYZIN_ISOTOPOLOGUES_SCHEMA,
     XyzinIsotopologueRecord,
     build_run_manifest,
+    BasicSection,
     ensure_workspace,
+    parse_basic_section,
     parse_xyzin_isotopologue_records,
+    read_basic_section,
     replace_section,
     replace_xyz_block,
     section_content,
     validate_xyzin_isotopologue_records,
+    write_basic_section,
     xyzin_isotopologue_section_lines,
 )
 
@@ -26,6 +30,39 @@ def test_manifest_schema(tmp_path):
     manifest = build_run_manifest(workflow="smoke", status="completed", run_dir=tmp_path)
     assert manifest.schema_version == ORACLE_MANIFEST_SCHEMA
     assert manifest.to_dict()["workflow"] == "smoke"
+
+
+def test_basic_section_accepts_merlino_aligned_key_values():
+    section = parse_basic_section(
+        [
+            "CHARGE              -1",
+            "SPIN_MULTIPLICITY   2",
+            "POINT_GROUP         Cs",
+            "Watson Reduction A",
+            "T_K = 150.0",
+            "P_atm = 0.5",
+        ]
+    )
+
+    assert section.charge == -1
+    assert section.multiplicity == 2
+    assert section.point_group == "Cs"
+    assert section.watson_reduction == "A"
+    assert section.temperature_K == 150.0
+    assert section.pressure_atm == 0.5
+
+
+def test_basic_section_writer_preserves_other_sections(tmp_path):
+    path = tmp_path / "molecule.xyzin"
+    path.write_text("1\nh\nH 0 0 0\n\n#GIC\nSCHEMA oracle.xyz.gic.v1\n", encoding="utf-8")
+
+    write_basic_section(path, BasicSection(charge=1, multiplicity=2, point_group="C1"))
+    lines = path.read_text(encoding="utf-8").splitlines()
+    parsed = read_basic_section(path)
+
+    assert parsed.charge == 1
+    assert parsed.multiplicity == 2
+    assert section_content(lines, "GIC")[0] == "SCHEMA oracle.xyz.gic.v1"
 
 
 def test_section_replacement_preserves_other_sections(tmp_path):

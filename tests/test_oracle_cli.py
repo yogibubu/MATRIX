@@ -60,6 +60,31 @@ def test_fragments_plan_cli_calls_writer(tmp_path, monkeypatch, capsys):
     assert "Planned ORACLE fragment workflow" in capsys.readouterr().out
 
 
+def test_rovib_summarize_cli_prints_summary(tmp_path, capsys):
+    path = tmp_path / "molecule.xyzin"
+    path.write_text(
+        "\n".join(
+            [
+                "1",
+                "h",
+                "H 0 0 0",
+                "",
+                "#ROTATIONAL",
+                "A_MHz = 1000.0",
+                "B_MHz = 900.0",
+                "C_MHz = 800.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rc = oracle_run.main(["rovib", "summarize", str(path)])
+
+    assert rc == 0
+    assert "rotational: A=1000MHz B=900MHz C=800MHz" in capsys.readouterr().out
+
+
 def test_gicforge_plan_cli_calls_writer(tmp_path, monkeypatch, capsys):
     calls = {}
     path = tmp_path / "molecule.xyz"

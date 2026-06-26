@@ -39,6 +39,11 @@ def build_parser() -> argparse.ArgumentParser:
     plan = fragments_sub.add_parser("plan", help="Write the initial #FRAGMENTS section")
     plan.add_argument("xyzin", type=Path)
 
+    rovib = sub.add_parser("rovib", help="Standalone rovibrational xyzin utilities")
+    rovib_sub = rovib.add_subparsers(dest="rovib_command")
+    rovib_summary = rovib_sub.add_parser("summarize", help="Summarize rovib sections")
+    rovib_summary.add_argument("xyzin", type=Path)
+
     gicforge = sub.add_parser("gicforge", help="Plan GICForge post-validation sections")
     gicforge_sub = gicforge.add_subparsers(dest="gicforge_command")
     gic_plan = gicforge_sub.add_parser("plan", help="Write planned #GIC/#SYCART sections")
@@ -86,6 +91,11 @@ def main(argv: list[str] | None = None) -> int:
 
         write_fragment_plan_section(args.xyzin)
         print(f"Planned ORACLE fragment workflow: {args.xyzin}")
+        return 0
+    if args.command == "rovib" and args.rovib_command == "summarize":
+        from oracle_rovib import rovib_summary_lines, summarize_xyzin
+
+        print("\n".join(rovib_summary_lines(summarize_xyzin(args.xyzin))))
         return 0
     if args.command == "gicforge" and args.gicforge_command == "plan":
         from oracle_gicforge import write_gicforge_plan_sections

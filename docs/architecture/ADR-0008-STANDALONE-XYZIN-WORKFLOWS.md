@@ -40,6 +40,8 @@ xyzin/enriched XYZ
 
 Examples:
 
+- `oracle-rovib summarize` reads `#BASIC`, `#ROTATIONAL` and `#VIBRATIONAL`
+  directly from an existing `xyzin`.
 - MORPHEUS/SEFit reads geometry plus `#ISOTOPOLOGUES`, and consumes `#GIC` or
   `#SYCART` depending on coordinate model.
 - GF/PED reads frozen `#GIC` plus a normalized Cartesian Hessian adapter.
