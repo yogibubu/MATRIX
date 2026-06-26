@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from oracle_gicforge import discover_gic_corpus, summarize_gic_corpus
+
 
 CORPUS = Path(__file__).resolve().parent / "fixtures" / "test_molecules" / "molecules"
 ENV_HELPERS = Path(__file__).resolve().parents[1] / "scripts" / "oracle_env.sh"
@@ -28,6 +30,17 @@ def test_gic_regression_corpus_keeps_qm_adapter_outputs():
     assert (CORPUS / "c6h5.gjf").is_file()
 
 
+def test_gic_regression_corpus_inventory_classifies_files():
+    summary = summarize_gic_corpus(CORPUS)
+    inp_entries = discover_gic_corpus(CORPUS, suffixes=["inp"])
+
+    assert summary.total_files == 153
+    assert summary.suffix_counts[".inp"] == 126
+    assert summary.role_counts["legacy_gic_input"] == 126
+    assert len(inp_entries) == 126
+    assert {entry.role for entry in inp_entries} == {"legacy_gic_input"}
+
+
 def test_oracle_environment_helpers_define_oracle_style_commands():
     text = ENV_HELPERS.read_text(encoding="utf-8")
 
@@ -38,5 +51,7 @@ def test_oracle_environment_helpers_define_oracle_style_commands():
         "oracle-run-check()",
         "oracle-test-all()",
         "oracle-clean()",
+        "oracle-gic-corpus-list()",
+        "oracle-gic-corpus-summary()",
     ):
         assert name in text

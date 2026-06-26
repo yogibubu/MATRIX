@@ -179,8 +179,11 @@ oracle-clean() {
 }
 
 oracle-gic-corpus-list() {
-    find "$ORACLE_HOME/tests/fixtures/test_molecules/molecules" -type f -name "*.inp" \
-        | sort
+    oracle-cli gicforge corpus --format paths --suffix .inp "$@"
+}
+
+oracle-gic-corpus-summary() {
+    oracle-cli gicforge corpus "$@"
 }
 
 unset _oracle_env_file

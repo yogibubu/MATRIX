@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -64,6 +65,19 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     gic_plan.add_argument("xyzin", type=Path)
     gic_plan.add_argument("--symmetrize", action="store_true")
     gic_plan.add_argument("--sycart", action="store_true")
+    corpus = gicforge_sub.add_parser(
+        "corpus",
+        help="List or summarize the demanding GIC regression corpus",
+    )
+    corpus.add_argument("--root", type=Path, help="Override the GIC corpus root directory")
+    corpus.add_argument("--suffix", action="append", help="Filter by suffix, for example .inp or fchk")
+    corpus.add_argument("--limit", type=int, help="Limit listed records")
+    corpus.add_argument(
+        "--format",
+        choices=("summary", "paths", "json"),
+        default="summary",
+        help="Output format",
+    )
     gaussian_input = gicforge_sub.add_parser(
         "gaussian-input",
         help="Write Gaussian input from validated #GIC state",
@@ -121,6 +135,32 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
             sycart=args.sycart,
         )
         print(f"Planned GICForge workflow: {args.xyzin}")
+        return 0
+    if args.command == "gicforge" and args.gicforge_command == "corpus":
+        from oracle_gicforge import (
+            default_gic_corpus_root,
+            format_gic_corpus_paths,
+            format_gic_corpus_summary,
+            gic_corpus_records,
+            summarize_gic_corpus,
+        )
+
+        corpus_root = args.root or default_gic_corpus_root(root)
+        summary = summarize_gic_corpus(corpus_root, suffixes=args.suffix)
+        if args.format == "json":
+            payload = {
+                "root": str(summary.root),
+                "total_files": summary.total_files,
+                "suffix_counts": summary.suffix_counts,
+                "role_counts": summary.role_counts,
+                "entries": gic_corpus_records(summary, limit=args.limit),
+            }
+            print(json.dumps(payload, indent=2, sort_keys=True))
+            return 0
+        if args.format == "paths":
+            print("\n".join(format_gic_corpus_paths(summary, limit=args.limit)))
+            return 0
+        print("\n".join(format_gic_corpus_summary(summary)))
         return 0
     if args.command == "gicforge" and args.gicforge_command == "gaussian-input":
         from oracle_gicforge import write_gicforge_gaussian_input

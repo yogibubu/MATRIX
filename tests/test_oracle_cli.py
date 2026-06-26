@@ -10,6 +10,7 @@ from tools import oracle_run
 
 
 ROOT = Path(__file__).resolve().parents[1]
+GIC_CORPUS = ROOT / "tests" / "fixtures" / "test_molecules" / "molecules"
 
 
 def test_python_module_entrypoint_prints_help():
@@ -121,6 +122,38 @@ def test_gicforge_plan_cli_calls_writer(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert calls == {"target": path, "symmetrize": True, "sycart": True}
     assert "Planned GICForge workflow" in capsys.readouterr().out
+
+
+def test_gicforge_corpus_cli_prints_inventory(capsys):
+    rc = oracle_run.main(["gicforge", "corpus", "--root", str(GIC_CORPUS)])
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "TOTAL_FILES 153" in out
+    assert "SUFFIX .inp 126" in out
+    assert "ROLE legacy_gic_input 126" in out
+
+
+def test_gicforge_corpus_cli_filters_paths(capsys):
+    rc = oracle_run.main(
+        [
+            "gicforge",
+            "corpus",
+            "--root",
+            str(GIC_CORPUS),
+            "--format",
+            "paths",
+            "--suffix",
+            ".inp",
+            "--limit",
+            "2",
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert rc == 0
+    assert len(lines) == 2
+    assert all(line.endswith(".inp") for line in lines)
 
 
 def test_gicforge_gaussian_input_cli_calls_writer(tmp_path, monkeypatch, capsys):

@@ -52,6 +52,11 @@ oracle-test-all
 The demanding `test_molecules` corpus is versioned under
 `tests/fixtures/test_molecules` for GICForge/parser regressions.
 
+```bash
+python -m oracle gicforge corpus
+python -m oracle gicforge corpus --format paths --suffix .inp
+```
+
 Fragment workflows are planned against existing topology/synthon sections:
 
 ```bash
