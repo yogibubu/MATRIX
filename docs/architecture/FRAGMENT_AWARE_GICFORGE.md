@@ -43,9 +43,9 @@ the same scalar definitions used for the Gaussian symbolic export:
 - Cartesian center translations;
 - quaternion-vector components of relative fragment orientation.
 
-The first backend is finite-difference and intentionally centralized in
-`oracle-gicforge`; downstream GF, MORPHEUS and refinement tools must call this
-service instead of carrying their own fragment-coordinate derivatives.
+The backend is analytic and intentionally centralized in `oracle-gicforge`.
+Downstream GF, MORPHEUS and refinement tools must call this service instead of
+carrying their own fragment-coordinate derivatives.
 
 ## Legacy Origin
 

@@ -88,7 +88,6 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     bmatrix = gicforge_sub.add_parser("bmatrix", help="Evaluate the frozen GIC B matrix")
     bmatrix.add_argument("xyzin", type=Path)
     bmatrix.add_argument("output", type=Path, nargs="?")
-    bmatrix.add_argument("--step", type=float, default=1.0e-5)
     corpus = gicforge_sub.add_parser(
         "corpus",
         help="List or summarize the demanding GIC regression corpus",
@@ -238,10 +237,10 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
         )
 
         if args.output is None:
-            matrix = build_gic_b_matrix_from_xyzin(args.xyzin, step_angstrom=args.step)
+            matrix = build_gic_b_matrix_from_xyzin(args.xyzin)
             print("\n".join(gic_b_matrix_lines(matrix)))
             return 0
-        matrix = write_gic_b_matrix(args.xyzin, args.output, step_angstrom=args.step)
+        matrix = write_gic_b_matrix(args.xyzin, args.output)
         print(
             "Wrote GIC B matrix: "
             f"{args.output} (rows={len(matrix.rows)}, "

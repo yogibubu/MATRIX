@@ -34,9 +34,9 @@ the implementation is split into shared libraries and independent tools.
   private parser.
 - The Fortran77 backend remains intentional and should later be wrapped behind
   the same frozen `#GIC` and `#SYCART` contracts.
-- The initial ORACLE-native backend generates primitive candidates from the
-  saved topology, selects a non-redundant set by finite-difference B-matrix rank,
-  and freezes the result in the enriched XYZ file.
+- The ORACLE-native backend generates primitive candidates from the saved
+  topology, selects a non-redundant set by analytic B-matrix rank, and freezes
+  the result in the enriched XYZ file.
 - Full non-C1 symmetry adaptation and ring-specialized coordinates remain
   porting targets from the legacy Fortran/Python stack. Until those projectors
   are migrated, non-C1 `--symmetrize` requests must stop cleanly.

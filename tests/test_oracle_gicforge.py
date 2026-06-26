@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from oracle_core import section_content
@@ -10,6 +11,7 @@ from oracle_fragments import write_fragment_build_section
 from oracle_gaussian import read_gaussian_cartesian_input
 from oracle_gicforge import (
     GICForgeContractError,
+    GICPrimitive,
     build_gic_b_matrix_from_xyzin,
     build_gic_definition_from_xyzin,
     gaussian_gic_lines_from_xyzin,
@@ -18,6 +20,7 @@ from oracle_gicforge import (
     write_gicforge_gaussian_input,
     write_gicforge_plan_sections,
 )
+from oracle_gicforge.definition import _analytic_b_row, _finite_difference_b_row
 
 
 def test_gicforge_plan_requires_validation_pass(tmp_path):
@@ -239,6 +242,45 @@ def test_gicforge_build_gaussian_input_includes_readgic_block(tmp_path):
     assert "GIC003 = A(2,1,3)" in text
 
 
+def test_gicforge_native_analytic_b_rows_match_diagnostic_finite_difference():
+    coords = np.asarray(
+        [
+            [0.00, 0.00, 0.00],
+            [1.20, 0.00, 0.00],
+            [1.80, 1.05, 0.20],
+            [2.55, 1.20, 1.05],
+        ],
+        dtype=float,
+    )
+    linear_coords = np.asarray(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.001, 0.0],
+        ],
+        dtype=float,
+    )
+    primitives = [
+        (GICPrimitive("P001", "Str", "STRETCH", "R", (1, 2)), coords),
+        (GICPrimitive("P002", "Bend", "BEND", "A", (1, 2, 3)), coords),
+        (GICPrimitive("P003", "Tors", "TORSION", "D", (1, 2, 3, 4)), coords),
+        (GICPrimitive("P004", "OuPl", "OUT_OF_PLANE", "U", (2, 1, 3, 4)), coords),
+        (
+            GICPrimitive("P005", "LinB", "LINEAR_BEND", "L", (1, 2, 3), mode=-1),
+            linear_coords,
+        ),
+    ]
+
+    for primitive, primitive_coords in primitives:
+        analytic = _analytic_b_row(primitive, primitive_coords)
+        diagnostic_fd = _finite_difference_b_row(
+            primitive,
+            primitive_coords,
+            step_angstrom=1.0e-6,
+        )
+        assert np.max(np.abs(analytic - diagnostic_fd)) < 1.0e-5
+
+
 def test_gicforge_build_handles_corpus_zmatrix_case(tmp_path):
     source = (
         Path(__file__).resolve().parents[1]
@@ -329,7 +371,7 @@ def test_gicforge_b_matrix_includes_fragment_coordinate_rows(tmp_path):
     preprocess_to_enriched_xyz(source, xyzin)
     write_validation_section(xyzin)
     write_fragment_build_section(xyzin)
-    write_gicforge_build_sections(xyzin)
+    definition = write_gicforge_build_sections(xyzin)
     matrix = build_gic_b_matrix_from_xyzin(xyzin)
 
     assert matrix.coordinate_labels == tuple(f"GIC{idx:03d}" for idx in range(1, 13))
@@ -356,6 +398,14 @@ def test_gicforge_b_matrix_includes_fragment_coordinate_rows(tmp_path):
 
     lines = gic_b_matrix_lines(matrix)
     assert lines[0] == "SCHEMA oracle.gic.bmatrix.v1"
+    assert "BACKEND oracle-native-analytic-bmatrix.v1" in lines
+    assert "DERIVATIVE_MODE ANALYTIC" in lines
     assert "ROW_COUNT 12" in lines
     assert "COLUMN_COUNT 18" in lines
     assert any(line.startswith("GIC005 NAME=FCDi0001 IRREP=A VALUES=") for line in lines)
+
+    coords = np.asarray(definition.reference_coordinates_angstrom, dtype=float)
+    frot = next(primitive for primitive in definition.primitives if primitive.function == "FROT")
+    analytic = _analytic_b_row(frot, coords)
+    diagnostic_fd = _finite_difference_b_row(frot, coords, step_angstrom=1.0e-6)
+    assert np.max(np.abs(analytic - diagnostic_fd)) < 1.0e-5

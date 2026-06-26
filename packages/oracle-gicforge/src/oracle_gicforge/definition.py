@@ -19,9 +19,9 @@ from .contracts import (
 
 GIC_BACKEND = "oracle-native-primitive.v1"
 SYCART_BACKEND = "oracle-native-cartesian-nullspace.v1"
-B_MATRIX_BACKEND = "oracle-native-finite-difference-bmatrix.v1"
+B_MATRIX_BACKEND = "oracle-native-analytic-bmatrix.v1"
 RANK_TOLERANCE = 1.0e-7
-FINITE_DIFFERENCE_STEP = 1.0e-5
+DIAGNOSTIC_FINITE_DIFFERENCE_STEP = 1.0e-5
 LINEAR_ANGLE_DEGREES = 175.0
 
 
@@ -35,6 +35,8 @@ class GICPrimitive:
     mode: int = 0
     ref_atoms: tuple[int, ...] = ()
     refs: tuple[str, ...] = ()
+    frame_atoms: tuple[int, ...] = ()
+    ref_frame_atoms: tuple[int, ...] = ()
 
     def gaussian_expression(self) -> str:
         if not self.is_gaussian_native:
@@ -80,7 +82,6 @@ class GICBMatrix:
     coordinate_names: tuple[str, ...]
     irreps: tuple[str, ...]
     cartesian_columns: tuple[str, ...]
-    finite_difference_step_angstrom: float
     rows: tuple[tuple[float, ...], ...]
 
 
@@ -191,8 +192,8 @@ def gic_definition_section_lines(definition: GICDefinition) -> list[str]:
         f"CANDIDATE_COUNT {definition.candidate_count}",
         f"PRIMITIVE_COUNT {len(definition.primitives)}",
         f"GIC_COUNT {len(definition.gics)}",
-        "RANK_METHOD finite_difference_b_matrix_greedy",
-        f"FINITE_DIFFERENCE_STEP_ANGSTROM {FINITE_DIFFERENCE_STEP:.12g}",
+        "RANK_METHOD analytic_b_matrix_greedy",
+        "B_MATRIX_DERIVATIVE_MODE ANALYTIC",
         f"RANK_TOLERANCE {RANK_TOLERANCE:.12g}",
         "[PRIMITIVES]",
     ]
@@ -261,7 +262,6 @@ def build_gic_b_matrix(
     definition: GICDefinition,
     *,
     coordinates_angstrom: tuple[tuple[float, float, float], ...] | np.ndarray | None = None,
-    step_angstrom: float = FINITE_DIFFERENCE_STEP,
 ) -> GICBMatrix:
     """Evaluate the Wilson B matrix for a frozen GIC definition."""
     coords = (
@@ -271,8 +271,6 @@ def build_gic_b_matrix(
     )
     if coords.ndim != 2 or coords.shape[1] != 3:
         raise GICForgeContractError("B-matrix coordinates must have shape (natoms, 3)")
-    if not np.isfinite(step_angstrom) or step_angstrom <= 0.0:
-        raise GICForgeContractError("B-matrix finite-difference step must be positive")
     primitive_by_id = {primitive.identifier: primitive for primitive in definition.primitives}
     rows: list[tuple[float, ...]] = []
     for gic in definition.gics:
@@ -284,11 +282,7 @@ def build_gic_b_matrix(
                 raise GICForgeContractError(
                     f"unknown primitive {primitive_id!r} in frozen GIC {gic.identifier}"
                 )
-            row += float(coefficient) * _finite_difference_b_row(
-                primitive,
-                coords,
-                step_angstrom=step_angstrom,
-            )
+            row += float(coefficient) * _analytic_b_row(primitive, coords)
         if not np.all(np.isfinite(row)):
             raise GICForgeContractError(
                 f"non-finite B-matrix row for frozen GIC {gic.identifier}"
@@ -300,16 +294,11 @@ def build_gic_b_matrix(
         coordinate_names=tuple(gic.name for gic in definition.gics),
         irreps=tuple(gic.irrep for gic in definition.gics),
         cartesian_columns=_cartesian_column_labels(coords.shape[0]),
-        finite_difference_step_angstrom=float(step_angstrom),
         rows=tuple(rows),
     )
 
 
-def build_gic_b_matrix_from_xyzin(
-    path: Path,
-    *,
-    step_angstrom: float = FINITE_DIFFERENCE_STEP,
-) -> GICBMatrix:
+def build_gic_b_matrix_from_xyzin(path: Path) -> GICBMatrix:
     """Evaluate the B matrix from the frozen #GIC section of an enriched XYZ."""
     target = Path(path)
     definition = read_gic_definition_from_xyzin(target)
@@ -317,7 +306,6 @@ def build_gic_b_matrix_from_xyzin(
     return build_gic_b_matrix(
         definition,
         coordinates_angstrom=geometry.coordinates_angstrom,
-        step_angstrom=step_angstrom,
     )
 
 
@@ -366,9 +354,9 @@ def gic_b_matrix_lines(matrix: GICBMatrix) -> list[str]:
         "SCHEMA oracle.gic.bmatrix.v1",
         f"BACKEND {matrix.backend}",
         "UNITS MIXED_GIC_PER_ANGSTROM",
+        "DERIVATIVE_MODE ANALYTIC",
         f"ROW_COUNT {len(matrix.rows)}",
         f"COLUMN_COUNT {len(matrix.cartesian_columns)}",
-        f"FINITE_DIFFERENCE_STEP_ANGSTROM {matrix.finite_difference_step_angstrom:.12g}",
         "[COLUMNS]",
         " ".join(matrix.cartesian_columns) if matrix.cartesian_columns else "NONE",
         "[ROWS]",
@@ -387,13 +375,8 @@ def gic_b_matrix_lines(matrix: GICBMatrix) -> list[str]:
     return lines
 
 
-def write_gic_b_matrix(
-    path: Path,
-    output: Path,
-    *,
-    step_angstrom: float = FINITE_DIFFERENCE_STEP,
-) -> GICBMatrix:
-    matrix = build_gic_b_matrix_from_xyzin(path, step_angstrom=step_angstrom)
+def write_gic_b_matrix(path: Path, output: Path) -> GICBMatrix:
+    matrix = build_gic_b_matrix_from_xyzin(path)
     target = Path(output)
     target.write_text("\n".join(gic_b_matrix_lines(matrix)) + "\n", encoding="utf-8")
     return matrix
@@ -505,6 +488,8 @@ def _make_primitive(
     mode: int = 0,
     ref_atoms: tuple[int, ...] = (),
     refs: tuple[str, ...] = (),
+    frame_atoms: tuple[int, ...] = (),
+    ref_frame_atoms: tuple[int, ...] = (),
 ) -> GICPrimitive:
     counters[family] += 1
     prefix = {
@@ -528,6 +513,8 @@ def _make_primitive(
         mode=int(mode),
         ref_atoms=tuple(int(atom) for atom in ref_atoms),
         refs=tuple(str(ref) for ref in refs),
+        frame_atoms=tuple(int(atom) for atom in frame_atoms),
+        ref_frame_atoms=tuple(int(atom) for atom in ref_frame_atoms),
     )
 
 
@@ -544,7 +531,7 @@ def _select_ranked_primitives(
     rows: list[np.ndarray] = []
     rank = 0
     for primitive in candidates:
-        row = _finite_difference_b_row(primitive, coords)
+        row = _analytic_b_row(primitive, coords)
         norm = float(np.linalg.norm(row))
         if not np.isfinite(norm) or norm <= rank_tolerance:
             continue
@@ -561,11 +548,137 @@ def _select_ranked_primitives(
     return tuple(selected), rank
 
 
+def _analytic_b_row(primitive: GICPrimitive, coords: np.ndarray) -> np.ndarray:
+    coords = np.asarray(coords, dtype=float)
+    if primitive.function == "R":
+        return _distance_b_row(coords, primitive.atoms)
+    if primitive.function == "A":
+        return _angle_b_row(coords, primitive.atoms)
+    if primitive.function == "FC_DIST":
+        return _fragment_center_distance_b_row(coords, primitive.atoms, primitive.ref_atoms)
+    if primitive.function == "FCA_DIST":
+        return _fragment_center_atom_distance_b_row(coords, primitive.atoms, primitive.ref_atoms)
+    if primitive.function == "FTRANS":
+        return _fragment_translation_b_row(
+            coords,
+            primitive.atoms,
+            primitive.ref_atoms,
+            mode=primitive.mode,
+        )
+    return _dual_b_row(primitive, coords)
+
+
+def _distance_b_row(coords: np.ndarray, atoms: tuple[int, ...]) -> np.ndarray:
+    i, j = (atom - 1 for atom in atoms)
+    delta = coords[i] - coords[j]
+    distance = float(np.linalg.norm(delta))
+    if distance <= RANK_TOLERANCE:
+        raise FloatingPointError("zero-length distance coordinate")
+    row = np.zeros(coords.size, dtype=float)
+    unit = delta / distance
+    row[3 * i : 3 * i + 3] = unit
+    row[3 * j : 3 * j + 3] = -unit
+    return row
+
+
+def _angle_b_row(coords: np.ndarray, atoms: tuple[int, ...]) -> np.ndarray:
+    i, j, k = (atom - 1 for atom in atoms)
+    rji = coords[i] - coords[j]
+    rjk = coords[k] - coords[j]
+    dji = float(np.linalg.norm(rji))
+    djk = float(np.linalg.norm(rjk))
+    if dji <= RANK_TOLERANCE or djk <= RANK_TOLERANCE:
+        raise FloatingPointError("zero-length angle arm")
+    eji = rji / dji
+    ejk = rjk / djk
+    cosine = float(np.clip(np.dot(eji, ejk), -1.0, 1.0))
+    sine = float(np.sqrt(max(1.0 - cosine * cosine, 0.0)))
+    if sine <= RANK_TOLERANCE:
+        raise FloatingPointError("linear angle has no ordinary bend derivative")
+    gi = (cosine * eji - ejk) / (dji * sine)
+    gk = (cosine * ejk - eji) / (djk * sine)
+    row = np.zeros(coords.size, dtype=float)
+    row[3 * i : 3 * i + 3] = gi
+    row[3 * k : 3 * k + 3] = gk
+    row[3 * j : 3 * j + 3] = -(gi + gk)
+    return row
+
+
+def _fragment_center_distance_b_row(
+    coords: np.ndarray,
+    atoms: tuple[int, ...],
+    ref_atoms: tuple[int, ...],
+) -> np.ndarray:
+    center = _fragment_center(coords, atoms)
+    ref_center = _fragment_center(coords, ref_atoms)
+    delta = center - ref_center
+    distance = float(np.linalg.norm(delta))
+    if distance <= RANK_TOLERANCE:
+        raise FloatingPointError("coincident fragment centers")
+    unit = delta / distance
+    row = np.zeros(coords.size, dtype=float)
+    _accumulate_center_gradient(row, atoms, unit / len(atoms))
+    _accumulate_center_gradient(row, ref_atoms, -unit / len(ref_atoms))
+    return row
+
+
+def _fragment_center_atom_distance_b_row(
+    coords: np.ndarray,
+    atoms: tuple[int, ...],
+    ref_atoms: tuple[int, ...],
+) -> np.ndarray:
+    if len(ref_atoms) != 1:
+        raise FloatingPointError("center-atom distance needs exactly one reference atom")
+    atom = ref_atoms[0]
+    delta = _fragment_center(coords, atoms) - coords[atom - 1]
+    distance = float(np.linalg.norm(delta))
+    if distance <= RANK_TOLERANCE:
+        raise FloatingPointError("fragment center and atom are coincident")
+    unit = delta / distance
+    row = np.zeros(coords.size, dtype=float)
+    _accumulate_center_gradient(row, atoms, unit / len(atoms))
+    row[3 * (atom - 1) : 3 * atom] -= unit
+    return row
+
+
+def _fragment_translation_b_row(
+    coords: np.ndarray,
+    atoms: tuple[int, ...],
+    ref_atoms: tuple[int, ...],
+    *,
+    mode: int,
+) -> np.ndarray:
+    row = np.zeros(coords.size, dtype=float)
+    axis = np.zeros(3, dtype=float)
+    axis[mode] = 1.0
+    _accumulate_center_gradient(row, atoms, axis / len(atoms))
+    _accumulate_center_gradient(row, ref_atoms, -axis / len(ref_atoms))
+    return row
+
+
+def _accumulate_center_gradient(
+    row: np.ndarray,
+    atoms: tuple[int, ...],
+    gradient: np.ndarray,
+) -> None:
+    for atom in atoms:
+        start = 3 * (atom - 1)
+        row[start : start + 3] += gradient
+
+
+def _dual_b_row(primitive: GICPrimitive, coords: np.ndarray) -> np.ndarray:
+    dcoords = _dual_coordinates(coords)
+    value = _dual_primitive_value(primitive, dcoords, coords)
+    if not np.isfinite(value.val):
+        raise FloatingPointError("non-finite analytic derivative value")
+    return np.asarray(value.der, dtype=float)
+
+
 def _finite_difference_b_row(
     primitive: GICPrimitive,
     coords: np.ndarray,
     *,
-    step_angstrom: float = FINITE_DIFFERENCE_STEP,
+    step_angstrom: float = DIAGNOSTIC_FINITE_DIFFERENCE_STEP,
 ) -> np.ndarray:
     flat = np.asarray(coords, dtype=float).reshape(-1)
     base = _primitive_value(primitive, coords)
@@ -590,6 +703,284 @@ def _finite_difference_b_row(
         else:
             row[idx] = delta / (2.0 * step_angstrom)
     return row
+
+
+class _Dual:
+    __slots__ = ("val", "der")
+
+    def __init__(self, val: float, der: np.ndarray):
+        self.val = float(val)
+        self.der = np.asarray(der, dtype=float)
+
+    def _coerce(self, other: object) -> "_Dual":
+        if isinstance(other, _Dual):
+            return other
+        return _Dual(float(other), np.zeros_like(self.der))
+
+    def __add__(self, other: object) -> "_Dual":
+        rhs = self._coerce(other)
+        return _Dual(self.val + rhs.val, self.der + rhs.der)
+
+    def __radd__(self, other: object) -> "_Dual":
+        return self.__add__(other)
+
+    def __sub__(self, other: object) -> "_Dual":
+        rhs = self._coerce(other)
+        return _Dual(self.val - rhs.val, self.der - rhs.der)
+
+    def __rsub__(self, other: object) -> "_Dual":
+        lhs = self._coerce(other)
+        return _Dual(lhs.val - self.val, lhs.der - self.der)
+
+    def __mul__(self, other: object) -> "_Dual":
+        rhs = self._coerce(other)
+        return _Dual(self.val * rhs.val, self.val * rhs.der + rhs.val * self.der)
+
+    def __rmul__(self, other: object) -> "_Dual":
+        return self.__mul__(other)
+
+    def __truediv__(self, other: object) -> "_Dual":
+        rhs = self._coerce(other)
+        inv = 1.0 / rhs.val
+        return _Dual(self.val * inv, (self.der - self.val * rhs.der * inv) * inv)
+
+    def __rtruediv__(self, other: object) -> "_Dual":
+        lhs = self._coerce(other)
+        inv = 1.0 / self.val
+        return _Dual(lhs.val * inv, (lhs.der - lhs.val * self.der * inv) * inv)
+
+    def __neg__(self) -> "_Dual":
+        return _Dual(-self.val, -self.der)
+
+
+def _dual_coordinates(coords: np.ndarray) -> list[list[_Dual]]:
+    flat = np.asarray(coords, dtype=float).reshape(-1)
+    dim = flat.size
+    out: list[list[_Dual]] = []
+    for atom in range(coords.shape[0]):
+        row = []
+        for axis in range(3):
+            idx = 3 * atom + axis
+            der = np.zeros(dim, dtype=float)
+            der[idx] = 1.0
+            row.append(_Dual(float(coords[atom, axis]), der))
+        out.append(row)
+    return out
+
+
+def _dual_primitive_value(
+    primitive: GICPrimitive,
+    dcoords: list[list[_Dual]],
+    coords: np.ndarray,
+) -> _Dual:
+    if primitive.function == "L":
+        return _dual_linear_bend_value(dcoords, primitive.atoms, mode=primitive.mode)
+    if primitive.function == "D":
+        return _dual_dihedral_value(dcoords, primitive.atoms)
+    if primitive.function == "U":
+        return _dual_out_of_plane_value(dcoords, primitive.atoms)
+    if primitive.function == "FROT":
+        return _dual_fragment_rotation_value(
+            dcoords,
+            coords,
+            primitive.atoms,
+            primitive.ref_atoms,
+            mode=primitive.mode,
+            frame_atoms=primitive.frame_atoms,
+            ref_frame_atoms=primitive.ref_frame_atoms,
+        )
+    raise GICForgeContractError(
+        f"analytic B row is not implemented for function {primitive.function}"
+    )
+
+
+def _dual_linear_bend_value(
+    dcoords: list[list[_Dual]],
+    atoms: tuple[int, ...],
+    *,
+    mode: int,
+) -> _Dual:
+    i, j, k = (atom - 1 for atom in atoms)
+    left = _d_unit(_d_vec_sub(dcoords[i], dcoords[j]))
+    right = _d_unit(_d_vec_sub(dcoords[k], dcoords[j]))
+    axis = _d_unit(_d_vec_sub(right, left))
+    e1, e2 = _d_orthogonal_frame(axis)
+    bend = _d_vec_add(left, right)
+    return _d_dot(bend, e1 if mode == -1 else e2)
+
+
+def _dual_dihedral_value(dcoords: list[list[_Dual]], atoms: tuple[int, ...]) -> _Dual:
+    i, j, k, l = (atom - 1 for atom in atoms)
+    p0, p1, p2, p3 = dcoords[i], dcoords[j], dcoords[k], dcoords[l]
+    b0 = _d_vec_neg(_d_vec_sub(p1, p0))
+    b1 = _d_vec_sub(p2, p1)
+    b2 = _d_vec_sub(p3, p2)
+    b1 = _d_unit(b1)
+    v = _d_vec_sub(b0, _d_vec_scale(b1, _d_dot(b0, b1)))
+    w = _d_vec_sub(b2, _d_vec_scale(b1, _d_dot(b2, b1)))
+    x = _d_dot(v, w)
+    y = _d_dot(_d_cross(b1, v), w)
+    return _d_atan2(y, x)
+
+
+def _dual_out_of_plane_value(
+    dcoords: list[list[_Dual]],
+    atoms: tuple[int, ...],
+) -> _Dual:
+    center, n1, n2, n3 = (atom - 1 for atom in atoms)
+    r1 = _d_vec_sub(dcoords[n1], dcoords[center])
+    r2 = _d_vec_sub(dcoords[n2], dcoords[center])
+    r3 = _d_vec_sub(dcoords[n3], dcoords[center])
+    normal = _d_unit(_d_cross(r2, r3))
+    return _d_asin(_d_dot(_d_unit(r1), normal))
+
+
+def _dual_fragment_rotation_value(
+    dcoords: list[list[_Dual]],
+    coords: np.ndarray,
+    atoms: tuple[int, ...],
+    ref_atoms: tuple[int, ...],
+    *,
+    mode: int,
+    frame_atoms: tuple[int, ...] = (),
+    ref_frame_atoms: tuple[int, ...] = (),
+) -> _Dual:
+    frame_atoms = frame_atoms or _fragment_frame_anchor_atoms(atoms, coords=coords)
+    ref_frame_atoms = ref_frame_atoms or _fragment_frame_anchor_atoms(ref_atoms, coords=coords)
+    frame_frag = _d_fragment_frame(dcoords, atoms, frame_atoms=frame_atoms)
+    frame_ref = _d_fragment_frame(dcoords, ref_atoms, frame_atoms=ref_frame_atoms)
+    rotation = [
+        [_d_dot(frame_frag[left], frame_ref[right]) for right in range(3)]
+        for left in range(3)
+    ]
+    return _d_quaternion_vector(rotation)[mode]
+
+
+def _d_fragment_frame(
+    dcoords: list[list[_Dual]],
+    atoms: tuple[int, ...],
+    *,
+    frame_atoms: tuple[int, ...],
+) -> list[list[_Dual]]:
+    p_atom, q_atom = frame_atoms
+    center = _d_fragment_center(dcoords, atoms)
+    p_axis = _d_unit(_d_vec_sub(dcoords[p_atom - 1], center))
+    q_raw = _d_cross(p_axis, _d_vec_sub(dcoords[q_atom - 1], center))
+    q_axis = _d_unit(q_raw)
+    s_axis = _d_unit(_d_cross(p_axis, q_axis))
+    return [p_axis, q_axis, s_axis]
+
+
+def _d_fragment_center(
+    dcoords: list[list[_Dual]],
+    atoms: tuple[int, ...],
+) -> list[_Dual]:
+    if not atoms:
+        raise FloatingPointError("fragment has no atoms")
+    total = [_d_zero_like(dcoords[atoms[0] - 1][0]) for _axis in range(3)]
+    for atom in atoms:
+        total = _d_vec_add(total, dcoords[atom - 1])
+    return _d_vec_scale(total, 1.0 / len(atoms))
+
+
+def _d_quaternion_vector(rotation: list[list[_Dual]]) -> tuple[_Dual, _Dual, _Dual]:
+    trace = rotation[0][0] + rotation[1][1] + rotation[2][2]
+    if trace.val <= -1.0 + RANK_TOLERANCE:
+        raise FloatingPointError("fragment quaternion is singular near 180 degrees")
+    kw = 0.5 * _d_sqrt(trace + 1.0)
+    denom = 4.0 * kw
+    return (
+        (rotation[1][2] - rotation[2][1]) / denom,
+        (rotation[2][0] - rotation[0][2]) / denom,
+        (rotation[0][1] - rotation[1][0]) / denom,
+    )
+
+
+def _d_zero_like(value: _Dual) -> _Dual:
+    return _Dual(0.0, np.zeros_like(value.der))
+
+
+def _d_vec_add(left: list[_Dual], right: list[_Dual]) -> list[_Dual]:
+    return [left[idx] + right[idx] for idx in range(3)]
+
+
+def _d_vec_sub(left: list[_Dual], right: list[_Dual]) -> list[_Dual]:
+    return [left[idx] - right[idx] for idx in range(3)]
+
+
+def _d_vec_neg(vector: list[_Dual]) -> list[_Dual]:
+    return [-item for item in vector]
+
+
+def _d_vec_scale(vector: list[_Dual], scale: float | _Dual) -> list[_Dual]:
+    return [scale * item for item in vector]
+
+
+def _d_dot(left: list[_Dual], right: list[_Dual]) -> _Dual:
+    return left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
+
+
+def _d_cross(left: list[_Dual], right: list[_Dual]) -> list[_Dual]:
+    return [
+        left[1] * right[2] - left[2] * right[1],
+        left[2] * right[0] - left[0] * right[2],
+        left[0] * right[1] - left[1] * right[0],
+    ]
+
+
+def _d_norm(vector: list[_Dual]) -> _Dual:
+    return _d_sqrt(_d_dot(vector, vector))
+
+
+def _d_unit(vector: list[_Dual]) -> list[_Dual]:
+    norm = _d_norm(vector)
+    if norm.val <= RANK_TOLERANCE:
+        raise FloatingPointError("zero-length vector")
+    return [item / norm for item in vector]
+
+
+def _d_orthogonal_frame(axis: list[_Dual]) -> tuple[list[_Dual], list[_Dual]]:
+    trial = [1.0, 0.0, 0.0]
+    if abs(axis[0].val) > 0.9:
+        trial = [0.0, 1.0, 0.0]
+    e1 = _d_unit(_d_cross(axis, [_d_constant(axis[0], value) for value in trial]))
+    e2 = _d_unit(_d_cross(axis, e1))
+    return e1, e2
+
+
+def _d_constant(template: _Dual, value: float) -> _Dual:
+    return _Dual(value, np.zeros_like(template.der))
+
+
+def _d_sqrt(value: _Dual) -> _Dual:
+    if value.val <= 0.0:
+        raise FloatingPointError("square root of non-positive value")
+    root = float(np.sqrt(value.val))
+    return _Dual(root, value.der / (2.0 * root))
+
+
+def _d_acos(value: _Dual) -> _Dual:
+    clipped = float(np.clip(value.val, -1.0, 1.0))
+    denom = float(np.sqrt(max(1.0 - clipped * clipped, 0.0)))
+    if denom <= RANK_TOLERANCE:
+        raise FloatingPointError("acos derivative is singular")
+    return _Dual(float(np.arccos(clipped)), -value.der / denom)
+
+
+def _d_asin(value: _Dual) -> _Dual:
+    clipped = float(np.clip(value.val, -1.0, 1.0))
+    denom = float(np.sqrt(max(1.0 - clipped * clipped, 0.0)))
+    if denom <= RANK_TOLERANCE:
+        raise FloatingPointError("asin derivative is singular")
+    return _Dual(float(np.arcsin(clipped)), value.der / denom)
+
+
+def _d_atan2(y_value: _Dual, x_value: _Dual) -> _Dual:
+    denom = x_value.val * x_value.val + y_value.val * y_value.val
+    if denom <= RANK_TOLERANCE:
+        raise FloatingPointError("atan2 derivative is singular")
+    der = (x_value.val * y_value.der - y_value.val * x_value.der) / denom
+    return _Dual(float(np.arctan2(y_value.val, x_value.val)), der)
 
 
 def _primitive_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
@@ -620,6 +1011,8 @@ def _primitive_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
             primitive.atoms,
             primitive.ref_atoms,
             mode=primitive.mode,
+            frame_atoms=primitive.frame_atoms,
+            ref_frame_atoms=primitive.ref_frame_atoms,
         )
     raise GICForgeContractError(f"unsupported primitive function: {primitive.function}")
 
@@ -705,10 +1098,12 @@ def _fragment_rotation_value(
     ref_atoms: tuple[int, ...],
     *,
     mode: int,
+    frame_atoms: tuple[int, ...] = (),
+    ref_frame_atoms: tuple[int, ...] = (),
 ) -> float:
-    frame_ref = _fragment_frame(coords, ref_atoms)
-    frame_frag = _fragment_frame(coords, atoms)
-    rotation = frame_ref.T @ frame_frag
+    frame_frag = _fragment_frame(coords, atoms, frame_atoms=frame_atoms)
+    frame_ref = _fragment_frame(coords, ref_atoms, frame_atoms=ref_frame_atoms)
+    rotation = frame_frag.T @ frame_ref
     return float(_quaternion_vector(rotation)[mode])
 
 
@@ -797,6 +1192,8 @@ def _fragment_primitive_candidates(
             _fragment_frame_rank(coords, atoms) >= 2
             and _fragment_frame_rank(coords, ref_atoms) >= 2
         ):
+            frame_atoms = _fragment_frame_anchor_atoms(atoms, coords=coords)
+            ref_frame_atoms = _fragment_frame_anchor_atoms(ref_atoms, coords=coords)
             for axis in range(3):
                 candidates.append(
                     _make_primitive(
@@ -807,6 +1204,8 @@ def _fragment_primitive_candidates(
                         mode=axis,
                         ref_atoms=ref_atoms,
                         refs=(getattr(record, "identifier"), getattr(reference, "identifier")),
+                        frame_atoms=frame_atoms,
+                        ref_frame_atoms=ref_frame_atoms,
                     )
                 )
     return tuple(candidates)
@@ -859,10 +1258,19 @@ def _fragment_frame_rank(coords: np.ndarray, atoms: tuple[int, ...]) -> int:
     return int(np.sum(singular_values > 1.0e-8))
 
 
-def _fragment_frame(coords: np.ndarray, atoms: tuple[int, ...]) -> np.ndarray:
+def _fragment_frame(
+    coords: np.ndarray,
+    atoms: tuple[int, ...],
+    *,
+    frame_atoms: tuple[int, ...] = (),
+) -> np.ndarray:
     if _fragment_frame_rank(coords, atoms) < 2:
         raise FloatingPointError("fragment orientation is underdefined")
-    p_atom, q_atom = _fragment_frame_anchor_atoms(atoms, coords=coords)
+    p_atom, q_atom = (
+        tuple(frame_atoms)
+        if frame_atoms
+        else _fragment_frame_anchor_atoms(atoms, coords=coords)
+    )
     center = _fragment_center(coords, atoms)
     p_axis = _unit(coords[p_atom - 1] - center)
     q_raw = np.cross(p_axis, coords[q_atom - 1] - center)
@@ -916,9 +1324,9 @@ def _rotation_vector(rotation: np.ndarray) -> np.ndarray:
     if trace > 0.0:
         scale = 0.5 / np.sqrt(trace + 1.0)
         qw = 0.25 / scale
-        qx = (rotation[2, 1] - rotation[1, 2]) * scale
-        qy = (rotation[0, 2] - rotation[2, 0]) * scale
-        qz = (rotation[1, 0] - rotation[0, 1]) * scale
+        qx = (rotation[1, 2] - rotation[2, 1]) * scale
+        qy = (rotation[2, 0] - rotation[0, 2]) * scale
+        qz = (rotation[0, 1] - rotation[1, 0]) * scale
     else:
         qw, qx, qy, qz = _fallback_quaternion(rotation)
     quat = np.array([qw, qx, qy, qz], dtype=float)
@@ -941,9 +1349,9 @@ def _quaternion_vector(rotation: np.ndarray) -> np.ndarray:
     if trace > 0.0:
         scale = 0.5 / np.sqrt(trace + 1.0)
         qw = 0.25 / scale
-        qx = (rotation[2, 1] - rotation[1, 2]) * scale
-        qy = (rotation[0, 2] - rotation[2, 0]) * scale
-        qz = (rotation[1, 0] - rotation[0, 1]) * scale
+        qx = (rotation[1, 2] - rotation[2, 1]) * scale
+        qy = (rotation[2, 0] - rotation[0, 2]) * scale
+        qz = (rotation[0, 1] - rotation[1, 0]) * scale
     else:
         qw, qx, qy, qz = _fallback_quaternion(rotation)
     quat = np.array([qw, qx, qy, qz], dtype=float)
@@ -1057,6 +1465,8 @@ def _parse_primitive_line(line: str) -> GICPrimitive:
             mode=int(fields.get("MODE", "0")),
             ref_atoms=_parse_atom_list(fields.get("REF_ATOMS", "")),
             refs=_parse_text_list(fields.get("REFS", "")),
+            frame_atoms=_parse_atom_list(fields.get("FRAME_ATOMS", "")),
+            ref_frame_atoms=_parse_atom_list(fields.get("REF_FRAME_ATOMS", "")),
         )
     except KeyError as exc:
         raise GICForgeContractError(f"invalid primitive line: {line}") from exc
@@ -1160,9 +1570,20 @@ def _primitive_line(primitive: GICPrimitive) -> str:
         else ""
     )
     refs = " REFS=" + ",".join(primitive.refs) if primitive.refs else ""
+    frame_atoms = (
+        " FRAME_ATOMS=" + ",".join(str(atom) for atom in primitive.frame_atoms)
+        if primitive.frame_atoms
+        else ""
+    )
+    ref_frame_atoms = (
+        " REF_FRAME_ATOMS=" + ",".join(str(atom) for atom in primitive.ref_frame_atoms)
+        if primitive.ref_frame_atoms
+        else ""
+    )
     return (
         f"{primitive.identifier} NAME={primitive.name} FAMILY={primitive.family} "
-        f"FUNCTION={primitive.function} ATOMS={atoms}{ref_atoms}{refs}{mode} "
+        f"FUNCTION={primitive.function} ATOMS={atoms}{ref_atoms}{refs}"
+        f"{frame_atoms}{ref_frame_atoms}{mode} "
         f"GAUSSIAN={primitive.gaussian_expression()}"
     )
 
@@ -1177,10 +1598,18 @@ def _gaussian_gic_block_lines(definition: GICDefinition) -> list[str]:
         for fragment_id in sorted(fragment_atoms):
             lines.extend(_gaussian_center_lines(fragment_id))
         frot_pairs = _gaussian_frot_pairs(definition.primitives)
+        frame_atoms = _gaussian_fragment_frame_atoms(definition.primitives)
         frame_fragments = sorted({fragment for pair in frot_pairs for fragment in pair})
         for fragment_id in frame_fragments:
             atoms = fragment_atoms[fragment_id]
-            lines.extend(_gaussian_frame_lines(fragment_id, atoms, coords=coords))
+            lines.extend(
+                _gaussian_frame_lines(
+                    fragment_id,
+                    atoms,
+                    coords=coords,
+                    frame_atoms=frame_atoms.get(fragment_id, ()),
+                )
+            )
         for frag_id, ref_id in sorted(frot_pairs):
             lines.extend(_gaussian_quaternion_lines(frag_id, ref_id))
 
@@ -1247,6 +1676,20 @@ def _gaussian_frot_pairs(primitives: tuple[GICPrimitive, ...]) -> set[tuple[str,
     return pairs
 
 
+def _gaussian_fragment_frame_atoms(
+    primitives: tuple[GICPrimitive, ...],
+) -> dict[str, tuple[int, ...]]:
+    frame_atoms: dict[str, tuple[int, ...]] = {}
+    for primitive in primitives:
+        if primitive.function != "FROT" or len(primitive.refs) < 2:
+            continue
+        if primitive.frame_atoms:
+            frame_atoms.setdefault(primitive.refs[0], primitive.frame_atoms)
+        if primitive.ref_frame_atoms:
+            frame_atoms.setdefault(primitive.refs[1], primitive.ref_frame_atoms)
+    return frame_atoms
+
+
 def _gaussian_center_lines(fragment_id: str) -> list[str]:
     return [
         f"Cx{fragment_id}(Inactive)=XCntr({fragment_id})",
@@ -1260,8 +1703,13 @@ def _gaussian_frame_lines(
     atoms: tuple[int, ...],
     *,
     coords: np.ndarray,
+    frame_atoms: tuple[int, ...] = (),
 ) -> list[str]:
-    p_atom, q_atom = _fragment_frame_anchor_atoms(atoms, coords=coords)
+    p_atom, q_atom = (
+        tuple(frame_atoms)
+        if frame_atoms
+        else _fragment_frame_anchor_atoms(atoms, coords=coords)
+    )
     return [
         f"RP{fragment_id}(Inactive)=SQRT((X({p_atom})-Cx{fragment_id})**2+"
         f"(Y({p_atom})-Cy{fragment_id})**2+(Z({p_atom})-Cz{fragment_id})**2)",
