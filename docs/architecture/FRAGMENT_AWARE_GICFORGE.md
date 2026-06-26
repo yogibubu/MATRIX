@@ -24,14 +24,16 @@ candidates before ordinary angle/torsion pruning:
   and an anchor atom;
 - `FRAG_TRANSLATION` / `FTRANS`: Cartesian component of a center-center
   displacement relative to the reference fragment;
-- `FRAG_ORIENTATION` / `FROT`: quaternion-vector component of a fragment local
-  frame relative to the reference fragment frame.
+- `FRAG_ORIENTATION` / `FROT`: TRIC/geomeTRIC-style exponential-map rotation
+  component of a fragment local frame relative to the reference fragment frame.
 
 These primitives are frozen in `#GIC` and available to ORACLE downstream tools.
 `[GAUSSIAN_GIC]` exports them as Gaussian symbolic GIC expressions using
 `Fragment(...)`, `XCntr/YCntr/ZCntr(...)`, Cartesian `X/Y/Z`, and the
-fragment-frame `P/Q/S` plus quaternion construction documented in Gaussian's
-GIC guide.
+fragment-frame `P/Q/S` plus quaternion/exponential-map construction documented
+in Gaussian's GIC guide. The Gaussian text export regularizes `||Kvec||` by a
+tiny constant so exactly aligned fragment frames use the same small-rotation
+limit instead of producing a `0/0` expression.
 
 ## B Matrix
 
@@ -41,7 +43,7 @@ the same scalar definitions used for the Gaussian symbolic export:
 
 - center-center and center-atom distances;
 - Cartesian center translations;
-- quaternion-vector components of relative fragment orientation.
+- exponential-map components of relative fragment orientation.
 
 The backend is analytic and intentionally centralized in `oracle-gicforge`.
 Downstream GF, MORPHEUS and refinement tools must call this service instead of
@@ -49,7 +51,9 @@ carrying their own fragment-coordinate derivatives.
 
 ## Legacy Origin
 
-The translation and rotation definitions follow the Merlino/Gaussian rotor
-model: fragment centers are geometric centroids, frames are built from fragment
-anchor atoms, and relative orientations are expressed through quaternion
-components.
+The translation and rotation definitions follow the Merlino TRIC roadmap and
+geomeTRIC reference model: fragment centers are geometric centroids, frames are
+built from fragment anchor atoms, and relative orientations are expressed as the
+three-component exponential map derived from the relative-orientation
+quaternion. The native Python and Fortran B-matrix paths use the same analytic
+definition, including the regular small-rotation limit `2*Kvec`.

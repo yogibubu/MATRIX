@@ -345,7 +345,9 @@ def test_gicforge_build_uses_built_fragments_for_relative_coordinates(tmp_path):
     assert any(line.startswith("GIC005 = SQRT((CxF001-CxF002)**2") for line in gaussian_lines)
     assert any(line.startswith("GIC006 = SQRT((CxF002-X(1))**2") for line in gaussian_lines)
     assert any("KxF002F001" in line for line in gaussian_lines)
-    assert any(line.startswith("GIC011 = KxF002F001") for line in gaussian_lines)
+    assert any("ExF002F001" in line for line in gaussian_lines)
+    assert any("1.0D-24" in line and line.startswith("KnF002F001") for line in gaussian_lines)
+    assert any(line.startswith("GIC011 = ExF002F001") for line in gaussian_lines)
 
 
 def test_gicforge_b_matrix_includes_fragment_coordinate_rows(tmp_path):

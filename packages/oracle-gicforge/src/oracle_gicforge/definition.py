@@ -853,7 +853,7 @@ def _dual_fragment_rotation_value(
         [_d_dot(frame_frag[left], frame_ref[right]) for right in range(3)]
         for left in range(3)
     ]
-    return _d_quaternion_vector(rotation)[mode]
+    return _d_rotation_vector(rotation)[mode]
 
 
 def _d_fragment_frame(
@@ -894,6 +894,20 @@ def _d_quaternion_vector(rotation: list[list[_Dual]]) -> tuple[_Dual, _Dual, _Du
         (rotation[2][0] - rotation[0][2]) / denom,
         (rotation[0][1] - rotation[1][0]) / denom,
     )
+
+
+def _d_rotation_vector(rotation: list[list[_Dual]]) -> tuple[_Dual, _Dual, _Dual]:
+    trace = rotation[0][0] + rotation[1][1] + rotation[2][2]
+    if trace.val <= -1.0 + RANK_TOLERANCE:
+        raise FloatingPointError("fragment exponential map is singular near 180 degrees")
+    kw = 0.5 * _d_sqrt(trace + 1.0)
+    kx, ky, kz = _d_quaternion_vector(rotation)
+    kn2 = kx * kx + ky * ky + kz * kz
+    if kn2.val <= RANK_TOLERANCE * RANK_TOLERANCE:
+        return 2.0 * kx, 2.0 * ky, 2.0 * kz
+    kn = _d_sqrt(kn2)
+    factor = (2.0 * _d_atan2(kn, kw)) / kn
+    return factor * kx, factor * ky, factor * kz
 
 
 def _d_zero_like(value: _Dual) -> _Dual:
@@ -1104,7 +1118,7 @@ def _fragment_rotation_value(
     frame_frag = _fragment_frame(coords, atoms, frame_atoms=frame_atoms)
     frame_ref = _fragment_frame(coords, ref_atoms, frame_atoms=ref_frame_atoms)
     rotation = frame_frag.T @ frame_ref
-    return float(_quaternion_vector(rotation)[mode])
+    return float(_rotation_vector(rotation)[mode])
 
 
 def _cartesian_vibrational_basis(coords: np.ndarray, *, target_rank: int) -> np.ndarray:
@@ -1646,7 +1660,7 @@ def _gaussian_expression_for_primitive(primitive: GICPrimitive) -> str | None:
     if primitive.function == "FROT":
         frag_id, ref_id = primitive.refs
         axis = ("x", "y", "z")[primitive.mode]
-        return f"K{axis}{frag_id}{ref_id}"
+        return f"E{axis}{frag_id}{ref_id}"
     return None
 
 
@@ -1753,6 +1767,11 @@ def _gaussian_quaternion_lines(frag_id: str, ref_id: str) -> list[str]:
         f"Kx{pair}(Inactive)=(R23{pair}-R32{pair})/(4*Kw{pair})",
         f"Ky{pair}(Inactive)=(R31{pair}-R13{pair})/(4*Kw{pair})",
         f"Kz{pair}(Inactive)=(R12{pair}-R21{pair})/(4*Kw{pair})",
+        f"Kn{pair}(Inactive)=SQRT(Kx{pair}**2+Ky{pair}**2+Kz{pair}**2+1.0D-24)",
+        f"Th{pair}(Inactive)=2*ATAN(Kn{pair}/Kw{pair})",
+        f"Ex{pair}(Inactive)=Th{pair}*Kx{pair}/Kn{pair}",
+        f"Ey{pair}(Inactive)=Th{pair}*Ky{pair}/Kn{pair}",
+        f"Ez{pair}(Inactive)=Th{pair}*Kz{pair}/Kn{pair}",
     ]
 
 
