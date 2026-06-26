@@ -16,8 +16,9 @@ plan under-described several ORACLE responsibilities:
 - paper/benchmark artifact generation;
 - Gaussian job launching/status helpers.
 
-These are now tracked as explicit architecture responsibilities. They should be
-migrated after the shared parser, topology and section contracts are stable.
+These are now tracked as explicit architecture responsibilities. The Gaussian,
+Thermo and Rovib items have ORACLE-native ports; remaining items should migrate
+after the shared parser, topology and section contracts are stable.
 
 ## Reviewed ORACLE Areas
 
@@ -31,9 +32,10 @@ Core/package areas:
   reference library search, paper benchmarks.
 - `oracle_gf`: HessianInput, Wilson GF/PED, internal-coordinate transform,
   reports and CSV export.
-- `oracle_vpt2_vci`: QFF/FCHK adapters, VPT2, VCI, Davidson and workflow.
+- `oracle_vpt2_vci`: normalized QFF consumers, VPT2, VCI, Davidson and workflow.
 - `oracle_dvr`: DVR request and manifest preparation.
-- `oracle_gaussian`: Gaussian job discovery/status plus log summaries.
+- `oracle_gaussian`: Gaussian input/log/FCHK/QFF adapters plus job
+  discovery/status/run helpers.
 - `oracle_engines`: backend discovery and build checks.
 - `geometry`: rotational, vibrational, rovib, Coriolis, Q-cent and
   thermochemistry utilities.
@@ -90,10 +92,10 @@ Reference libraries
 
 Gaussian job helpers
 
-- ORACLE has parsers and an input writer scaffold.
-- ORACLE's `oracle_gaussian.jobs` behavior, including `gauin`/`gauin.gjf`
-  selection and normal-termination status, remains to migrate into
-  `oracle-gaussian`.
+- ORACLE has parsers, an input writer, job discovery/status/run helpers and
+  `formchk` support in `oracle-gaussian`.
+- FCHK/QFF parsing is owned by `oracle-gaussian`; `oracle_vpt2_vci.gaussian_qff`
+  is retained only as a compatibility wrapper.
 
 Paper/benchmark generation
 
@@ -108,7 +110,8 @@ Paper/benchmark generation
 - GICForge, GF/PED, DVR and VPT2/VCI package placeholders already exist.
 - Fragment/Nano-LEGO direction is covered by `oracle-fragments`.
 - Unified geometry/Gaussian/Z-matrix parsing is started but not complete for
-  all QM programs (`Molpro`, `MRCC`, FCHK/QFF details still need migration).
+  all QM programs (`Molpro`, `MRCC` and other non-Gaussian adapters still need
+  migration).
 - GIC symmetry is an ORACLE strength and must preserve Merlino3.0 behavior.
   The current ORACLE projector covers tested low-symmetry, `C/D/Dnh/Dnd`
   families plus matrix-classified `Td`, `Oh` and `Ih`. Remaining parity work is

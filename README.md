@@ -19,7 +19,8 @@ packages are separated behind stable service, CLI and manifest contracts.
 - `oracle-morpheus`: semiexperimental geometry refinement, constraints,
   predicates, parameter classes, diagnostics and ensemble refinement.
 - `oracle-gf`: frozen-GIC GF/PED analysis.
-- `oracle-gaussian`: Gaussian input/output adapters.
+- `oracle-gaussian`: Gaussian input/output adapters, job status/run helpers and
+  FCHK/QFF promotion.
 - `oracle-babel`: import adapters for external sources and molecular databases
   such as LCB25.
 - `oracle-fragments`: topology-backed fragmentation, fragment-library search
@@ -75,6 +76,16 @@ python -m oracle gicforge plan molecule.xyzin --symmetrize --sycart
 python -m oracle gicforge build molecule.xyzin --symmetrize --sycart
 python -m oracle gicforge bmatrix molecule.xyzin bmat.out
 python -m oracle gicforge gaussian-input molecule.xyzin job.gjf
+```
+
+Gaussian adapters and job helpers are available directly:
+
+```bash
+python -m oracle gaussian summary gauin.log
+python -m oracle gaussian status .
+python -m oracle gaussian run . --executable gdv
+python -m oracle gaussian formchk gicforge.chk gicforge.fchk
+python -m oracle gaussian fchk-summary gicforge.fchk
 ```
 
 Thermo and rovibrational utilities run from the same enriched `xyzin` state:

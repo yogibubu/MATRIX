@@ -40,6 +40,19 @@ class FCHKData:
         data.validate()
         return data
 
+    def to_anharmonic_input(self):
+        from oracle_vpt2_vci.models import AnharmonicInput
+
+        data = AnharmonicInput(
+            harmonic_frequencies_cm=self.harmonic_frequencies_cm,
+            anharmonic_frequencies_cm=self.anharmonic_frequencies_cm,
+            cubic_cm={},
+            quartic_cm={},
+            source="gaussian-fchk",
+        )
+        data.validate()
+        return data
+
 
 def read_gaussian_fchk(path: Path) -> FCHKData:
     """Read harmonic Hessian and Gaussian anharmonic arrays from an FCHK file."""
@@ -88,6 +101,77 @@ def read_gaussian_fchk(path: Path) -> FCHKData:
 def hessian_input_from_gaussian_fchk(path: Path):
     """Gaussian FCHK adapter: return the canonical ORACLE Hessian input."""
     return read_gaussian_fchk(path).to_hessian_input()
+
+
+def read_gaussian_fchk_qff(path: Path) -> FCHKData:
+    """Compatibility alias for the Gaussian FCHK/QFF adapter."""
+    return read_gaussian_fchk(path)
+
+
+def anharmonic_input_from_gaussian_fchk(path: Path):
+    """Gaussian FCHK adapter: return the canonical ORACLE anharmonic input."""
+    return read_gaussian_fchk(path).to_anharmonic_input()
+
+
+def read_indexed_qff_text(path: Path, frequencies_cm: np.ndarray | None = None):
+    """Read an indexed cubic/quartic normal-coordinate force field.
+
+    Accepted records are intentionally simple and solver-independent:
+
+    - `FREQ i value_cm`
+    - `CUBIC i j k value_cm`
+    - `QUARTIC i j k l value_cm`
+
+    Mode indices are one-based in the file and converted to zero-based tuples.
+    Header lines from Gaussian-like sections are ignored, so extracted blocks can
+    be pasted directly into a normalized `.qff` file.
+    """
+    from oracle_vpt2_vci.vci import QuarticForceField
+
+    freqs: dict[int, float] = {}
+    cubic: dict[tuple[int, int, int], float] = {}
+    quartic: dict[tuple[int, int, int, int], float] = {}
+    for raw in Path(path).read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith("!"):
+            continue
+        parts = line.replace(",", " ").split()
+        tag = parts[0].upper()
+        try:
+            if tag in {"FREQ", "FREQUENCY"} and len(parts) >= 3:
+                freqs[int(parts[1]) - 1] = float(parts[2].replace("D", "E"))
+            elif tag in {"CUBIC", "C3"} and len(parts) >= 5:
+                key = tuple(sorted(int(value) - 1 for value in parts[1:4]))
+                cubic[key] = float(parts[4].replace("D", "E"))
+            elif tag in {"QUARTIC", "C4"} and len(parts) >= 6:
+                key = tuple(sorted(int(value) - 1 for value in parts[1:5]))
+                quartic[key] = float(parts[5].replace("D", "E"))
+            elif len(parts) in {4, 5} and all(
+                token.lstrip("+-").isdigit() for token in parts[:-1]
+            ):
+                key = tuple(sorted(int(value) - 1 for value in parts[:-1]))
+                value = float(parts[-1].replace("D", "E"))
+                if len(key) == 3:
+                    cubic[key] = value
+                else:
+                    quartic[key] = value
+        except ValueError:
+            continue
+
+    if frequencies_cm is None:
+        if not freqs:
+            raise ValueError("No frequencies found in indexed QFF text")
+        n_modes = max(freqs) + 1
+        frequencies = np.array([freqs[idx] for idx in range(n_modes)], dtype=float)
+    else:
+        frequencies = np.asarray(frequencies_cm, dtype=float)
+        if freqs:
+            frequencies = frequencies.copy()
+            for index, value in freqs.items():
+                if index >= len(frequencies):
+                    raise ValueError("QFF frequency index exceeds supplied frequency array")
+                frequencies[index] = value
+    return QuarticForceField(frequencies, cubic, quartic)
 
 
 def lower_to_symmetric(lower: np.ndarray) -> np.ndarray:

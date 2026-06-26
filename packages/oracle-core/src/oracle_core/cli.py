@@ -61,6 +61,26 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     preprocess.add_argument("--symmetry-inertia", type=float, default=1.0e-3)
     preprocess.add_argument("--max-rotation-order", type=int, default=6)
 
+    gaussian = sub.add_parser("gaussian", help="Gaussian adapter and job utilities")
+    gaussian_sub = gaussian.add_subparsers(dest="gaussian_command")
+    gaussian_summary = gaussian_sub.add_parser("summary", help="Summarize a Gaussian log/out")
+    gaussian_summary.add_argument("log", type=Path)
+    gaussian_status = gaussian_sub.add_parser("status", help="Inspect Gaussian job state")
+    gaussian_status.add_argument("workdir", type=Path)
+    gaussian_run = gaussian_sub.add_parser("run", help="Run Gaussian from a work directory")
+    gaussian_run.add_argument("workdir", type=Path)
+    gaussian_run.add_argument("--executable")
+    gaussian_run.add_argument("--input", type=Path)
+    gaussian_run.add_argument("--background", action="store_true")
+    gaussian_run.add_argument("--timeout", type=float)
+    gaussian_formchk = gaussian_sub.add_parser("formchk", help="Run formchk on a checkpoint file")
+    gaussian_formchk.add_argument("chk", type=Path)
+    gaussian_formchk.add_argument("fchk", type=Path, nargs="?")
+    gaussian_formchk.add_argument("--executable", default=None)
+    gaussian_formchk.add_argument("--timeout", type=float)
+    gaussian_fchk = gaussian_sub.add_parser("fchk-summary", help="Summarize FCHK/QFF blocks")
+    gaussian_fchk.add_argument("fchk", type=Path)
+
     lcb25 = sub.add_parser("lcb25", help="Manage the local ORACLE LCB25 geometry cache")
     lcb25_sub = lcb25.add_subparsers(dest="lcb25_command")
     fetch = lcb25_sub.add_parser("fetch", help="Download/extract LCB25 geometries once")
@@ -344,6 +364,77 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
             f"PG={result.point_group}, bonds={result.topology_bond_count}, "
             f"rings={result.ring_count})"
         )
+        return 0
+    if args.command == "gaussian" and args.gaussian_command == "summary":
+        from oracle_gaussian import summarize_gaussian_log
+
+        summary = summarize_gaussian_log(args.log)
+        print(f"path: {summary.path}")
+        print(f"normal_termination: {int(summary.normal_termination)}")
+        print(f"scf_count: {len(summary.scf_energies_hartree)}")
+        if summary.scf_energies_hartree:
+            print(f"last_scf_hartree: {summary.scf_energies_hartree[-1]:.12g}")
+        print(f"standard_orientations: {summary.standard_orientation_count}")
+        print(f"input_orientations: {summary.input_orientation_count}")
+        print(f"frequencies: {len(summary.frequencies_cm)}")
+        return 0
+    if args.command == "gaussian" and args.gaussian_command == "status":
+        from oracle_gaussian import gaussian_job_status
+
+        status = gaussian_job_status(args.workdir)
+        print(f"status: {status.status}")
+        print(f"workdir: {status.workdir}")
+        print(f"log: {status.log_path}")
+        if status.input_path is not None:
+            print(f"input: {status.input_path}")
+        if status.pid is not None:
+            print(f"pid: {status.pid}")
+        print(f"normal_termination: {int(status.normal_termination)}")
+        print(f"error_termination: {int(status.error_termination)}")
+        print(f"message: {status.message}")
+        return 0
+    if args.command == "gaussian" and args.gaussian_command == "run":
+        from oracle_gaussian import run_gaussian_job
+
+        result = run_gaussian_job(
+            args.workdir,
+            executable=args.executable,
+            input_path=args.input,
+            background=args.background,
+            timeout=args.timeout,
+        )
+        print(f"gaussian_input: {result.input_path}")
+        print(f"gaussian_log: {result.log_path}")
+        if result.pid is not None:
+            print(f"pid: {result.pid}")
+        if result.exit_code is not None:
+            print(f"exit_code: {result.exit_code}")
+        if result.success is not None:
+            print(f"success: {int(result.success)}")
+        print(f"message: {result.message}")
+        return 0
+    if args.command == "gaussian" and args.gaussian_command == "formchk":
+        from oracle_gaussian import FORMCHK_EXECUTABLE, formchk_checkpoint
+
+        output = formchk_checkpoint(
+            args.chk,
+            args.fchk,
+            executable=args.executable or FORMCHK_EXECUTABLE,
+            timeout=args.timeout,
+        )
+        print(f"Wrote formatted checkpoint: {output}")
+        return 0
+    if args.command == "gaussian" and args.gaussian_command == "fchk-summary":
+        from oracle_gaussian import read_gaussian_fchk_qff
+
+        data = read_gaussian_fchk_qff(args.fchk)
+        print(f"path: {args.fchk}")
+        print(f"atoms: {len(data.atomic_numbers)}")
+        print(f"hessian_lower: {len(data.cartesian_hessian_lower)}")
+        print(f"harmonic_frequencies: {len(data.harmonic_frequencies_cm)}")
+        print(f"anharmonic_frequencies: {len(data.anharmonic_frequencies_cm)}")
+        print(f"anharmonic_e2_values: {len(data.anharmonic_e2)}")
+        print(f"normal_mode_values: {len(data.normal_modes)}")
         return 0
     if args.command == "lcb25" and args.lcb25_command == "fetch":
         from oracle_babel import sync_lcb25_library

@@ -114,6 +114,166 @@ def test_babel_preprocess_cli_calls_shared_pipeline(tmp_path, monkeypatch, capsy
     assert "Preprocessed ORACLE-Babel molecule" in capsys.readouterr().out
 
 
+def test_gaussian_summary_cli_prints_log_markers(tmp_path, capsys):
+    log = tmp_path / "job.log"
+    log.write_text(
+        "\n".join(
+            [
+                "SCF Done:  E(RHF) =  -75.0",
+                "Frequencies -- 100.0 200.0 300.0",
+                "Normal termination of Gaussian 16",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rc = oracle_run.main(["gaussian", "summary", str(log)])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "normal_termination: 1" in out
+    assert "scf_count: 1" in out
+    assert "frequencies: 3" in out
+
+
+def test_gaussian_status_cli_calls_adapter(tmp_path, monkeypatch, capsys):
+    calls = {}
+
+    def fake_status(workdir):
+        calls["workdir"] = workdir
+        return SimpleNamespace(
+            status="running",
+            workdir=workdir,
+            log_path=workdir / "gauin.log",
+            input_path=workdir / "gauin.gjf",
+            pid=123,
+            normal_termination=False,
+            error_termination=False,
+            message="running",
+        )
+
+    monkeypatch.setattr("oracle_gaussian.gaussian_job_status", fake_status)
+
+    rc = oracle_run.main(["gaussian", "status", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert calls == {"workdir": tmp_path}
+    assert "status: running" in out
+    assert "pid: 123" in out
+
+
+def test_gaussian_run_cli_calls_adapter(tmp_path, monkeypatch, capsys):
+    calls = {}
+
+    def fake_run(workdir, *, executable=None, input_path=None, background=False, timeout=None):
+        calls["workdir"] = workdir
+        calls["executable"] = executable
+        calls["input_path"] = input_path
+        calls["background"] = background
+        calls["timeout"] = timeout
+        return SimpleNamespace(
+            input_path=workdir / "gauin.gjf",
+            log_path=workdir / "gauin.log",
+            pid=None,
+            exit_code=0,
+            success=True,
+            message="ok",
+        )
+
+    monkeypatch.setattr("oracle_gaussian.run_gaussian_job", fake_run)
+
+    rc = oracle_run.main(
+        [
+            "gaussian",
+            "run",
+            str(tmp_path),
+            "--executable",
+            "g16",
+            "--input",
+            str(tmp_path / "job.gjf"),
+            "--timeout",
+            "1.5",
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert calls == {
+        "workdir": tmp_path,
+        "executable": "g16",
+        "input_path": tmp_path / "job.gjf",
+        "background": False,
+        "timeout": 1.5,
+    }
+    assert "success: 1" in out
+    assert "message: ok" in out
+
+
+def test_gaussian_formchk_cli_calls_adapter(tmp_path, monkeypatch, capsys):
+    calls = {}
+    chk = tmp_path / "job.chk"
+    fchk = tmp_path / "job.fchk"
+
+    def fake_formchk(source, target=None, *, executable, timeout=None):
+        calls["source"] = source
+        calls["target"] = target
+        calls["executable"] = executable
+        calls["timeout"] = timeout
+        return target
+
+    monkeypatch.setattr("oracle_gaussian.formchk_checkpoint", fake_formchk)
+
+    rc = oracle_run.main(
+        [
+            "gaussian",
+            "formchk",
+            str(chk),
+            str(fchk),
+            "--executable",
+            "formchk-test",
+            "--timeout",
+            "2",
+        ]
+    )
+
+    assert rc == 0
+    assert calls == {
+        "source": chk,
+        "target": fchk,
+        "executable": "formchk-test",
+        "timeout": 2.0,
+    }
+    assert f"Wrote formatted checkpoint: {fchk}" in capsys.readouterr().out
+
+
+def test_gaussian_fchk_summary_cli_calls_qff_reader(tmp_path, monkeypatch, capsys):
+    calls = {}
+    fchk = tmp_path / "job.fchk"
+
+    def fake_read(path):
+        calls["path"] = path
+        return SimpleNamespace(
+            atomic_numbers=[1, 8, 1],
+            cartesian_hessian_lower=[0.0] * 45,
+            harmonic_frequencies_cm=[1.0, 2.0],
+            anharmonic_frequencies_cm=[1.1],
+            anharmonic_e2=[0.0] * 6,
+            normal_modes=[0.0] * 9,
+        )
+
+    monkeypatch.setattr("oracle_gaussian.read_gaussian_fchk_qff", fake_read)
+
+    rc = oracle_run.main(["gaussian", "fchk-summary", str(fchk)])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert calls == {"path": fchk}
+    assert "atoms: 3" in out
+    assert "anharmonic_frequencies: 1" in out
+
+
 def test_fragments_plan_cli_calls_writer(tmp_path, monkeypatch, capsys):
     calls = {}
     path = tmp_path / "molecule.xyz"
