@@ -80,6 +80,15 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     gaussian_formchk.add_argument("--timeout", type=float)
     gaussian_fchk = gaussian_sub.add_parser("fchk-summary", help="Summarize FCHK/QFF blocks")
     gaussian_fchk.add_argument("fchk", type=Path)
+    gaussian_promote_fchk = gaussian_sub.add_parser(
+        "promote-fchk",
+        help="Promote Gaussian FCHK Hessian/normal-mode/QFF data into an ORACLE xyzin",
+    )
+    gaussian_promote_fchk.add_argument("fchk", type=Path)
+    gaussian_promote_fchk.add_argument("xyzin", type=Path)
+    gaussian_promote_fchk.add_argument("--no-cartesian-hessian", action="store_true")
+    gaussian_promote_fchk.add_argument("--no-normal-modes", action="store_true")
+    gaussian_promote_fchk.add_argument("--no-qff", action="store_true")
     gaussian_promote_rovib = gaussian_sub.add_parser(
         "promote-rovib",
         help="Promote Gaussian rovibrational log data into an ORACLE xyzin",
@@ -192,7 +201,7 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     thermo.add_argument("--keep-low-positive", action="store_true")
 
     gf = sub.add_parser("gf", help="Run GF/PED analysis from a Cartesian Hessian")
-    gf.add_argument("--fchk", type=Path, required=True)
+    gf.add_argument("--fchk", type=Path)
     gf.add_argument("--xyzin", type=Path, help="Frozen ORACLE xyzin with a BUILT #GIC section")
     gf.add_argument("--out", type=Path, help="Write the GF/PED report")
     gf.add_argument("--csv-dir", type=Path, help="Write GF/PED CSV tables")
@@ -481,6 +490,21 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
         print(f"anharmonic_e2_values: {len(data.anharmonic_e2)}")
         print(f"normal_mode_values: {len(data.normal_modes)}")
         return 0
+    if args.command == "gaussian" and args.gaussian_command == "promote-fchk":
+        from oracle_gaussian import promote_gaussian_fchk_to_xyzin
+
+        result = promote_gaussian_fchk_to_xyzin(
+            args.fchk,
+            args.xyzin,
+            write_cartesian_hessian=not args.no_cartesian_hessian,
+            write_normal_modes=not args.no_normal_modes,
+            write_qff=not args.no_qff,
+        )
+        print(f"Promoted Gaussian FCHK data: {result.fchk_path} -> {result.xyzin}")
+        print(f"wrote_cartesian_hessian: {int(result.wrote_cartesian_hessian)}")
+        print(f"wrote_normal_modes: {int(result.wrote_normal_modes)}")
+        print(f"wrote_qff: {int(result.wrote_qff)}")
+        return 0
     if args.command == "gaussian" and args.gaussian_command == "promote-rovib":
         from oracle_gaussian import promote_gaussian_rovib_to_xyzin
 
@@ -701,12 +725,28 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
         from oracle_gf import (
             run_gf_report_from_fchk,
             run_xyzin_gf_report_from_fchk,
+            run_xyzin_gf_report_from_xyzin,
             write_csv_tables,
         )
 
         if args.xyzin is None:
+            if args.fchk is None:
+                raise ValueError("gf needs --fchk, or --xyzin containing #CARTESIAN_HESSIAN")
             report = run_gf_report_from_fchk(args.fchk)
             prefix = "gf"
+        elif args.fchk is None:
+            report = run_xyzin_gf_report_from_xyzin(
+                args.xyzin,
+                scale_path=args.scale_file,
+                scale_records=tuple(args.scale),
+                local=args.local,
+                force_threshold=args.force_threshold,
+                block_by_irrep=args.symmetry_blocks,
+                subtract_electrostatic=args.subtract_electrostatic,
+                subtract_uff_vdw=args.subtract_uff_vdw,
+                nonbonded_14_scale=args.nonbonded_14_scale,
+            )
+            prefix = "gic_gf"
         else:
             report = run_xyzin_gf_report_from_fchk(
                 args.fchk,

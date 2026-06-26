@@ -20,9 +20,11 @@ from .writers import (
 )
 from .fchk import (
     FCHKData,
+    GaussianFCHKPromotion,
     anharmonic_input_from_gaussian_fchk,
     hessian_input_from_gaussian_fchk,
     lower_to_symmetric,
+    promote_gaussian_fchk_to_xyzin,
     read_gaussian_fchk,
     read_gaussian_fchk_qff,
     read_indexed_qff_text,
@@ -55,6 +57,7 @@ __all__ = [
     "GAUSSIAN_EXECUTABLE",
     "GaussianWriteError",
     "FCHKData",
+    "GaussianFCHKPromotion",
     "GaussianInputError",
     "GaussianJobStatus",
     "GaussianLogSummary",
@@ -73,6 +76,7 @@ __all__ = [
     "gaussian_topology_section_lines",
     "hessian_input_from_gaussian_fchk",
     "lower_to_symmetric",
+    "promote_gaussian_fchk_to_xyzin",
     "parse_gaussian_topology",
     "parse_gaussian_rovib_log",
     "promote_gaussian_rovib_to_xyzin",

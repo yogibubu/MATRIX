@@ -19,6 +19,8 @@ packages are separated behind stable service, CLI and manifest contracts.
 - `oracle-morpheus`: semiexperimental geometry refinement, constraints,
   predicates, parameter classes, diagnostics and ensemble refinement.
 - `oracle-gf`: frozen-GIC GF/PED analysis.
+- `oracle-qm`: shared QM data sections for Cartesian Hessians, normal modes and
+  QFF/anharmonic force fields.
 - `oracle-gaussian`: Gaussian input/output adapters, job status/run helpers,
   FCHK/QFF promotion and Gaussian log rovibrational promotion.
 - `oracle-molpro`: Molpro output adapters returning shared ORACLE geometry and
@@ -90,6 +92,7 @@ python -m oracle gaussian status .
 python -m oracle gaussian run . --executable gdv
 python -m oracle gaussian formchk gicforge.chk gicforge.fchk
 python -m oracle gaussian fchk-summary gicforge.fchk
+python -m oracle gaussian promote-fchk gaussian.fchk molecule.xyzin
 python -m oracle gaussian promote-rovib gauin.log molecule.xyzin
 python -m oracle molpro promote molpro.out molecule.xyzin
 python -m oracle mrcc promote mrcc.out molecule.xyzin
@@ -104,6 +107,7 @@ python -m oracle rovib coriolis molecule.xyzin --out coriolis.report
 python -m oracle rovib qcent molecule.xyzin --out qcent.report
 python -m oracle rovib dos molecule.xyzin
 python -m oracle rovib dos-rovib molecule.xyzin
+python -m oracle gf --xyzin molecule.xyzin
 ```
 
 ## Migration Rule

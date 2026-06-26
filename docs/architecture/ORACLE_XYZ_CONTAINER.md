@@ -27,8 +27,9 @@ plain XYZ
   -> oracle-chem adds #VALIDATION
   -> oracle-gicforge adds #GIC and optionally #SYCART
   -> branches:
-       oracle-gaussian writes Gaussian inputs or imports QM outputs
-       oracle-gf adds #GF_PED from Cartesian Hessian plus frozen #GIC
+       oracle-gaussian writes Gaussian inputs or imports QM outputs through oracle-qm
+       oracle-qm adds #CARTESIAN_HESSIAN, #NORMAL_MODES or #QFF
+       oracle-gf adds #GF_PED from #CARTESIAN_HESSIAN plus frozen #GIC
        oracle-rovib adds #ROTATIONAL, #VIBRATIONAL, #DELTABVIB, #CORIOLIS or #QCENT
        oracle-thermo adds #THERMO from BASIC/ROTATIONAL/VIBRATIONAL state
        oracle-morpheus adds #ISOTOPOLOGUES and #MORPHEUS
@@ -81,6 +82,22 @@ rotational corrections into shared ORACLE sections:
 
 GF, Thermo, SEfit/MORPHEUS and anharmonic workflows consume these sections
 rather than reparsing Gaussian output.
+
+## QM Tensor Sections
+
+`oracle-qm` owns the shared tensor sections used after external QM adapters have
+finished parsing:
+
+- `#CARTESIAN_HESSIAN` stores atomic numbers, Cartesian coordinates in bohr,
+  atomic masses, the packed lower Cartesian Hessian and harmonic frequencies.
+- `#NORMAL_MODES` stores normal-mode vectors as a mode by Cartesian-coordinate
+  matrix, plus their frequencies.
+- `#QFF` stores harmonic and anharmonic frequencies plus indexed cubic and
+  quartic normal-coordinate force constants.
+
+`oracle gaussian promote-fchk` writes these sections from Gaussian FCHK data.
+GF/PED can then run from `oracle gf --xyzin molecule.xyzin` without reparsing the
+FCHK. VPT2/VCI loaders can read `#QFF` directly from the same container.
 
 ## GIC State
 

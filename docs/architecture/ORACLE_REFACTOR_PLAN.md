@@ -20,6 +20,7 @@ The repository already contains useful ORACLE package boundaries:
 - `oracle_gicforge`: GICForge service, frozen GIC schemas and B-matrix evaluation.
 - `oracle_morpheus`: MORPHEUS/SEfit single- and multi-structure refinement.
 - `oracle_gf`: frozen-GIC GF/PED analysis.
+- `oracle_qm`: shared QM tensor sections for Hessians, normal modes and QFF.
 - `oracle_gaussian`: Gaussian adapters.
 - `oracle_engines`: backend discovery and wrappers.
 - `oracle_dvr`: DVR workflow wrapper.
@@ -86,6 +87,8 @@ ORACLE/
       src/oracle_morpheus/
     oracle-gf/
       src/oracle_gf/
+    oracle-qm/
+      src/oracle_qm/
     oracle-gaussian/
       src/oracle_gaussian/
     oracle-molpro/
@@ -210,6 +213,13 @@ reuse the saved sections.
 - Frozen-GIC Hessian transformation, Wilson GF/PED, Pulay scaling, reports and
   CSV tables.
 - Must stay independent from VPT2/VCI.
+
+`oracle-qm`
+
+- Shared enriched-XYZ contracts for Cartesian Hessians, normal modes and QFF
+  data promoted by external QM adapters.
+- Owns `#CARTESIAN_HESSIAN`, `#NORMAL_MODES` and `#QFF`.
+- Scientific tools consume these sections instead of reparsing QM output files.
 
 `oracle-gaussian`
 

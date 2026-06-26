@@ -274,6 +274,56 @@ def test_gaussian_fchk_summary_cli_calls_qff_reader(tmp_path, monkeypatch, capsy
     assert "anharmonic_frequencies: 1" in out
 
 
+def test_gaussian_promote_fchk_cli_calls_adapter(tmp_path, monkeypatch, capsys):
+    calls = {}
+    fchk = tmp_path / "job.fchk"
+    xyzin = tmp_path / "mol.xyzin"
+
+    def fake_promote(
+        fchk_path,
+        xyzin_path,
+        *,
+        write_cartesian_hessian=True,
+        write_normal_modes=True,
+        write_qff=True,
+    ):
+        calls["fchk"] = fchk_path
+        calls["xyzin"] = xyzin_path
+        calls["write_cartesian_hessian"] = write_cartesian_hessian
+        calls["write_normal_modes"] = write_normal_modes
+        calls["write_qff"] = write_qff
+        return SimpleNamespace(
+            fchk_path=fchk_path,
+            xyzin=xyzin_path,
+            wrote_cartesian_hessian=write_cartesian_hessian,
+            wrote_normal_modes=write_normal_modes,
+            wrote_qff=write_qff,
+        )
+
+    monkeypatch.setattr("oracle_gaussian.promote_gaussian_fchk_to_xyzin", fake_promote)
+
+    rc = oracle_run.main(
+        [
+            "gaussian",
+            "promote-fchk",
+            str(fchk),
+            str(xyzin),
+            "--no-normal-modes",
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert calls == {
+        "fchk": fchk,
+        "xyzin": xyzin,
+        "write_cartesian_hessian": True,
+        "write_normal_modes": False,
+        "write_qff": True,
+    }
+    assert "wrote_normal_modes: 0" in out
+
+
 def test_gaussian_promote_rovib_cli_calls_adapter(tmp_path, monkeypatch, capsys):
     calls = {}
     log = tmp_path / "job.log"
@@ -331,6 +381,37 @@ def test_gaussian_promote_rovib_cli_calls_adapter(tmp_path, monkeypatch, capsys)
         "exclude_modes": (3,),
     }
     assert "wrote_rotational: 0" in out
+
+
+def test_gf_cli_can_use_hessian_from_xyzin_without_fchk(tmp_path, monkeypatch, capsys):
+    calls = {}
+    xyzin = tmp_path / "molecule.xyzin"
+
+    def fake_report(
+        xyzin_path,
+        *,
+        scale_path=None,
+        scale_records=(),
+        local=False,
+        force_threshold=None,
+        block_by_irrep=False,
+        subtract_electrostatic=False,
+        subtract_uff_vdw=False,
+        nonbonded_14_scale=0.5,
+    ):
+        calls["xyzin"] = xyzin_path
+        calls["local"] = local
+        calls["block_by_irrep"] = block_by_irrep
+        return SimpleNamespace(text="GF from xyzin", result=SimpleNamespace())
+
+    monkeypatch.setattr("oracle_gf.run_xyzin_gf_report_from_xyzin", fake_report)
+
+    rc = oracle_run.main(["gf", "--xyzin", str(xyzin), "--local", "--symmetry-blocks"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert calls == {"xyzin": xyzin, "local": True, "block_by_irrep": True}
+    assert "GF from xyzin" in out
 
 
 def test_fragments_plan_cli_calls_writer(tmp_path, monkeypatch, capsys):

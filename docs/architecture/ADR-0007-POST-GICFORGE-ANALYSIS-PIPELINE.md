@@ -51,6 +51,8 @@ Downstream ownership:
 - `oracle-thermo`: consumes normalized frequencies, rotational constants and
   electronic energies.
 - `oracle-vpt2-vci`: consumes normalized QFF/anharmonic force-field data.
+- `oracle-qm`: owns `#CARTESIAN_HESSIAN`, `#NORMAL_MODES` and `#QFF` as the
+  shared handoff sections between QM adapters and scientific tools.
 
 ## Consequences
 
@@ -58,5 +60,6 @@ Downstream ownership:
   exists.
 - GICForge can produce Gaussian input as a workflow operation without owning a
   private Gaussian writer.
-- Cartesian Hessian, rotational, thermochemical and anharmonic data should be
-  promoted to schema-controlled ORACLE models before use by scientific tools.
+- Cartesian Hessian, normal-mode, QFF, rotational, thermochemical and
+  anharmonic data should be promoted to schema-controlled ORACLE sections
+  before use by scientific tools.

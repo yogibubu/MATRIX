@@ -44,11 +44,11 @@ Examples:
   directly from an existing `xyzin`.
 - MORPHEUS/SEFit reads geometry plus `#ISOTOPOLOGUES`, and consumes `#GIC` or
   `#SYCART` depending on coordinate model.
-- GF/PED reads frozen `#GIC` plus a normalized Cartesian Hessian adapter.
+- GF/PED reads frozen `#GIC` plus `#CARTESIAN_HESSIAN`.
 - Thermochemistry reads `#BASIC`, `#ROTATIONAL` and optionally
   `#VIBRATIONAL`.
-- VPT2/VCI reads normalized QFF/anharmonic data from adapters and does not
-  rebuild GICs.
+- VPT2/VCI reads `#QFF` or equivalent normalized QFF/anharmonic data and does
+  not rebuild GICs.
 - DVR reads normalized scan/path data from adapters and uses its engine
   wrapper.
 
@@ -60,3 +60,5 @@ Examples:
 - ORACLE-Babel and validation are recommended producers of clean state, but
   standalone tools can consume externally prepared compatible state.
 - Package CLIs should prefer `--xyzin` for direct standalone mode.
+- GF/PED standalone mode consumes `#CARTESIAN_HESSIAN` plus frozen `#GIC`.
+- VPT2/VCI standalone loaders consume `#QFF` when present.

@@ -13,6 +13,8 @@ orchestrates these packages; it must not duplicate scientific logic.
 - `oracle_gf`: harmonic Cartesian-Hessian to internal-coordinate GF/PED. It
   owns `HessianInput`, Wilson GF linear algebra, frozen-GIC Hessian
   transformation, Pulay scaling and GF/PED report/CSV services.
+- `oracle_qm`: shared enriched-XYZ contracts for Cartesian Hessians, normal
+  modes and QFF/anharmonic force fields.
 - `oracle_vpt2_vci`: anharmonic normal-mode VPT2/VCI. It owns QFF data,
   normal-mode basis selection, VPT2, VCI and Davidson diagonalization. It does
   not build or evaluate GICs.

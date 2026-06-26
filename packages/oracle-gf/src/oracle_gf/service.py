@@ -7,8 +7,9 @@ from pathlib import Path
 
 import numpy as np
 
-from oracle_gaussian import hessian_input_from_gaussian_fchk
 from oracle_gicforge import read_gic_definition_from_xyzin
+from oracle_gaussian import hessian_input_from_gaussian_fchk
+from oracle_qm import hessian_input_from_xyzin
 
 from .internal import (
     GFLocalOptions,
@@ -27,6 +28,7 @@ class GFReport:
     text: str
     xyzin_path: Path | None = None
     scale_path: Path | None = None
+    hessian_source: str = ""
 
 
 def run_gf_report_from_fchk(fchk_path: Path) -> GFReport:
@@ -52,9 +54,71 @@ def run_xyzin_gf_report_from_fchk(
 ) -> GFReport:
     """Run the frozen-xyzin GF branch from a Cartesian Hessian FCHK adapter."""
     path = Path(fchk_path)
-    xyzin = Path(xyzin_path)
-    definition = read_gic_definition_from_xyzin(xyzin)
     hessian_input = hessian_input_from_gaussian_fchk(path)
+    return _run_xyzin_gf_report_from_hessian_input(
+        hessian_input,
+        path,
+        Path(xyzin_path),
+        hessian_source=f"FCHK {path}",
+        scale_path=scale_path,
+        scale_records=scale_records,
+        local=local,
+        force_threshold=force_threshold,
+        block_by_irrep=block_by_irrep,
+        subtract_electrostatic=subtract_electrostatic,
+        subtract_uff_vdw=subtract_uff_vdw,
+        nonbonded_14_scale=nonbonded_14_scale,
+    )
+
+
+def run_xyzin_gf_report_from_xyzin(
+    xyzin_path: Path,
+    *,
+    scale_path: Path | None = None,
+    scale_records: tuple[str, ...] = (),
+    local: bool = False,
+    force_threshold: float | None = None,
+    block_by_irrep: bool = False,
+    subtract_electrostatic: bool = False,
+    subtract_uff_vdw: bool = False,
+    nonbonded_14_scale: float = 0.5,
+) -> GFReport:
+    """Run GF from frozen #GIC and #CARTESIAN_HESSIAN sections in one xyzin."""
+    xyzin = Path(xyzin_path)
+    hessian_input = hessian_input_from_xyzin(xyzin)
+    return _run_xyzin_gf_report_from_hessian_input(
+        hessian_input,
+        xyzin,
+        xyzin,
+        hessian_source=f"#CARTESIAN_HESSIAN in {xyzin}",
+        scale_path=scale_path,
+        scale_records=scale_records,
+        local=local,
+        force_threshold=force_threshold,
+        block_by_irrep=block_by_irrep,
+        subtract_electrostatic=subtract_electrostatic,
+        subtract_uff_vdw=subtract_uff_vdw,
+        nonbonded_14_scale=nonbonded_14_scale,
+    )
+
+
+def _run_xyzin_gf_report_from_hessian_input(
+    hessian_input,
+    source_path: Path,
+    xyzin: Path,
+    *,
+    hessian_source: str,
+    scale_path: Path | None = None,
+    scale_records: tuple[str, ...] = (),
+    local: bool = False,
+    force_threshold: float | None = None,
+    block_by_irrep: bool = False,
+    subtract_electrostatic: bool = False,
+    subtract_uff_vdw: bool = False,
+    nonbonded_14_scale: float = 0.5,
+) -> GFReport:
+    xyzin = Path(xyzin)
+    definition = read_gic_definition_from_xyzin(xyzin)
     correction = None
     correction_label = "NONE"
     if subtract_electrostatic or subtract_uff_vdw:
@@ -96,11 +160,18 @@ def run_xyzin_gf_report_from_fchk(
         cartesian_hessian_correction_label=correction_label,
     )
     return GFReport(
-        path,
+        Path(source_path),
         result,
-        format_gf_report(path, result, xyzin_path=xyzin, scale_path=scale_path),
+        format_gf_report(
+            Path(source_path),
+            result,
+            xyzin_path=xyzin,
+            scale_path=scale_path,
+            hessian_source=hessian_source,
+        ),
         xyzin_path=xyzin,
         scale_path=scale_path,
+        hessian_source=hessian_source,
     )
 
 
@@ -110,10 +181,11 @@ def format_gf_report(
     *,
     xyzin_path: Path | None = None,
     scale_path: Path | None = None,
+    hessian_source: str | None = None,
 ) -> str:
     lines = [
         "GF/PED from ORACLE non-redundant GICs",
-        f"Source FCHK: {Path(fchk_path)}",
+        f"Hessian source: {hessian_source or f'FCHK {Path(fchk_path)}'}",
         f"Coordinate source: {result.coordinate_source}",
         f"Point group: {result.point_group}",
         f"Symmetrized GICs: {result.symmetrized_gics}",

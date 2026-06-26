@@ -34,6 +34,7 @@ _SERVICE_EXPORTS = {
     "pulay_scaling_factors",
     "run_gf_report_from_fchk",
     "run_xyzin_gf_report_from_fchk",
+    "run_xyzin_gf_report_from_xyzin",
     "write_csv_tables",
 }
 
@@ -68,6 +69,7 @@ __all__ = [
     "pulay_scaling_factors",
     "run_gf_report_from_fchk",
     "run_xyzin_gf_report_from_fchk",
+    "run_xyzin_gf_report_from_xyzin",
     "solve_wilson_gf",
     "synthon_charges_from_xyzin",
     "topology_bonds_from_xyzin",

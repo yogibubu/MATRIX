@@ -54,6 +54,15 @@ class FCHKData:
         return data
 
 
+@dataclass(frozen=True)
+class GaussianFCHKPromotion:
+    xyzin: Path
+    fchk_path: Path
+    wrote_cartesian_hessian: bool
+    wrote_normal_modes: bool
+    wrote_qff: bool
+
+
 def read_gaussian_fchk(path: Path) -> FCHKData:
     """Read harmonic Hessian and Gaussian anharmonic arrays from an FCHK file."""
     blocks = _read_fchk_blocks(Path(path))
@@ -111,6 +120,68 @@ def read_gaussian_fchk_qff(path: Path) -> FCHKData:
 def anharmonic_input_from_gaussian_fchk(path: Path):
     """Gaussian FCHK adapter: return the canonical ORACLE anharmonic input."""
     return read_gaussian_fchk(path).to_anharmonic_input()
+
+
+def promote_gaussian_fchk_to_xyzin(
+    fchk_path: Path | str,
+    xyzin: Path | str,
+    *,
+    write_cartesian_hessian: bool = True,
+    write_normal_modes: bool = True,
+    write_qff: bool = True,
+) -> GaussianFCHKPromotion:
+    """Promote Gaussian FCHK harmonic/QFF payloads into shared ORACLE xyzin sections."""
+    from oracle_qm import (
+        cartesian_hessian_section_from_hessian_input,
+        normal_modes_section_from_arrays,
+        qff_section_from_anharmonic_input,
+        write_cartesian_hessian_section,
+        write_normal_modes_section,
+        write_qff_section,
+    )
+
+    source = Path(fchk_path)
+    target = Path(xyzin)
+    data = read_gaussian_fchk(source)
+    wrote_hessian = False
+    wrote_modes = False
+    wrote_force_field = False
+    if write_cartesian_hessian:
+        write_cartesian_hessian_section(
+            target,
+            cartesian_hessian_section_from_hessian_input(data.to_hessian_input(), source="gaussian-fchk"),
+        )
+        wrote_hessian = True
+    if write_normal_modes and data.normal_modes.size:
+        coordinate_count = 3 * len(data.atomic_numbers)
+        frequencies = (
+            data.anharmonic_frequencies_cm
+            if data.anharmonic_frequencies_cm.size
+            else data.harmonic_frequencies_cm
+        )
+        write_normal_modes_section(
+            target,
+            normal_modes_section_from_arrays(
+                frequencies,
+                data.normal_modes,
+                source="gaussian-fchk",
+                coordinate_count=coordinate_count,
+            ),
+        )
+        wrote_modes = True
+    if write_qff:
+        write_qff_section(
+            target,
+            qff_section_from_anharmonic_input(data.to_anharmonic_input(), source="gaussian-fchk"),
+        )
+        wrote_force_field = True
+    return GaussianFCHKPromotion(
+        xyzin=target,
+        fchk_path=source,
+        wrote_cartesian_hessian=wrote_hessian,
+        wrote_normal_modes=wrote_modes,
+        wrote_qff=wrote_force_field,
+    )
 
 
 def read_indexed_qff_text(path: Path, frequencies_cm: np.ndarray | None = None):

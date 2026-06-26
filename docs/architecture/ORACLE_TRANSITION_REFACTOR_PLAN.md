@@ -39,6 +39,8 @@ The planned new scientific capabilities are limited and explicit:
 - `oracle_gf`: Cartesian-Hessian to GIC-B/GF/PED transformations, Pulay
   scaling and harmonic report/CSV services. This package is physically
   separated from VPT2/VCI.
+- `oracle_qm`: shared enriched-XYZ tensor sections for Cartesian Hessians,
+  normal modes and QFF/anharmonic force fields.
 - `oracle_gaussian`: Gaussian input writing, log parsing, scan extraction,
   GIC-value extraction and job metadata.
 - `oracle_molpro`: Molpro output geometry, charge and multiplicity adapters.

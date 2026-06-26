@@ -6,6 +6,7 @@ from io import StringIO
 from pathlib import Path
 
 import numpy as np
+from oracle_qm import quartic_force_field_from_qff_section, read_qff_section
 
 from .gaussian_qff import anharmonic_input_from_gaussian_fchk, read_indexed_qff_text
 from .validation import validate_force_field
@@ -20,8 +21,14 @@ class VPT2VCIReport:
     text: str
 
 
-def load_force_field(fchk_path: Path | None = None, qff_path: Path | None = None) -> QuarticForceField:
+def load_force_field(
+    fchk_path: Path | None = None,
+    qff_path: Path | None = None,
+    xyzin_path: Path | None = None,
+) -> QuarticForceField:
     """Load a canonical ORACLE QFF using optional Gaussian/FCHK frequencies."""
+    if xyzin_path is not None:
+        return quartic_force_field_from_qff_section(read_qff_section(Path(xyzin_path)))
     frequencies = None
     anharmonic_input = None
     if fchk_path is not None:
