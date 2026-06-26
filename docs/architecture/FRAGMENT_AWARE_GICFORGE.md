@@ -6,6 +6,9 @@ Date: 2026-06-26
 
 `oracle-fragments` owns fragment discovery and writes concrete `#FRAGMENTS`
 records. GICForge consumes those records; it does not rediscover fragments.
+The same package owns `#INTERACTION_CENTERS`, where bond midpoints, ring
+centroids and future eta-n/H-bond centers are stored as virtual centers. These
+centers are metadata over real atoms, not dummy atoms in the molecular graph.
 
 The first implemented strategy is `CONNECTED_COMPONENTS`, which materializes:
 
@@ -27,6 +30,17 @@ candidates before ordinary angle/torsion pruning:
 - `FRAG_ORIENTATION` / `FROT`: TRIC/geomeTRIC-style exponential-map rotation
   component of a fragment local frame relative to the reference fragment frame.
 
+When `#INTERACTION_CENTERS` has `STATUS BUILT`, GICForge also adds:
+
+- `CENTER_ATOM_DISTANCE` / `CENTER_ATOM_DIST`: distance between a real atom and
+  a virtual center defined by a bond midpoint, ring centroid, eta-n ligand
+  centroid or future H-bond/contact center.
+
+This covers atom-to-ring-center and atom-to-bond-center interactions used for
+eta coordination, pi/H-bond contacts and transition-metal skeletal coordinates.
+Additional tilt, torsion and frame-orientation primitives should reuse the same
+center records rather than introducing separate center parsers.
+
 These primitives are frozen in `#GIC` and available to ORACLE downstream tools.
 `[GAUSSIAN_GIC]` exports them as Gaussian symbolic GIC expressions using
 `Fragment(...)`, `XCntr/YCntr/ZCntr(...)`, Cartesian `X/Y/Z`, and the
@@ -42,6 +56,7 @@ regenerating the GIC basis. For fragment-aware coordinates, ORACLE differentiate
 the same scalar definitions used for the Gaussian symbolic export:
 
 - center-center and center-atom distances;
+- atom to virtual bond/ring/contact center distances;
 - Cartesian center translations;
 - exponential-map components of relative fragment orientation.
 

@@ -10,12 +10,15 @@ from oracle_chem import preprocess_to_enriched_xyz, write_validation_section
 from oracle_fragments import write_fragment_build_section
 from oracle_gaussian import read_gaussian_cartesian_input
 from oracle_gicforge import (
+    FrozenGIC,
     GICForgeContractError,
+    GICDefinition,
     GICPrimitive,
     build_gic_b_matrix_from_xyzin,
     build_gic_definition_from_xyzin,
     gaussian_gic_lines_from_xyzin,
     gic_b_matrix_lines,
+    gic_definition_section_lines,
     write_gicforge_build_sections,
     write_gicforge_gaussian_input,
     write_gicforge_plan_sections,
@@ -411,3 +414,55 @@ def test_gicforge_b_matrix_includes_fragment_coordinate_rows(tmp_path):
     analytic = _analytic_b_row(frot, coords)
     diagnostic_fd = _finite_difference_b_row(frot, coords, step_angstrom=1.0e-6)
     assert np.max(np.abs(analytic - diagnostic_fd)) < 1.0e-5
+
+
+def test_gicforge_center_atom_distance_uses_analytic_b_and_gaussian_center():
+    primitive = GICPrimitive(
+        identifier="P001",
+        name="CnAt0001",
+        family="CENTER_ATOM_DISTANCE",
+        function="CENTER_ATOM_DIST",
+        atoms=(1, 2),
+        ref_atoms=(3,),
+        refs=("C001", "A3"),
+    )
+    coords = np.asarray(
+        [
+            [-1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 2.0],
+        ],
+        dtype=float,
+    )
+
+    analytic = _analytic_b_row(primitive, coords)
+    diagnostic_fd = _finite_difference_b_row(primitive, coords, step_angstrom=1.0e-6)
+    assert np.max(np.abs(analytic - diagnostic_fd)) < 1.0e-8
+    assert analytic[2] == pytest.approx(-0.5)
+    assert analytic[5] == pytest.approx(-0.5)
+    assert analytic[8] == pytest.approx(1.0)
+
+    definition = GICDefinition(
+        backend="test",
+        point_group="C1",
+        symmetrize=False,
+        target_rank=1,
+        rank=1,
+        candidate_count=1,
+        reference_coordinates_angstrom=tuple(tuple(row) for row in coords),
+        primitives=(primitive,),
+        gics=(
+            FrozenGIC(
+                identifier="GIC001",
+                name="CnAt0001",
+                family="CENTER_ATOM_DISTANCE",
+                irrep="A",
+                primitive_id="P001",
+                gaussian_expression="NONE",
+                coefficients=(("P001", 1.0),),
+            ),
+        ),
+    )
+    gaussian_lines = gic_definition_section_lines(definition)
+    assert "CxC001(Inactive)=(X(1)+X(2))/2" in gaussian_lines
+    assert any(line.startswith("GIC001 = SQRT((CxC001-X(3))**2") for line in gaussian_lines)

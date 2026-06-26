@@ -117,6 +117,7 @@ def build_gic_definition_from_xyzin(
         coords=coords,
         natoms=geometry.natoms,
         fragment_records=_fragment_records(target),
+        interaction_centers=_interaction_center_definition(target),
     )
     target_rank = _vibrational_rank(coords)
     selected, rank = _select_ranked_primitives(
@@ -421,6 +422,7 @@ def _primitive_candidates(
     coords: np.ndarray,
     natoms: int,
     fragment_records: tuple[object, ...] = (),
+    interaction_centers: object | None = None,
 ) -> tuple[GICPrimitive, ...]:
     adjacency = _adjacency(bonds, natoms=natoms)
     counters: dict[str, int] = {
@@ -433,6 +435,7 @@ def _primitive_candidates(
         "FRAG_CENTER_ATOM_DISTANCE": 0,
         "FRAG_TRANSLATION": 0,
         "FRAG_ORIENTATION": 0,
+        "CENTER_ATOM_DISTANCE": 0,
     }
     candidates: list[GICPrimitive] = []
 
@@ -441,6 +444,9 @@ def _primitive_candidates(
 
     candidates.extend(
         _fragment_primitive_candidates(fragment_records, coords=coords, counters=counters)
+    )
+    candidates.extend(
+        _interaction_center_primitive_candidates(interaction_centers, counters=counters)
     )
 
     for center in range(1, natoms + 1):
@@ -502,6 +508,7 @@ def _make_primitive(
         "FRAG_CENTER_ATOM_DISTANCE": "FCAt",
         "FRAG_TRANSLATION": "FTrn",
         "FRAG_ORIENTATION": "FRot",
+        "CENTER_ATOM_DISTANCE": "CnAt",
     }[family]
     serial = sum(counters.values())
     return GICPrimitive(
@@ -557,6 +564,8 @@ def _analytic_b_row(primitive: GICPrimitive, coords: np.ndarray) -> np.ndarray:
     if primitive.function == "FC_DIST":
         return _fragment_center_distance_b_row(coords, primitive.atoms, primitive.ref_atoms)
     if primitive.function == "FCA_DIST":
+        return _fragment_center_atom_distance_b_row(coords, primitive.atoms, primitive.ref_atoms)
+    if primitive.function == "CENTER_ATOM_DIST":
         return _fragment_center_atom_distance_b_row(coords, primitive.atoms, primitive.ref_atoms)
     if primitive.function == "FTRANS":
         return _fragment_translation_b_row(
@@ -1012,6 +1021,8 @@ def _primitive_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
         return _fragment_center_distance_value(coords, primitive.atoms, primitive.ref_atoms)
     if primitive.function == "FCA_DIST":
         return _fragment_center_atom_distance_value(coords, primitive.atoms, primitive.ref_atoms)
+    if primitive.function == "CENTER_ATOM_DIST":
+        return _fragment_center_atom_distance_value(coords, primitive.atoms, primitive.ref_atoms)
     if primitive.function == "FTRANS":
         return _fragment_translation_value(
             coords,
@@ -1225,12 +1236,48 @@ def _fragment_primitive_candidates(
     return tuple(candidates)
 
 
+def _interaction_center_primitive_candidates(
+    definition: object | None,
+    *,
+    counters: dict[str, int],
+) -> tuple[GICPrimitive, ...]:
+    if definition is None:
+        return ()
+    centers = {getattr(center, "identifier"): center for center in getattr(definition, "centers", ())}
+    candidates: list[GICPrimitive] = []
+    for interaction in getattr(definition, "interactions", ()):
+        center = centers.get(getattr(interaction, "center_id"))
+        if center is None:
+            continue
+        atom = int(getattr(interaction, "atom"))
+        atoms = tuple(int(item) for item in getattr(center, "atoms"))
+        candidates.append(
+            _make_primitive(
+                "CENTER_ATOM_DISTANCE",
+                "CENTER_ATOM_DIST",
+                atoms,
+                counters,
+                ref_atoms=(atom,),
+                refs=(getattr(center, "identifier"), f"A{atom}"),
+            )
+        )
+    return tuple(candidates)
+
+
 def _fragment_records(path: Path) -> tuple[object, ...]:
     try:
         from oracle_fragments import read_fragment_records
     except ImportError:
         return ()
     return tuple(read_fragment_records(Path(path)))
+
+
+def _interaction_center_definition(path: Path) -> object | None:
+    try:
+        from oracle_fragments import read_interaction_center_definition
+    except ImportError:
+        return None
+    return read_interaction_center_definition(Path(path))
 
 
 def _fragment_number(record: object) -> int:
@@ -1605,6 +1652,10 @@ def _primitive_line(primitive: GICPrimitive) -> str:
 def _gaussian_gic_block_lines(definition: GICDefinition) -> list[str]:
     coords = np.asarray(definition.reference_coordinates_angstrom, dtype=float)
     lines: list[str] = []
+    virtual_centers = _gaussian_virtual_center_atoms(definition.primitives)
+    if virtual_centers:
+        for center_id, atoms in sorted(virtual_centers.items()):
+            lines.extend(_gaussian_virtual_center_lines(center_id, atoms))
     fragment_atoms = _gaussian_fragment_atoms(definition.primitives)
     if fragment_atoms:
         for fragment_id, atoms in sorted(fragment_atoms.items()):
@@ -1653,6 +1704,14 @@ def _gaussian_expression_for_primitive(primitive: GICPrimitive) -> str | None:
             f"(Cy{frag_id}-Y({atom}))**2+"
             f"(Cz{frag_id}-Z({atom}))**2)"
         )
+    if primitive.function == "CENTER_ATOM_DIST":
+        center_id, atom_ref = primitive.refs
+        atom = atom_ref[1:]
+        return (
+            f"SQRT((Cx{center_id}-X({atom}))**2+"
+            f"(Cy{center_id}-Y({atom}))**2+"
+            f"(Cz{center_id}-Z({atom}))**2)"
+        )
     if primitive.function == "FTRANS":
         frag_id, ref_id = primitive.refs
         axis = ("x", "y", "z")[primitive.mode]
@@ -1680,6 +1739,19 @@ def _gaussian_fragment_atoms(
         if second.startswith("F"):
             fragments.setdefault(second, primitive.ref_atoms)
     return fragments
+
+
+def _gaussian_virtual_center_atoms(
+    primitives: tuple[GICPrimitive, ...],
+) -> dict[str, tuple[int, ...]]:
+    centers: dict[str, tuple[int, ...]] = {}
+    for primitive in primitives:
+        if primitive.function != "CENTER_ATOM_DIST" or not primitive.refs:
+            continue
+        center_id = primitive.refs[0]
+        if center_id.startswith("C"):
+            centers.setdefault(center_id, primitive.atoms)
+    return centers
 
 
 def _gaussian_frot_pairs(primitives: tuple[GICPrimitive, ...]) -> set[tuple[str, str]]:
@@ -1710,6 +1782,21 @@ def _gaussian_center_lines(fragment_id: str) -> list[str]:
         f"Cy{fragment_id}(Inactive)=YCntr({fragment_id})",
         f"Cz{fragment_id}(Inactive)=ZCntr({fragment_id})",
     ]
+
+
+def _gaussian_virtual_center_lines(center_id: str, atoms: tuple[int, ...]) -> list[str]:
+    if not atoms:
+        return []
+    denominator = len(atoms)
+    return [
+        f"Cx{center_id}(Inactive)=({_gaussian_axis_sum('X', atoms)})/{denominator}",
+        f"Cy{center_id}(Inactive)=({_gaussian_axis_sum('Y', atoms)})/{denominator}",
+        f"Cz{center_id}(Inactive)=({_gaussian_axis_sum('Z', atoms)})/{denominator}",
+    ]
+
+
+def _gaussian_axis_sum(axis: str, atoms: tuple[int, ...]) -> str:
+    return "+".join(f"{axis}({atom})" for atom in atoms)
 
 
 def _gaussian_frame_lines(

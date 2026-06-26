@@ -69,6 +69,11 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     plan.add_argument("xyzin", type=Path)
     fragments_build = fragments_sub.add_parser("build", help="Build concrete #FRAGMENTS")
     fragments_build.add_argument("xyzin", type=Path)
+    centers = fragments_sub.add_parser(
+        "centers",
+        help="Build virtual bond/ring interaction centers for GICForge",
+    )
+    centers.add_argument("xyzin", type=Path)
 
     rovib = sub.add_parser("rovib", help="Standalone rovibrational xyzin utilities")
     rovib_sub = rovib.add_subparsers(dest="rovib_command")
@@ -199,6 +204,16 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
             "Built ORACLE fragments: "
             f"{args.xyzin} (fragments={len(definition.fragments)}, "
             f"reference={definition.reference_fragment})"
+        )
+        return 0
+    if args.command == "fragments" and args.fragments_command == "centers":
+        from oracle_fragments import write_interaction_center_section
+
+        definition = write_interaction_center_section(args.xyzin)
+        print(
+            "Built ORACLE interaction centers: "
+            f"{args.xyzin} (centers={len(definition.centers)}, "
+            f"interactions={len(definition.interactions)})"
         )
         return 0
     if args.command == "rovib" and args.rovib_command == "summarize":
