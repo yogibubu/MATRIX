@@ -232,11 +232,14 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     vpt2_source.add_argument("--xyzin", type=Path, help="ORACLE xyzin containing #QFF")
     vpt2_source.add_argument("--fchk", type=Path, help="Gaussian FCHK adapter input")
     vpt2_source.add_argument("--qff-file", type=Path, help="Indexed QFF text adapter input")
+    vpt2_source.add_argument("--collect", type=Path, help="Collect post-run VPT2/VCI outputs into #VPT2_VCI")
     vpt2_vci.add_argument("--max-quanta", type=int, default=2)
     vpt2_vci.add_argument("--roots", type=int, default=10)
     vpt2_vci.add_argument("--vci-method", choices=("dense", "davidson"), default="dense")
+    vpt2_vci.add_argument("--run-dir", type=Path, help="Write report, CSV tables and manifest here")
     vpt2_vci.add_argument("--out", type=Path, help="Write the readable VPT2/VCI report")
     vpt2_vci.add_argument("--csv-dir", type=Path, help="Write VPT2/VCI CSV tables")
+    vpt2_vci.add_argument("--no-write", action="store_true", help="With --collect, do not update #VPT2_VCI")
 
     dvr = sub.add_parser("dvr", help="Prepare scan/path DVR workflows")
     dvr_sub = dvr.add_subparsers(dest="dvr_command")
@@ -808,7 +811,29 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
             print(f"Wrote GF/PED CSV tables: {len(written)} files in {args.csv_dir}")
         return 0
     if args.command == "vpt2-vci":
-        from oracle_vpt2_vci import VCIOptions, load_force_field, run_vpt2_vci_report, write_csv_tables
+        from oracle_vpt2_vci import (
+            VCIOptions,
+            collect_vpt2_vci_outputs_from_xyzin,
+            refresh_vpt2_vci_section,
+            load_force_field,
+            run_vpt2_vci_report,
+            vpt2_vci_output_summary_lines,
+            vpt2_vci_section_from_run,
+            write_csv_tables,
+            write_vpt2_vci_manifest,
+            write_vpt2_vci_section,
+        )
+
+        if args.collect is not None:
+            snapshot = (
+                collect_vpt2_vci_outputs_from_xyzin(args.collect)
+                if args.no_write
+                else refresh_vpt2_vci_section(args.collect)
+            )
+            print("\n".join(vpt2_vci_output_summary_lines(snapshot)))
+            if not args.no_write:
+                print(f"Updated #VPT2_VCI: {args.collect}")
+            return 0
 
         qff = load_force_field(fchk_path=args.fchk, qff_path=args.qff_file, xyzin_path=args.xyzin)
         report = run_vpt2_vci_report(
@@ -818,15 +843,66 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
             options=VCIOptions(),
             vci_method=args.vci_method,
         )
-        if args.out is not None:
-            args.out.parent.mkdir(parents=True, exist_ok=True)
-            args.out.write_text(report.text + "\n", encoding="utf-8")
-            print(f"Wrote VPT2/VCI report: {args.out}")
+        report_path = args.out
+        csv_dir = args.csv_dir
+        run_dir = args.run_dir
+        if run_dir is not None:
+            run_dir.mkdir(parents=True, exist_ok=True)
+            report_path = report_path or (run_dir / "vpt2_vci.report")
+            csv_dir = csv_dir or run_dir
+        if report_path is not None:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(report.text + "\n", encoding="utf-8")
+            print(f"Wrote VPT2/VCI report: {report_path}")
         else:
             print(report.text)
-        if args.csv_dir is not None:
-            written = write_csv_tables(report, args.csv_dir)
-            print(f"Wrote VPT2/VCI CSV tables: {len(written)} files in {args.csv_dir}")
+        written_csv: dict[str, Path] = {}
+        if csv_dir is not None:
+            written_csv = write_csv_tables(report, csv_dir)
+            print(f"Wrote VPT2/VCI CSV tables: {len(written_csv)} files in {csv_dir}")
+        outputs = {}
+        if report_path is not None:
+            outputs["report"] = report_path
+        outputs.update(
+            {
+                key.removesuffix(".csv").replace("mode_contributions", "mode_contributions"): path
+                for key, path in written_csv.items()
+            }
+        )
+        manifest_path = None
+        source_kind, source_path = _vpt2_vci_source(args)
+        if run_dir is not None:
+            manifest_path = write_vpt2_vci_manifest(
+                run_dir=run_dir,
+                inputs={source_kind: source_path} if source_path is not None else {},
+                outputs=outputs,
+                max_quanta=args.max_quanta,
+                roots=args.roots,
+                vci_method=args.vci_method,
+                source_kind=source_kind,
+                status="complete" if "comparison" in outputs and "report" in outputs else "partial",
+            )
+            outputs["manifest"] = manifest_path
+            print(f"manifest: {manifest_path}")
+        if args.xyzin is not None and args.xyzin.exists() and outputs:
+            status = "complete" if "comparison" in outputs and "report" in outputs else "partial"
+            write_vpt2_vci_section(
+                args.xyzin,
+                vpt2_vci_section_from_run(
+                    source_kind=source_kind,
+                    source_path=source_path,
+                    run_dir=run_dir,
+                    report_path=report_path,
+                    csv_dir=csv_dir,
+                    manifest_path=manifest_path,
+                    max_quanta=args.max_quanta,
+                    roots=args.roots,
+                    vci_method=args.vci_method,
+                    outputs=outputs,
+                    status=status,
+                ),
+            )
+            print(f"Updated #VPT2_VCI: {args.xyzin}")
         return 0
     if args.command == "dvr" and args.dvr_command == "prepare":
         import shlex
@@ -1226,6 +1302,16 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
 
 def _parse_fixed_parameters(raw: str) -> tuple[str, ...]:
     return tuple(part.strip() for part in _split_top_level(raw, separators=",;") if part.strip())
+
+
+def _vpt2_vci_source(args) -> tuple[str, Path | None]:
+    if getattr(args, "xyzin", None) is not None:
+        return "xyzin", args.xyzin
+    if getattr(args, "fchk", None) is not None:
+        return "fchk", args.fchk
+    if getattr(args, "qff_file", None) is not None:
+        return "qff_file", args.qff_file
+    return "unknown", None
 
 
 def _split_top_level(raw: str, *, separators: str) -> list[str]:

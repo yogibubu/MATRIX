@@ -462,6 +462,117 @@ def test_vpt2_vci_cli_uses_qff_section_from_xyzin(tmp_path, monkeypatch, capsys)
     assert "Wrote VPT2/VCI report" in capsys.readouterr().out
 
 
+def test_vpt2_vci_cli_writes_manifest_and_xyzin_section(tmp_path, monkeypatch, capsys):
+    from oracle_vpt2_vci import read_vpt2_vci_section
+
+    calls = {}
+    xyzin = tmp_path / "molecule.xyzin"
+    run_dir = tmp_path / "run"
+    xyzin.write_text("1\ncomment\nH 0.0 0.0 0.0\n", encoding="utf-8")
+
+    def fake_load_force_field(*, fchk_path=None, qff_path=None, xyzin_path=None):
+        return SimpleNamespace(harmonic_frequencies_cm=(100.0,))
+
+    def fake_run(force_field, *, max_quanta, roots, options=None, vci_method="dense"):
+        calls["run"] = (max_quanta, roots, vci_method)
+        return SimpleNamespace(text="vpt2 vci report")
+
+    def fake_csv(report, outdir, *, prefix="vpt2_vci"):
+        paths = {
+            "frequencies.csv": outdir / f"{prefix}_frequencies.csv",
+            "comparison.csv": outdir / f"{prefix}_comparison.csv",
+            "mode_contributions.csv": outdir / f"{prefix}_mode_contributions.csv",
+        }
+        paths["frequencies.csv"].write_text("mode,harmonic_frequency_cm-1\n1,100.0\n", encoding="utf-8")
+        paths["comparison.csv"].write_text(
+            "root,vpt2_abs_cm-1,vci_abs_cm-1,delta_abs_cm-1,"
+            "vpt2_exc_cm-1,vci_exc_cm-1,delta_exc_cm-1\n"
+            "1,50.0,50.0,0.0,0.0,0.0,0.0\n",
+            encoding="utf-8",
+        )
+        paths["mode_contributions.csv"].write_text("root,mode,expected_quanta\n1,1,0.5\n", encoding="utf-8")
+        return paths
+
+    monkeypatch.setattr("oracle_vpt2_vci.load_force_field", fake_load_force_field)
+    monkeypatch.setattr("oracle_vpt2_vci.run_vpt2_vci_report", fake_run)
+    monkeypatch.setattr("oracle_vpt2_vci.write_csv_tables", fake_csv)
+
+    rc = oracle_run.main(
+        [
+            "vpt2-vci",
+            "--xyzin",
+            str(xyzin),
+            "--run-dir",
+            str(run_dir),
+            "--max-quanta",
+            "3",
+            "--roots",
+            "4",
+            "--vci-method",
+            "davidson",
+        ]
+    )
+    out = capsys.readouterr().out
+    section = read_vpt2_vci_section(xyzin)
+
+    assert rc == 0
+    assert calls["run"] == (3, 4, "davidson")
+    assert (run_dir / "vpt2_vci_manifest.json").is_file()
+    assert section.status == "complete"
+    assert section.outputs["comparison"] == run_dir / "vpt2_vci_comparison.csv"
+    assert "manifest:" in out
+    assert "Updated #VPT2_VCI" in out
+
+
+def test_vpt2_vci_collect_cli_refreshes_section(tmp_path, capsys):
+    from oracle_vpt2_vci import read_vpt2_vci_section, vpt2_vci_section_from_run, write_vpt2_vci_section
+
+    xyzin = tmp_path / "molecule.xyzin"
+    run_dir = tmp_path / "vpt2_vci"
+    xyzin.write_text("1\ncomment\nH 0.0 0.0 0.0\n", encoding="utf-8")
+    run_dir.mkdir()
+    (run_dir / "vpt2_vci.report").write_text("report\n", encoding="utf-8")
+    (run_dir / "vpt2_vci_frequencies.csv").write_text(
+        "mode,harmonic_frequency_cm-1\n1,100.0\n",
+        encoding="utf-8",
+    )
+    (run_dir / "vpt2_vci_comparison.csv").write_text(
+        "root,vpt2_abs_cm-1,vci_abs_cm-1,delta_abs_cm-1,"
+        "vpt2_exc_cm-1,vci_exc_cm-1,delta_exc_cm-1\n"
+        "1,50.0,50.0,0.0,0.0,0.0,0.0\n",
+        encoding="utf-8",
+    )
+    (run_dir / "vpt2_vci_mode_contributions.csv").write_text(
+        "root,mode,expected_quanta\n1,1,0.5\n",
+        encoding="utf-8",
+    )
+    write_vpt2_vci_section(
+        xyzin,
+        vpt2_vci_section_from_run(
+            source_kind="xyzin",
+            source_path=xyzin,
+            run_dir=run_dir,
+            report_path=run_dir / "vpt2_vci.report",
+            csv_dir=run_dir,
+            manifest_path=None,
+            max_quanta=2,
+            roots=1,
+            vci_method="dense",
+            status="prepared",
+        ),
+    )
+
+    rc = oracle_run.main(["vpt2-vci", "--collect", str(xyzin)])
+    out = capsys.readouterr().out
+    section = read_vpt2_vci_section(xyzin)
+
+    assert rc == 0
+    assert section.status == "complete"
+    assert section.outputs["frequencies"] == run_dir / "vpt2_vci_frequencies.csv"
+    assert "status: complete" in out
+    assert "Updated #VPT2_VCI" in out
+
+
 def test_dvr_prepare_cli_writes_manifest_and_xyzin_section(tmp_path, monkeypatch, capsys):
     calls = {}
     log = tmp_path / "scan.log"

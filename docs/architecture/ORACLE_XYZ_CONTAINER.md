@@ -103,6 +103,13 @@ FCHK. VPT2/VCI loaders can read `#QFF` directly from the same container.
 standalone input. `--fchk` and `--qff-file` remain adapter/compatibility entry
 points; scientific VPT2/VCI code should not reparse Gaussian output directly.
 
+`oracle vpt2-vci --xyzin molecule.xyzin --run-dir runs/vpt2_vci` writes the
+readable report, CSV comparison tables, an `oracle.run.v1` manifest and a
+`#VPT2_VCI` section. `oracle vpt2-vci --collect molecule.xyzin` rereads those
+outputs, records `OUTPUT_*` pointers and sets the section status to `complete`,
+`partial` or `prepared`. GUI controllers consume this normalized state through
+`oracle-vpt2-vci`, not by scanning CSV files directly.
+
 ## DVR State
 
 `#DVR` stores the normalized DVR workflow request and output pointers:

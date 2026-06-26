@@ -11,12 +11,15 @@ from oracle_vpt2_vci import (
     QuarticForceField,
     ScientificValidationError,
     VCIOptions,
+    collect_vpt2_vci_outputs,
     compare_vpt2_vci,
     davidson_lowest,
     generate_vibrational_basis,
     inventory_vpt2_vci_backends,
     load_force_field,
     lower_to_symmetric,
+    read_vpt2_vci_section,
+    refresh_vpt2_vci_section,
     read_gaussian_fchk_qff,
     read_indexed_qff_text,
     run_python_vci_from_gaussian_fchk,
@@ -25,6 +28,8 @@ from oracle_vpt2_vci import (
     solve_vci_from_anharmonic_input,
     solve_vpt2_from_anharmonic_input,
     validate_force_field,
+    vpt2_vci_section_from_run,
+    write_vpt2_vci_section,
     zero_anharmonic_force_field,
 )
 from oracle_vpt2_vci.gaussian_qff import hessian_input_from_gaussian_fchk
@@ -261,6 +266,59 @@ def test_report_service_exposes_davidson_vci_path():
     assert "VPT2/VCI comparison on canonical ORACLE QFF" in report.text
 
 
+def test_vpt2_vci_section_roundtrip_and_collect_outputs(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    run_dir = tmp_path / "vpt2_vci"
+    xyzin.write_text("1\ncomment\nH 0.0 0.0 0.0\n", encoding="utf-8")
+    _write_vpt2_vci_outputs(run_dir)
+    section = vpt2_vci_section_from_run(
+        source_kind="xyzin",
+        source_path=xyzin,
+        run_dir=run_dir,
+        report_path=run_dir / "vpt2_vci.report",
+        csv_dir=run_dir,
+        manifest_path=run_dir / "vpt2_vci_manifest.json",
+        max_quanta=3,
+        roots=4,
+        vci_method="davidson",
+        outputs={},
+        status="prepared",
+    )
+
+    write_vpt2_vci_section(xyzin, section)
+    snapshot = refresh_vpt2_vci_section(xyzin)
+    parsed = read_vpt2_vci_section(xyzin)
+
+    assert snapshot.status == "complete"
+    assert snapshot.comparison[1].delta_exc_cm == 1.5
+    assert snapshot.frequencies[0].harmonic_frequency_cm == 100.0
+    assert snapshot.mode_contributions[0].expected_quanta == 0.25
+    assert parsed.status == "complete"
+    assert parsed.outputs["comparison"] == run_dir / "vpt2_vci_comparison.csv"
+
+
+def test_vpt2_vci_collect_marks_partial_when_csvs_are_missing(tmp_path):
+    run_dir = tmp_path / "vpt2_vci"
+    run_dir.mkdir()
+    (run_dir / "vpt2_vci.report").write_text("report only\n", encoding="utf-8")
+    section = vpt2_vci_section_from_run(
+        source_kind="xyzin",
+        source_path=tmp_path / "molecule.xyzin",
+        run_dir=run_dir,
+        report_path=run_dir / "vpt2_vci.report",
+        csv_dir=run_dir,
+        manifest_path=None,
+        max_quanta=2,
+        roots=2,
+        vci_method="dense",
+    )
+
+    snapshot = collect_vpt2_vci_outputs(section)
+
+    assert snapshot.status == "partial"
+    assert snapshot.missing_outputs == ("comparison", "frequencies", "mode_contributions")
+
+
 def test_force_field_validation_rejects_bad_modes():
     qff = QuarticForceField(
         harmonic_frequencies_cm=np.array([1000.0]),
@@ -283,3 +341,26 @@ def test_vpt2_vci_fortran_inventory_uses_oracle_engines_layout():
         "davidson_core.f",
     }
     assert inventory.davidson_backend == ROOT / "engines" / "fortran" / "vpt2_vci" / "davidson_core.f"
+
+
+def _write_vpt2_vci_outputs(run_dir: Path) -> None:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "vpt2_vci.report").write_text(
+        "VPT2/VCI comparison on canonical ORACLE QFF\n",
+        encoding="utf-8",
+    )
+    (run_dir / "vpt2_vci_frequencies.csv").write_text(
+        "mode,harmonic_frequency_cm-1\n1,100.0\n2,150.0\n",
+        encoding="utf-8",
+    )
+    (run_dir / "vpt2_vci_comparison.csv").write_text(
+        "root,vpt2_abs_cm-1,vci_abs_cm-1,delta_abs_cm-1,"
+        "vpt2_exc_cm-1,vci_exc_cm-1,delta_exc_cm-1\n"
+        "1,125.0,125.0,0.0,0.0,0.0,0.0\n"
+        "2,225.0,226.5,1.5,100.0,101.5,1.5\n",
+        encoding="utf-8",
+    )
+    (run_dir / "vpt2_vci_mode_contributions.csv").write_text(
+        "root,mode,expected_quanta\n1,1,0.25\n1,2,0.75\n",
+        encoding="utf-8",
+    )
