@@ -64,3 +64,5 @@ Examples:
 - GF/PED standalone mode consumes `#CARTESIAN_HESSIAN` plus frozen `#GIC`.
 - VPT2/VCI standalone loaders consume `#QFF` when present.
 - DVR standalone orchestration stores discoverable run state in `#DVR`.
+- DVR post-run collection is owned by `oracle-dvr`; GUI code consumes the
+  collected state and must not rediscover backend output files independently.

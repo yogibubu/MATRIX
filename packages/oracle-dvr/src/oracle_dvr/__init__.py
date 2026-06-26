@@ -1,5 +1,21 @@
 """DVR workflow services for ORACLE."""
 
+from .outputs import (
+    DVRExpectation,
+    DVRGridPoint,
+    DVRLevel,
+    DVROutputSnapshot,
+    DVRVectorPoint,
+    collect_dvr_outputs,
+    collect_dvr_outputs_from_xyzin,
+    detected_dvr_outputs,
+    dvr_output_summary_lines,
+    read_dvr_expectations,
+    read_dvr_grid,
+    read_dvr_levels,
+    read_fortran_vectors,
+    refresh_dvr_section,
+)
 from .workflow import (
     DVRSection,
     DVRRequest,
@@ -18,17 +34,31 @@ from .workflow import (
 )
 
 __all__ = [
+    "DVRExpectation",
+    "DVRGridPoint",
+    "DVRLevel",
+    "DVROutputSnapshot",
     "DVRRequest",
     "DVRSection",
+    "DVRVectorPoint",
     "ORACLE_XYZ_DVR_SCHEMA",
     "build_fortran_bridge_args",
     "build_fortran_shell_command",
     "build_path_analysis_args",
+    "collect_dvr_outputs",
+    "collect_dvr_outputs_from_xyzin",
+    "detected_dvr_outputs",
     "dvr_section_from_request",
     "dvr_section_lines",
+    "dvr_output_summary_lines",
     "is_fortran_solver",
     "parse_dvr_section",
+    "read_dvr_expectations",
+    "read_dvr_grid",
+    "read_dvr_levels",
     "read_dvr_section",
+    "read_fortran_vectors",
+    "refresh_dvr_section",
     "resolve_dvr_executable",
     "write_dvr_manifest",
     "write_dvr_section",

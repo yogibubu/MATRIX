@@ -511,6 +511,42 @@ def test_dvr_prepare_cli_writes_manifest_and_xyzin_section(tmp_path, monkeypatch
     assert "#DVR" in xyzin.read_text(encoding="utf-8")
 
 
+def test_dvr_collect_cli_refreshes_post_run_outputs(tmp_path, capsys):
+    from oracle_dvr import DVRRequest, dvr_section_from_request, read_dvr_section, write_dvr_section
+
+    xyzin = tmp_path / "molecule.xyzin"
+    outdir = tmp_path / "dvr"
+    xyzin.write_text("1\ncomment\nH 0.0 0.0 0.0\n", encoding="utf-8")
+    request = DVRRequest(
+        repo_root=tmp_path,
+        log_path=tmp_path / "scan.log",
+        outdir=outdir,
+        figdir=tmp_path / "fig",
+        prefix="demo",
+    )
+    write_dvr_section(xyzin, dvr_section_from_request(request))
+    outdir.mkdir()
+    (outdir / "demo_summary.txt").write_text("Mass-weighted path Hamiltonian\n", encoding="utf-8")
+    (outdir / "demo_levels.csv").write_text(
+        "state,energy_cm-1,energy_above_ground_cm-1\n0,10.0,0.0\n",
+        encoding="utf-8",
+    )
+    (outdir / "demo_grid.csv").write_text(
+        "grid,s_au,s_sqrtamu_angstrom,V_cm-1\n0,0.0,0.0,0.0\n",
+        encoding="utf-8",
+    )
+
+    rc = oracle_run.main(["dvr", "collect", str(xyzin)])
+    out = capsys.readouterr().out
+    section = read_dvr_section(xyzin)
+
+    assert rc == 0
+    assert section.status == "complete"
+    assert section.outputs["levels"] == outdir / "demo_levels.csv"
+    assert "status: complete" in out
+    assert "Updated #DVR" in out
+
+
 def test_fragments_plan_cli_calls_writer(tmp_path, monkeypatch, capsys):
     calls = {}
     path = tmp_path / "molecule.xyz"

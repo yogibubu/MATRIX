@@ -117,6 +117,13 @@ normalizes the request, writes an `oracle.run.v1` manifest and, when an `xyzin`
 is supplied, updates `#DVR` so the GUI and later workflow steps can discover
 the same run state without duplicating parser logic.
 
+After the backend has run, `oracle dvr collect molecule.xyzin` reads the
+produced summary/levels/grid/expectation files, detects optional 2D,
+anharmonic and Fortran outputs, updates `#DVR` with `OUTPUT_*` pointers and
+sets the section status to `complete`, `partial` or `prepared`. GUI controllers
+must consume this normalized state through `oracle-dvr` rather than scanning
+the run directory themselves.
+
 ## GIC State
 
 `#GIC` stores the frozen coordinate contract, not only a list of Gaussian input

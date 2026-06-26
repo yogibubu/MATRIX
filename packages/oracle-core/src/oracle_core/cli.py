@@ -255,6 +255,13 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     dvr_prepare.add_argument("--no-cremer-pople", action="store_true")
     dvr_prepare.add_argument("--check-only", action="store_true")
     dvr_prepare.add_argument("--xyzin", type=Path, help="Update this ORACLE xyzin with #DVR")
+    dvr_collect = dvr_sub.add_parser("collect", help="Collect post-run DVR outputs into #DVR")
+    dvr_collect.add_argument("xyzin", type=Path)
+    dvr_collect.add_argument(
+        "--no-write",
+        action="store_true",
+        help="Read and summarize outputs without updating #DVR",
+    )
 
     semiexp = sub.add_parser(
         "semiexp",
@@ -864,6 +871,22 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
             print(f"Updated #DVR: {args.xyzin}")
         print(f"manifest: {manifest}")
         print(f"command: {command}")
+        return 0
+    if args.command == "dvr" and args.dvr_command == "collect":
+        from oracle_dvr import (
+            collect_dvr_outputs_from_xyzin,
+            dvr_output_summary_lines,
+            refresh_dvr_section,
+        )
+
+        snapshot = (
+            collect_dvr_outputs_from_xyzin(args.xyzin)
+            if args.no_write
+            else refresh_dvr_section(args.xyzin)
+        )
+        print("\n".join(dvr_output_summary_lines(snapshot)))
+        if not args.no_write:
+            print(f"Updated #DVR: {args.xyzin}")
         return 0
     if args.command == "semiexp":
         from oracle_morpheus import (

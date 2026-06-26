@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -69,6 +70,7 @@ class DVRSection:
     grid_csv: Path | None = None
     summary: Path | None = None
     levels: Path | None = None
+    outputs: Mapping[str, Path] | None = None
     status: str = "prepared"
     source: str = "gaussian-log"
     schema: str = ORACLE_XYZ_DVR_SCHEMA
@@ -81,10 +83,37 @@ class DVRSection:
             value = getattr(self, attr)
             if value is not None:
                 object.__setattr__(self, attr, Path(value))
+        outputs = {
+            _normalize_output_key(name): Path(path)
+            for name, path in dict(self.outputs or {}).items()
+            if path is not None
+        }
+        object.__setattr__(self, "outputs", outputs)
         object.__setattr__(self, "prefix", self.prefix or "puckering_dvr")
         object.__setattr__(self, "compute_rotconst", bool(self.compute_rotconst))
         object.__setattr__(self, "label_cremer_pople", bool(self.label_cremer_pople))
         object.__setattr__(self, "check_only", bool(self.check_only))
+
+    def with_outputs(self, outputs: Mapping[str, Path], *, status: str | None = None) -> "DVRSection":
+        return DVRSection(
+            log_path=self.log_path,
+            outdir=self.outdir,
+            figdir=self.figdir,
+            prefix=self.prefix,
+            boundary=self.boundary,
+            solver=self.solver,
+            compute_rotconst=self.compute_rotconst,
+            label_cremer_pople=self.label_cremer_pople,
+            check_only=self.check_only,
+            manifest_path=self.manifest_path,
+            grid_csv=outputs.get("grid_csv", self.grid_csv),
+            summary=outputs.get("summary", self.summary),
+            levels=outputs.get("levels", self.levels),
+            outputs=outputs,
+            status=self.status if status is None else status,
+            source=self.source,
+            schema=self.schema,
+        )
 
 
 def is_fortran_solver(solver: str) -> bool:
@@ -212,25 +241,27 @@ def dvr_section_from_request(
 
 
 def dvr_section_lines(section: DVRSection) -> list[str]:
+    values = {
+        "SOURCE": section.source,
+        "STATUS": section.status,
+        "LOG_PATH": section.log_path,
+        "OUTDIR": section.outdir,
+        "FIGDIR": section.figdir,
+        "PREFIX": section.prefix,
+        "BOUNDARY": section.boundary,
+        "SOLVER": section.solver,
+        "COMPUTE_ROTCONST": int(section.compute_rotconst),
+        "LABEL_CREMER_POPLE": int(section.label_cremer_pople),
+        "CHECK_ONLY": int(section.check_only),
+        "MANIFEST": section.manifest_path,
+        "GRID_CSV": section.grid_csv,
+        "SUMMARY": section.summary,
+        "LEVELS": section.levels,
+    }
+    values.update({f"OUTPUT_{name.upper()}": path for name, path in section.outputs.items()})
     return key_value_section_lines(
         ORACLE_XYZ_DVR_SCHEMA,
-        {
-            "SOURCE": section.source,
-            "STATUS": section.status,
-            "LOG_PATH": section.log_path,
-            "OUTDIR": section.outdir,
-            "FIGDIR": section.figdir,
-            "PREFIX": section.prefix,
-            "BOUNDARY": section.boundary,
-            "SOLVER": section.solver,
-            "COMPUTE_ROTCONST": int(section.compute_rotconst),
-            "LABEL_CREMER_POPLE": int(section.label_cremer_pople),
-            "CHECK_ONLY": int(section.check_only),
-            "MANIFEST": section.manifest_path,
-            "GRID_CSV": section.grid_csv,
-            "SUMMARY": section.summary,
-            "LEVELS": section.levels,
-        },
+        values,
         key_order=(
             "SOURCE",
             "STATUS",
@@ -258,6 +289,11 @@ def parse_dvr_section(lines: list[str] | tuple[str, ...]) -> DVRSection:
         raise ValueError(f"unsupported DVR schema: {schema}")
     outdir = _path_value(values, "OUTDIR", Path("."))
     prefix = values.get("PREFIX", "puckering_dvr") or "puckering_dvr"
+    outputs = {
+        _normalize_output_key(key[len("OUTPUT_") :]): Path(raw)
+        for key, raw in values.items()
+        if key.startswith("OUTPUT_") and raw.strip()
+    }
     return DVRSection(
         log_path=_path_value(values, "LOG_PATH", Path("")),
         outdir=outdir,
@@ -272,6 +308,7 @@ def parse_dvr_section(lines: list[str] | tuple[str, ...]) -> DVRSection:
         grid_csv=_optional_path(values.get("GRID_CSV")) or outdir / f"{prefix}_grid.csv",
         summary=_optional_path(values.get("SUMMARY")) or outdir / f"{prefix}_summary.txt",
         levels=_optional_path(values.get("LEVELS")) or outdir / f"{prefix}_levels.csv",
+        outputs=outputs,
         status=values.get("STATUS", "prepared"),
         source=values.get("SOURCE", "gaussian-log"),
         schema=schema,
@@ -304,3 +341,7 @@ def _bool_value(values: dict[str, str], key: str, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+
+
+def _normalize_output_key(value: str) -> str:
+    return "_".join(part for part in str(value).lower().replace("-", "_").split("_") if part)
