@@ -37,9 +37,14 @@ the implementation is split into shared libraries and independent tools.
 - The ORACLE-native backend generates primitive candidates from the saved
   topology, selects a non-redundant set by analytic B-matrix rank, and freezes
   the result in the enriched XYZ file.
-- Full non-C1 symmetry adaptation and ring-specialized coordinates remain
-  porting targets from the legacy Fortran/Python stack. Until those projectors
-  are migrated, non-C1 `--symmetrize` requests must stop cleanly.
+- Full Merlino symmetry adaptation is a porting requirement, not an optional
+  enhancement. ORACLE now has a post-reduction point-group projector for the
+  tested `C`, `D`, `Dnh`, `Dnd`, `Td`, `Oh` and `Ih` character layers, with
+  homogeneous source-block protection. Remaining unsupported combinations must
+  fall back explicitly to the local Merlino-style SALC path or stop cleanly
+  when a downstream workflow requires a true point-group projector.
+- Ring-specialized coordinates and butterfly coordinates remain porting targets
+  from the legacy Fortran/Python stack and must be tested under symmetry.
 
 ## Porting Order
 

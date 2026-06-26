@@ -32,8 +32,11 @@ _IRREP_ORDER_BY_POINT_GROUP = {
         "B2u",
         "Eu",
     ),
+    "T": ("A", "E", "T"),
     "TD": ("A1", "A2", "E", "T1", "T2"),
+    "O": ("A1", "A2", "E", "T1", "T2"),
     "OH": ("A1g", "A2g", "Eg", "T1g", "T2g", "A1u", "A2u", "Eu", "T1u", "T2u"),
+    "I": ("A", "T1", "T2", "G", "H"),
     "IH": ("Ag", "T1g", "T2g", "Gg", "Hg", "Au", "T1u", "T2u", "Gu", "Hu"),
 }
 
@@ -78,6 +81,15 @@ def irrep_sequence(point_group: str | None) -> tuple[str, ...]:
     if n % 2 == 0:
         base.extend(["B1", "B2"])
     base.extend(f"E{idx}" for idx in range(1, max(1, n // 2)))
+    if suffix == "D":
+        if n % 2 == 1:
+            return tuple(
+                dict.fromkeys(
+                    [f"{name}g" for name in base]
+                    + [f"{name}u" for name in base]
+                )
+            )
+        return tuple(dict.fromkeys(base))
     if suffix == "H" and n % 2 == 0:
         return tuple(
             dict.fromkeys(
@@ -121,6 +133,9 @@ def irrep_name_prefix(irrep: str | None) -> str:
 def irrep_characters_for_operations(
     operation_labels: tuple[str, ...] | list[str],
     point_group: str | None,
+    operation_matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None = None,
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
     labels = tuple(_canonical_operation_label(label) for label in operation_labels)
     if labels == ("E",):
@@ -182,15 +197,30 @@ def irrep_characters_for_operations(
         return _d2_characters(labels)
     if group_key == "D2H":
         return _d2h_characters(labels)
-    generic = _generic_family_characters(labels, group_key)
+    generic = _generic_family_characters(
+        labels,
+        group_key,
+        operation_matrices=operation_matrices,
+    )
     if generic:
         return generic
+    polyhedral = _polyhedral_family_characters(
+        labels,
+        group_key,
+        operation_matrices=operation_matrices,
+    )
+    if polyhedral:
+        return polyhedral
     return ()
 
 
 def _generic_family_characters(
     labels: tuple[str, ...],
     group_key: str,
+    *,
+    operation_matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None = None,
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
     match = re.fullmatch(r"([CD])(\d+)([VHD]?)", group_key)
     if not match:
@@ -209,6 +239,8 @@ def _generic_family_characters(
         return _dn_characters(labels, n)
     if family == "D" and suffix == "H":
         return _dnh_characters(labels, n)
+    if family == "D" and suffix == "D":
+        return _dnd_characters(labels, n, operation_matrices=operation_matrices)
     return ()
 
 
@@ -400,6 +432,236 @@ def _dnh_characters(
     )
 
 
+def _dnd_characters(
+    labels: tuple[str, ...],
+    n: int,
+    *,
+    operation_matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None,
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    if n % 2 == 0:
+        effective_labels = _dnd_even_effective_labels(
+            labels,
+            n,
+            operation_matrices=operation_matrices,
+        )
+        if effective_labels is None:
+            return ()
+        return _dn_characters(effective_labels, 2 * n)
+
+    underlying = _dnd_odd_underlying_labels(
+        labels,
+        n,
+        operation_matrices=operation_matrices,
+    )
+    if underlying is None:
+        return ()
+    base_names = ["A1", "A2"]
+    for order in range(1, (n + 1) // 2):
+        base_names.append(_e_name(order, n))
+    return tuple(
+        (
+            name + suffix,
+            tuple(
+                _dn_irrep_value(underlying_label, n, name)
+                * (float(parity) if reflected else 1.0)
+                for underlying_label, reflected in underlying
+            ),
+        )
+        for suffix, parity in (("g", 1), ("u", -1))
+        for name in base_names
+    )
+
+
+def _dnd_even_effective_labels(
+    labels: tuple[str, ...],
+    n: int,
+    *,
+    operation_matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None,
+) -> tuple[str, ...] | None:
+    order = 2 * n
+    matrix_tuple = (
+        tuple(np.asarray(matrix, dtype=float) for matrix in operation_matrices)
+        if operation_matrices is not None
+        else None
+    )
+    if matrix_tuple is not None and len(matrix_tuple) != len(labels):
+        return None
+    out: list[str] = []
+    for idx, label in enumerate(labels):
+        mapped = _dnd_even_effective_label(label, n)
+        if mapped is None and matrix_tuple is not None:
+            mapped = _dnd_even_effective_label_from_matrix(matrix_tuple[idx], n)
+        if mapped is None:
+            return None
+        out.append(_canonical_dnd_effective_label(mapped, order))
+    return tuple(out)
+
+
+def _dnd_even_effective_label(label: str, n: int) -> str | None:
+    order = 2 * n
+    if label == "E":
+        return "E"
+    if label == "i":
+        return f"C{order}z^{n}"
+    match = re.fullmatch(r"Dnd_C(\d+)z\^(\d+)", label)
+    if match:
+        op_order, power = match.groups()
+        relative = order * int(power) / int(op_order)
+        return f"C{order}z^{int(round(relative)) % order}"
+    match = re.fullmatch(r"Dnd_C2_xy_(\d+)_(\d+)", label)
+    if match:
+        _op_order, index = match.groups()
+        return f"C2_xy_{order}_{int(index) % order}"
+    match = re.fullmatch(r"sigma_v_(\d+)_(\d+)", label)
+    if match:
+        op_order, index = match.groups()
+        if int(op_order) == order:
+            return f"C2_xy_{order}_{int(index) % order}"
+    match = re.fullmatch(r"C(\d+)z\^(\d+)", label)
+    if match:
+        op_order, power = match.groups()
+        relative = n * int(power) / int(op_order)
+        nearest = int(round(relative))
+        if abs(relative - nearest) <= 1.0e-8:
+            return f"C{order}z^{(2 * nearest) % order}"
+    match = re.fullmatch(r"C2_xy_(\d+)_(\d+)", label)
+    if match:
+        op_order, index = match.groups()
+        if int(op_order) == n:
+            return f"C2_xy_{order}_{(2 * int(index)) % order}"
+        if int(op_order) == order:
+            return f"C2_xy_{order}_{int(index) % order}"
+    if label in {"C2x", "C2y"}:
+        return f"C2_xy_{order}_{0 if label == 'C2x' else n}"
+    if label == "C2z":
+        return f"C{order}z^{n}"
+    return None
+
+
+def _dnd_even_effective_label_from_matrix(matrix: np.ndarray, n: int) -> str | None:
+    order = 2 * n
+    det = float(np.linalg.det(matrix))
+    if det > 0.0:
+        dn_label = _dn_label_from_matrix(matrix, n)
+        if dn_label is None:
+            return None
+        return _dnd_even_effective_label(dn_label, n)
+    sd = _diagonal_reflection_matrix()
+    dn_matrix = sd @ matrix
+    dn_label = _dn_label_from_matrix(dn_matrix, n)
+    if dn_label is None:
+        return None
+    if dn_label == "E":
+        return f"C2_xy_{order}_1"
+    match = re.fullmatch(r"C(\d+)z\^(\d+)", dn_label)
+    if match:
+        _op_order, power = match.groups()
+        return f"C2_xy_{order}_{(2 * int(power) + 1) % order}"
+    match = re.fullmatch(r"C2_xy_(\d+)_(\d+)", dn_label)
+    if match:
+        _op_order, index = match.groups()
+        return f"C{order}z^{(2 * int(index) + 1) % order}"
+    if dn_label == "C2z":
+        return f"C2_xy_{order}_{(n + 1) % order}"
+    return None
+
+
+def _canonical_dnd_effective_label(label: str, order: int) -> str:
+    match = re.fullmatch(r"C(\d+)z\^(\d+)", label)
+    if match:
+        _op_order, power = match.groups()
+        power_int = int(power) % order
+        if power_int == 0:
+            return "E"
+        if power_int == order // 2:
+            return "C2z"
+        return f"C{order}z^{power_int}"
+    return label
+
+
+def _dnd_odd_underlying_labels(
+    labels: tuple[str, ...],
+    n: int,
+    *,
+    operation_matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None,
+) -> tuple[tuple[str, bool], ...] | None:
+    matrix_tuple = (
+        tuple(np.asarray(matrix, dtype=float) for matrix in operation_matrices)
+        if operation_matrices is not None
+        else None
+    )
+    if matrix_tuple is not None and len(matrix_tuple) != len(labels):
+        return None
+    out: list[tuple[str, bool]] = []
+    for idx, label in enumerate(labels):
+        if matrix_tuple is not None:
+            matrix = matrix_tuple[idx]
+            reflected = float(np.linalg.det(matrix)) < 0.0
+            proper = -matrix if reflected else matrix
+            underlying = _dn_label_from_matrix(proper, n)
+        else:
+            underlying, reflected = _dnd_odd_underlying_label(label, n)
+        if underlying is None:
+            return None
+        out.append((underlying, reflected))
+    return tuple(out)
+
+
+def _dnd_odd_underlying_label(label: str, n: int) -> tuple[str | None, bool]:
+    if label == "i":
+        return "E", True
+    if label.startswith("Dnd_") or label.startswith("sigma"):
+        return None, True
+    if label == "E" or label.startswith("C"):
+        return label, False
+    return None, False
+
+
+def _dn_label_from_matrix(matrix: np.ndarray, n: int) -> str | None:
+    if not np.allclose(matrix.T @ matrix, np.eye(3), atol=1.0e-7):
+        return None
+    if float(np.linalg.det(matrix)) < 0.0:
+        return None
+    if np.allclose(matrix, np.eye(3), atol=1.0e-7):
+        return "E"
+    if np.allclose(matrix[2, :2], 0.0, atol=1.0e-7) and np.allclose(
+        matrix[:2, 2],
+        0.0,
+        atol=1.0e-7,
+    ):
+        if matrix[2, 2] > 0.0:
+            angle = np.arctan2(float(matrix[1, 0]), float(matrix[0, 0]))
+            power = int(round((angle % (2.0 * np.pi)) * n / (2.0 * np.pi))) % n
+            if power == 0:
+                return "E"
+            if n % 2 == 0 and power == n // 2:
+                return "C2z"
+            return f"C{n}z^{power}"
+        if _close(float(np.trace(matrix)), -1.0):
+            values, vectors = np.linalg.eig(matrix)
+            axis_index = int(np.argmin(np.abs(values - 1.0)))
+            axis = np.real(vectors[:, axis_index])
+            if abs(float(axis[2])) > 1.0e-6:
+                return None
+            angle = np.arctan2(float(axis[1]), float(axis[0])) % np.pi
+            index = int(round(angle * n / np.pi)) % n
+            return f"C2_xy_{n}_{index}"
+    return None
+
+
+def _diagonal_reflection_matrix() -> np.ndarray:
+    return np.array(
+        ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+        dtype=float,
+    )
+
+
 def _dnh_value(label: str, n: int, irrep: str, reflection_sign: int) -> float:
     underlying, reflected = _dnh_underlying_operation(label, n)
     value = _dn_irrep_value(underlying, n, irrep)
@@ -490,6 +752,331 @@ def _d2h_value(name: str, label: str, inversion_sign: int) -> float:
     if label in sigma_to_rotation:
         return float(inversion_sign) * d2_values[sigma_to_rotation[label]]
     return 0.0
+
+
+def _polyhedral_family_characters(
+    labels: tuple[str, ...],
+    group_key: str,
+    *,
+    operation_matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None,
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    if group_key in {"T", "TD", "O"}:
+        return _td_like_characters(labels, operation_matrices=operation_matrices)
+    if group_key == "OH":
+        return _oh_characters(labels, operation_matrices=operation_matrices)
+    if group_key == "I":
+        return _icosahedral_characters(
+            labels,
+            operation_matrices=operation_matrices,
+            centrosymmetric=False,
+        )
+    if group_key == "IH":
+        return _icosahedral_characters(
+            labels,
+            operation_matrices=operation_matrices,
+            centrosymmetric=True,
+        )
+    return ()
+
+
+def _td_like_characters(
+    labels: tuple[str, ...],
+    *,
+    operation_matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None,
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    table = {
+        "A1": {"E": 1.0, "C3": 1.0, "C2": 1.0, "S4": 1.0, "sigma_d": 1.0},
+        "A2": {"E": 1.0, "C3": 1.0, "C2": 1.0, "S4": -1.0, "sigma_d": -1.0},
+        "E": {"E": 2.0, "C3": -1.0, "C2": 2.0, "S4": 0.0, "sigma_d": 0.0},
+        "T1": {"E": 3.0, "C3": 0.0, "C2": -1.0, "S4": 1.0, "sigma_d": -1.0},
+        "T2": {"E": 3.0, "C3": 0.0, "C2": -1.0, "S4": -1.0, "sigma_d": 1.0},
+    }
+    classes = _polyhedral_operation_classes(labels, operation_matrices, family="TD")
+    if classes is None:
+        return ()
+    return tuple(
+        (irrep, tuple(chars.get(operation_class, 0.0) for operation_class in classes))
+        for irrep, chars in table.items()
+    )
+
+
+def _oh_characters(
+    labels: tuple[str, ...],
+    *,
+    operation_matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None,
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    proper_table = {
+        "A1": {"E": 1.0, "C3": 1.0, "C2_axis": 1.0, "C4": 1.0, "C2_edge": 1.0},
+        "A2": {"E": 1.0, "C3": 1.0, "C2_axis": 1.0, "C4": -1.0, "C2_edge": -1.0},
+        "E": {"E": 2.0, "C3": -1.0, "C2_axis": 2.0, "C4": 0.0, "C2_edge": 0.0},
+        "T1": {"E": 3.0, "C3": 0.0, "C2_axis": -1.0, "C4": 1.0, "C2_edge": -1.0},
+        "T2": {"E": 3.0, "C3": 0.0, "C2_axis": -1.0, "C4": -1.0, "C2_edge": 1.0},
+    }
+    classes = _polyhedral_operation_classes(labels, operation_matrices, family="OH")
+    if classes is None:
+        return ()
+
+    rows: list[tuple[str, tuple[float, ...]]] = []
+    for suffix, parity in (("g", 1.0), ("u", -1.0)):
+        for base_name, chars in proper_table.items():
+            values: list[float] = []
+            for operation_class in classes:
+                reflected = operation_class.startswith("i*")
+                proper_class = operation_class[2:] if reflected else operation_class
+                value = chars.get(proper_class, 0.0)
+                values.append(value * (parity if reflected else 1.0))
+            rows.append((base_name + suffix, tuple(values)))
+    return tuple(rows)
+
+
+def _icosahedral_characters(
+    labels: tuple[str, ...],
+    *,
+    operation_matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None,
+    centrosymmetric: bool,
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+    phi_bar = (1.0 - np.sqrt(5.0)) / 2.0
+    table = {
+        "A": {"E": 1.0, "C3": 1.0, "C2": 1.0, "C5": 1.0, "C5_2": 1.0},
+        "T1": {"E": 3.0, "C3": 0.0, "C2": -1.0, "C5": phi, "C5_2": phi_bar},
+        "T2": {"E": 3.0, "C3": 0.0, "C2": -1.0, "C5": phi_bar, "C5_2": phi},
+        "G": {"E": 4.0, "C3": 1.0, "C2": 0.0, "C5": -1.0, "C5_2": -1.0},
+        "H": {"E": 5.0, "C3": -1.0, "C2": 1.0, "C5": 0.0, "C5_2": 0.0},
+    }
+    classes = _icosahedral_operation_classes(labels, operation_matrices)
+    if classes is None:
+        return ()
+    if not centrosymmetric:
+        return tuple(
+            (irrep, tuple(chars.get(operation_class, 0.0) for operation_class in classes))
+            for irrep, chars in table.items()
+        )
+
+    rows: list[tuple[str, tuple[float, ...]]] = []
+    for suffix, parity in (("g", 1.0), ("u", -1.0)):
+        for base_name, chars in table.items():
+            values: list[float] = []
+            for operation_class in classes:
+                reflected = operation_class.startswith("i*")
+                proper_class = operation_class[2:] if reflected else operation_class
+                value = chars.get(proper_class, 0.0)
+                values.append(value * (parity if reflected else 1.0))
+            rows.append((base_name + suffix, tuple(values)))
+    return tuple(rows)
+
+
+def _icosahedral_operation_classes(
+    labels: tuple[str, ...],
+    matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None,
+) -> tuple[str, ...] | None:
+    if matrices is not None:
+        matrix_tuple = tuple(np.asarray(matrix, dtype=float) for matrix in matrices)
+        if len(matrix_tuple) != len(labels):
+            return None
+        classes: list[str] = []
+        for label, matrix in zip(labels, matrix_tuple):
+            operation_class = _icosahedral_matrix_class(label, matrix)
+            if operation_class is None:
+                return None
+            classes.append(operation_class)
+        return tuple(classes)
+
+    classes = []
+    for label in labels:
+        operation_class = _icosahedral_label_class(label)
+        if operation_class is None:
+            return None
+        classes.append(operation_class)
+    return tuple(classes)
+
+
+def _polyhedral_operation_classes(
+    labels: tuple[str, ...],
+    matrices: tuple[tuple[tuple[float, ...], ...], ...]
+    | list[tuple[tuple[float, ...], ...]]
+    | None,
+    *,
+    family: str,
+) -> tuple[str, ...] | None:
+    if matrices is not None:
+        matrix_tuple = tuple(np.asarray(matrix, dtype=float) for matrix in matrices)
+        if len(matrix_tuple) != len(labels):
+            return None
+        classes: list[str] = []
+        for label, matrix in zip(labels, matrix_tuple):
+            operation_class = (
+                _td_matrix_class(label, matrix)
+                if family == "TD"
+                else _oh_matrix_class(label, matrix)
+            )
+            if operation_class is None:
+                return None
+            classes.append(operation_class)
+        return tuple(classes)
+
+    classes = []
+    for label in labels:
+        operation_class = (
+            _td_label_class(label)
+            if family == "TD"
+            else _oh_label_class(label)
+        )
+        if operation_class is None:
+            return None
+        classes.append(operation_class)
+    return tuple(classes)
+
+
+def _td_matrix_class(label: str, matrix: np.ndarray) -> str | None:
+    if _is_matrix_close(matrix, np.eye(3)) or label == "E":
+        return "E"
+    det = float(np.linalg.det(matrix))
+    trace = float(np.trace(matrix))
+    if det > 0.0:
+        if _close(trace, 0.0):
+            return "C3"
+        if _close(trace, -1.0):
+            return "C2"
+    if det < 0.0:
+        if _close(trace, -1.0):
+            return "S4"
+        if _close(trace, 1.0):
+            return "sigma_d"
+    return _td_label_class(label)
+
+
+def _oh_matrix_class(label: str, matrix: np.ndarray) -> str | None:
+    if _is_matrix_close(matrix, np.eye(3)) or label == "E":
+        return "E"
+    det = float(np.linalg.det(matrix))
+    proper = matrix if det > 0.0 else -matrix
+    proper_class = _octahedral_proper_matrix_class(label, proper)
+    if proper_class is None:
+        return _oh_label_class(label)
+    return f"i*{proper_class}" if det < 0.0 else proper_class
+
+
+def _icosahedral_matrix_class(label: str, matrix: np.ndarray) -> str | None:
+    if _is_matrix_close(matrix, np.eye(3)) or label == "E":
+        return "E"
+    det = float(np.linalg.det(matrix))
+    proper = matrix if det > 0.0 else -matrix
+    proper_class = _icosahedral_proper_matrix_class(label, proper)
+    if proper_class is None:
+        return _icosahedral_label_class(label)
+    return f"i*{proper_class}" if det < 0.0 else proper_class
+
+
+def _icosahedral_proper_matrix_class(label: str, matrix: np.ndarray) -> str | None:
+    if _is_matrix_close(matrix, np.eye(3)) or label == "E":
+        return "E"
+    trace = float(np.trace(matrix))
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+    phi_bar = (1.0 - np.sqrt(5.0)) / 2.0
+    if _close(trace, 0.0):
+        return "C3"
+    if _close(trace, -1.0):
+        return "C2"
+    if _close(trace, phi):
+        return "C5"
+    if _close(trace, phi_bar):
+        return "C5_2"
+    return None
+
+
+def _octahedral_proper_matrix_class(label: str, matrix: np.ndarray) -> str | None:
+    if _is_matrix_close(matrix, np.eye(3)) or label == "E":
+        return "E"
+    trace = float(np.trace(matrix))
+    if _close(trace, 0.0):
+        return "C3"
+    if _close(trace, 1.0):
+        return "C4"
+    if _close(trace, -1.0):
+        return "C2_axis" if _is_coordinate_axis_c2(matrix) else "C2_edge"
+    return None
+
+
+def _td_label_class(label: str) -> str | None:
+    if label == "E":
+        return "E"
+    if "C3" in label:
+        return "C3"
+    if "C2" in label:
+        return "C2"
+    if "S4" in label:
+        return "S4"
+    if label.startswith("sigma"):
+        return "sigma_d"
+    return None
+
+
+def _oh_label_class(label: str) -> str | None:
+    if label == "E":
+        return "E"
+    if label == "i":
+        return "i*E"
+    if "S6" in label:
+        return "i*C3"
+    if "S4" in label:
+        return "i*C4"
+    if label.startswith("sigma"):
+        return "i*C2_axis" if label in {"sigma_xy", "sigma_xz", "sigma_yz"} else "i*C2_edge"
+    if "C3" in label:
+        return "C3"
+    if "C4" in label:
+        return "C4"
+    if "C2" in label:
+        return "C2_axis" if label in {"C2x", "C2y", "C2z"} else "C2_edge"
+    return None
+
+
+def _icosahedral_label_class(label: str) -> str | None:
+    if label == "E":
+        return "E"
+    if label == "i":
+        return "i*E"
+    reflected = label.startswith("ih_i_") or label.startswith("i*")
+    text = label[5:] if label.startswith("ih_i_") else label
+    text = text[2:] if text.startswith("i*") else text
+    if "C3" in text:
+        operation_class = "C3"
+    elif "C2" in text:
+        operation_class = "C2"
+    elif "C5_2" in text or "C5^2" in text:
+        operation_class = "C5_2"
+    elif "C5" in text:
+        operation_class = "C5"
+    else:
+        return None
+    return f"i*{operation_class}" if reflected else operation_class
+
+
+def _is_coordinate_axis_c2(matrix: np.ndarray) -> bool:
+    rounded = np.rint(matrix)
+    if not np.allclose(matrix, rounded, atol=1.0e-8):
+        return False
+    diagonal = np.diag(rounded)
+    return bool(np.count_nonzero(np.abs(diagonal) > 0.5) == 3)
+
+
+def _is_matrix_close(left: np.ndarray, right: np.ndarray) -> bool:
+    return bool(np.allclose(left, right, atol=1.0e-8))
+
+
+def _close(left: float, right: float) -> bool:
+    return abs(left - right) <= 1.0e-8
 
 
 def _e_name(order: int, n: int) -> str:

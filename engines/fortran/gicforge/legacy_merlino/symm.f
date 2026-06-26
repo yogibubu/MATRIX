@@ -355,6 +355,16 @@ C     ---- Cubic groups ----
          RETURN
       END IF
 
+      IF (GROUP .EQ. 'I' .OR. GROUP .EQ. 'i') THEN
+         CALL OPS_I(R, NOPS)
+         RETURN
+      END IF
+
+      IF (GROUP .EQ. 'Ih' .OR. GROUP .EQ. 'ih') THEN
+         CALL OPS_IH(R, NOPS)
+         RETURN
+      END IF
+
       WRITE(*,*) 'ERROR: GROUP NOT IMPLEMENTED ', GROUP
       STOP
       END
@@ -932,6 +942,198 @@ C     check (deve essere 48)
          WRITE(*,*) 'WARNING: OPS_OH generated ', NOPS,
      &              ' operations (expected 48)'
       END IF
+
+      RETURN
+      END
+
+*Deck OPS_I
+      SUBROUTINE OPS_I(R, NOPS)
+      INTEGER NOPS
+      DOUBLE PRECISION R(3,3,*)
+      LOGICAL WITHINV
+
+      WITHINV = .FALSE.
+      CALL OPS_ICO(WITHINV, R, NOPS)
+      IF (NOPS .NE. 60) THEN
+         WRITE(*,*) 'WARNING: OPS_I generated ', NOPS,
+     &              ' operations (expected 60)'
+      END IF
+      RETURN
+      END
+
+*Deck OPS_IH
+      SUBROUTINE OPS_IH(R, NOPS)
+      INTEGER NOPS
+      DOUBLE PRECISION R(3,3,*)
+      LOGICAL WITHINV
+
+      WITHINV = .TRUE.
+      CALL OPS_ICO(WITHINV, R, NOPS)
+      IF (NOPS .NE. 120) THEN
+         WRITE(*,*) 'WARNING: OPS_IH generated ', NOPS,
+     &              ' operations (expected 120)'
+      END IF
+      RETURN
+      END
+
+*Deck OPS_ICO
+      SUBROUTINE OPS_ICO(WITHINV, R, NOPS)
+      LOGICAL WITHINV
+      INTEGER NOPS
+      DOUBLE PRECISION R(3,3,*)
+      DOUBLE PRECISION V(3,12), S(3,3), SINV(3,3)
+      DOUBLE PRECISION T(3,3), A(3,3)
+      DOUBLE PRECISION D
+      DOUBLE PRECISION DET3
+      INTEGER I,J,K,L,P,Q
+      LOGICAL OK
+
+      NOPS = 0
+      CALL ICO_VERTICES(V)
+
+C     Source rows: vertices 1, 2 and 5 are linearly independent.
+      DO 20 P = 1, 3
+         S(1,P) = V(P,1)
+         S(2,P) = V(P,2)
+         S(3,P) = V(P,5)
+   20 CONTINUE
+      CALL INV3(S, SINV, OK)
+      IF (.NOT. OK) THEN
+         WRITE(*,*) 'ERROR: invalid icosahedral source frame'
+         STOP
+      END IF
+
+      DO 100 I = 1, 12
+      DO 100 J = 1, 12
+      DO 100 K = 1, 12
+         IF (I .EQ. J .OR. I .EQ. K .OR. J .EQ. K) GOTO 100
+
+         DO 30 P = 1, 3
+            T(1,P) = V(P,I)
+            T(2,P) = V(P,J)
+            T(3,P) = V(P,K)
+   30    CONTINUE
+
+         DO 60 P = 1, 3
+            DO 50 Q = 1, 3
+               A(P,Q) = 0.0D0
+               DO 40 L = 1, 3
+                  A(P,Q) = A(P,Q) + T(L,P)*SINV(Q,L)
+   40          CONTINUE
+   50       CONTINUE
+   60    CONTINUE
+
+         CALL ICO_MAPS_VERTICES(A, V, OK)
+         IF (.NOT. OK) GOTO 100
+
+         D = DET3(A)
+         IF (WITHINV) THEN
+            IF (DABS(DABS(D) - 1.0D0) .GT. 1.0D-8) GOTO 100
+         ELSE
+            IF (D .LT. 0.5D0) GOTO 100
+         END IF
+         CALL ADD_OP(R, NOPS, A)
+
+  100 CONTINUE
+      RETURN
+      END
+
+*Deck ICO_VERTICES
+      SUBROUTINE ICO_VERTICES(V)
+      DOUBLE PRECISION V(3,12), PHI
+
+      PHI = (1.0D0 + DSQRT(5.0D0))/2.0D0
+
+      V(1,1)=0.0D0
+      V(2,1)=-1.0D0
+      V(3,1)=-PHI
+      V(1,2)=0.0D0
+      V(2,2)=-1.0D0
+      V(3,2)= PHI
+      V(1,3)=0.0D0
+      V(2,3)=1.0D0
+      V(3,3)=-PHI
+      V(1,4)=0.0D0
+      V(2,4)=1.0D0
+      V(3,4)= PHI
+
+      V(1,5)=-1.0D0
+      V(2,5)=-PHI
+      V(3,5)=0.0D0
+      V(1,6)=-1.0D0
+      V(2,6)= PHI
+      V(3,6)=0.0D0
+      V(1,7)=1.0D0
+      V(2,7)=-PHI
+      V(3,7)=0.0D0
+      V(1,8)=1.0D0
+      V(2,8)= PHI
+      V(3,8)=0.0D0
+
+      V(1,9)=-PHI
+      V(2,9)=0.0D0
+      V(3,9)=-1.0D0
+      V(1,10)=-PHI
+      V(2,10)=0.0D0
+      V(3,10)=1.0D0
+      V(1,11)=PHI
+      V(2,11)=0.0D0
+      V(3,11)=-1.0D0
+      V(1,12)=PHI
+      V(2,12)=0.0D0
+      V(3,12)=1.0D0
+
+      RETURN
+      END
+
+*Deck INV3
+      SUBROUTINE INV3(A, B, OK)
+      DOUBLE PRECISION A(3,3), B(3,3), D
+      DOUBLE PRECISION DET3
+      LOGICAL OK
+
+      D = DET3(A)
+      OK = DABS(D) .GT. 1.0D-12
+      IF (.NOT. OK) RETURN
+
+      B(1,1) =  (A(2,2)*A(3,3)-A(2,3)*A(3,2))/D
+      B(1,2) = -(A(1,2)*A(3,3)-A(1,3)*A(3,2))/D
+      B(1,3) =  (A(1,2)*A(2,3)-A(1,3)*A(2,2))/D
+      B(2,1) = -(A(2,1)*A(3,3)-A(2,3)*A(3,1))/D
+      B(2,2) =  (A(1,1)*A(3,3)-A(1,3)*A(3,1))/D
+      B(2,3) = -(A(1,1)*A(2,3)-A(1,3)*A(2,1))/D
+      B(3,1) =  (A(2,1)*A(3,2)-A(2,2)*A(3,1))/D
+      B(3,2) = -(A(1,1)*A(3,2)-A(1,2)*A(3,1))/D
+      B(3,3) =  (A(1,1)*A(2,2)-A(1,2)*A(2,1))/D
+
+      RETURN
+      END
+
+*Deck ICO_MAPS_VERTICES
+      SUBROUTINE ICO_MAPS_VERTICES(A, V, OK)
+      DOUBLE PRECISION A(3,3), V(3,12)
+      DOUBLE PRECISION XP, YP, ZP, DX, DY, DZ, D2
+      INTEGER I, J
+      LOGICAL OK, FOUND
+
+      OK = .TRUE.
+      DO 20 I = 1, 12
+         XP = A(1,1)*V(1,I) + A(1,2)*V(2,I) + A(1,3)*V(3,I)
+         YP = A(2,1)*V(1,I) + A(2,2)*V(2,I) + A(2,3)*V(3,I)
+         ZP = A(3,1)*V(1,I) + A(3,2)*V(2,I) + A(3,3)*V(3,I)
+         FOUND = .FALSE.
+         DO 10 J = 1, 12
+            DX = XP - V(1,J)
+            DY = YP - V(2,J)
+            DZ = ZP - V(3,J)
+            D2 = DX*DX + DY*DY + DZ*DZ
+            IF (D2 .LT. 1.0D-10) FOUND = .TRUE.
+   10    CONTINUE
+         IF (.NOT. FOUND) THEN
+            OK = .FALSE.
+            RETURN
+         END IF
+   20 CONTINUE
 
       RETURN
       END

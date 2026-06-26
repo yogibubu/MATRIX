@@ -47,8 +47,12 @@ least-squares fits.
 `legacy_merlino/symm.f` is the reference source for Merlino-style point-group
 families and operation builders. ORACLE keeps its classifier families aligned
 with the Python character/projector layer for `Cn`, `Cnv`, `Cnh`, `Dn` and
-`Dnh`; `Dnd`, `Td` and `Oh` remain legacy operation sources until matching
-Python projector character tests are added.
+`Dnh`; `Dnd` is covered through the same Merlino-style `D_n + sigma_d D_n`
+operation construction. Python now has matrix-classified projector character
+tests for `Td`, `Oh` and `Ih`, and the strict Fortran77 source now exposes
+`OPS_I`/`OPS_IH` builders for the icosahedral groups. The next alignment step
+is to expose full projector diagnostics from strict Fortran77 instead of
+relying only on the local SALC helper.
 
 Construction, symmetrization and B evaluation are intentionally separate.
 Fortran optimizers should read the frozen primitive/GIC coefficient table once,

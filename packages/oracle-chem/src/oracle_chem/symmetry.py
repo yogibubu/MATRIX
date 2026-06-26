@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
+from itertools import permutations, product
 import re
 
 import numpy as np
@@ -181,6 +183,12 @@ def symmetry_elements_from_geometry(
 
 def group_label(elements, linear=False):
     labels = [item[0] for item in elements]
+    polyhedral = _polyhedral_group_label(elements)
+    if polyhedral:
+        return polyhedral
+    dnd_n = _dnd_group_order(labels)
+    if dnd_n:
+        return f"D{dnd_n}d"
     nmax, axis = _highest_cn_axis(labels)
     has_i = "i" in labels
     has_sigma = any(label.startswith("sigma") for label in labels)
@@ -271,6 +279,111 @@ def _highest_cn_axis(labels):
     return best, axis
 
 
+def _polyhedral_group_label(elements) -> str | None:
+    matrices = [np.asarray(item[1], dtype=float) for item in elements]
+    td_classes = Counter(
+        operation_class
+        for operation_class in (_td_candidate_class(matrix) for matrix in matrices)
+        if operation_class is not None
+    )
+    if td_classes == Counter(
+        {
+            "E": 1,
+            "C3": 8,
+            "C2": 3,
+            "S4": 6,
+            "sigma_d": 6,
+        }
+    ):
+        return "Td"
+    oh_classes = Counter(
+        operation_class
+        for operation_class in (_polyhedral_matrix_class(matrix) for matrix in matrices)
+        if operation_class is not None
+    )
+    if oh_classes == Counter(
+        {
+            "E": 1,
+            "C3": 8,
+            "C2_axis": 3,
+            "C4": 6,
+            "C2_edge": 6,
+            "i*E": 1,
+            "i*C3": 8,
+            "i*C2_axis": 3,
+            "i*C4": 6,
+            "i*C2_edge": 6,
+        }
+    ):
+        return "Oh"
+    ih_classes = Counter(
+        operation_class
+        for operation_class in (_icosahedral_candidate_class(matrix) for matrix in matrices)
+        if operation_class is not None
+    )
+    if ih_classes == Counter(
+        {
+            "E": 1,
+            "C2": 15,
+            "C3": 20,
+            "C5": 12,
+            "C5_2": 12,
+            "i*E": 1,
+            "i*C2": 15,
+            "i*C3": 20,
+            "i*C5": 12,
+            "i*C5_2": 12,
+        }
+    ):
+        return "Ih"
+    if ih_classes == Counter({"E": 1, "C2": 15, "C3": 20, "C5": 12, "C5_2": 12}):
+        return "I"
+    return None
+
+
+def _polyhedral_matrix_class(matrix: np.ndarray) -> str | None:
+    if np.allclose(matrix, np.eye(3), atol=1.0e-8):
+        return "E"
+    det = float(np.linalg.det(matrix))
+    trace = float(np.trace(matrix))
+    if det > 0.0:
+        if abs(trace) <= 1.0e-8:
+            return "C3"
+        if abs(trace - 1.0) <= 1.0e-8:
+            return "C4"
+        if abs(trace + 1.0) <= 1.0e-8:
+            return "C2_axis" if _is_coordinate_axis_c2(matrix) else "C2_edge"
+    if det < 0.0:
+        if np.allclose(matrix, -np.eye(3), atol=1.0e-8):
+            return "i*E"
+        proper = -matrix
+        proper_class = _polyhedral_matrix_class(proper)
+        if proper_class is not None:
+            return f"i*{proper_class}"
+        if abs(trace - 1.0) <= 1.0e-8:
+            return "sigma_d"
+        if abs(trace + 1.0) <= 1.0e-8:
+            return "S4"
+    return None
+
+
+def _is_coordinate_axis_c2(matrix: np.ndarray) -> bool:
+    rounded = np.rint(matrix)
+    if not np.allclose(matrix, rounded, atol=1.0e-8):
+        return False
+    return bool(np.count_nonzero(np.abs(np.diag(rounded)) > 0.5) == 3)
+
+
+def _dnd_group_order(labels: list[str]) -> int | None:
+    orders = []
+    for label in labels:
+        for pattern in (r"Dnd_C(\d+)z\^", r"Dnd_C2_xy_(\d+)_"):
+            match = re.search(pattern, str(label))
+            if match:
+                orders.append(int(match.group(1)) // 2)
+    return max(orders) if orders else None
+
+
 @lru_cache(maxsize=16)
 def candidate_ops(max_n=6):
     ops = [("E", np.eye(3)), ("i", -np.eye(3))]
@@ -306,7 +419,227 @@ def candidate_ops(max_n=6):
             normal = np.array((np.cos(theta), np.sin(theta), 0.0), dtype=float)
             normal /= np.linalg.norm(normal)
             ops.append((f"sigma_v_{n}_{k}", np.eye(3) - 2.0 * np.outer(normal, normal)))
+    ops.extend(_dnd_candidate_ops(max_n))
+    ops.extend(_cubic_candidate_ops())
+    ops.extend(_icosahedral_candidate_ops())
     return ops
+
+
+def _dnd_candidate_ops(max_n: int) -> list[tuple[str, np.ndarray]]:
+    ops: list[tuple[str, np.ndarray]] = []
+    sd = _diagonal_reflection_matrix()
+    for n in range(2, max_n + 1):
+        order = 2 * n
+        for power in range(n):
+            theta = 2.0 * np.pi * power / n
+            ops.append(
+                (
+                    f"Dnd_C2_xy_{order}_{(2 * power + 1) % order}",
+                    sd @ _rotation_matrix((0, 0, 1), theta),
+                )
+            )
+        for k in range(n):
+            theta = np.pi * k / n
+            c2 = _rotation_matrix((np.cos(theta), np.sin(theta), 0), np.pi)
+            ops.append((f"Dnd_C{order}z^{(2 * k + 1) % order}", sd @ c2))
+    return ops
+
+
+def _diagonal_reflection_matrix() -> np.ndarray:
+    return np.array(
+        ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+        dtype=float,
+    )
+
+
+def _cubic_candidate_ops() -> list[tuple[str, np.ndarray]]:
+    ops: list[tuple[str, np.ndarray]] = []
+    counters: Counter[str] = Counter()
+    seen: set[tuple[float, ...]] = set()
+
+    for matrix in _signed_permutation_matrices():
+        if _sign_product(matrix) != 1:
+            continue
+        label = _unique_cubic_label(_td_candidate_class(matrix), "td", counters)
+        if label is not None:
+            key = tuple(float(value) for value in matrix.reshape(-1))
+            seen.add(key)
+            ops.append((label, matrix))
+
+    for matrix in _signed_permutation_matrices():
+        key = tuple(float(value) for value in matrix.reshape(-1))
+        if key in seen:
+            continue
+        label = _unique_cubic_label(_oh_candidate_class(matrix), "oh", counters)
+        if label is not None:
+            ops.append((label, matrix))
+    return ops
+
+
+def _signed_permutation_matrices() -> tuple[np.ndarray, ...]:
+    matrices: list[np.ndarray] = []
+    for permutation in permutations(range(3)):
+        for signs in product((-1.0, 1.0), repeat=3):
+            matrix = np.zeros((3, 3), dtype=float)
+            for row, column in enumerate(permutation):
+                matrix[row, column] = signs[row]
+            matrices.append(matrix)
+    return tuple(matrices)
+
+
+def _sign_product(matrix: np.ndarray) -> int:
+    product_value = 1.0
+    for row in range(3):
+        nonzero = np.flatnonzero(np.abs(matrix[row]) > 0.5)
+        if len(nonzero) != 1:
+            return 0
+        product_value *= float(matrix[row, nonzero[0]])
+    return 1 if product_value > 0.0 else -1
+
+
+def _td_candidate_class(matrix: np.ndarray) -> str | None:
+    if np.allclose(matrix, np.eye(3), atol=1.0e-8):
+        return "E"
+    det = float(np.linalg.det(matrix))
+    trace = float(np.trace(matrix))
+    if det > 0.0:
+        if abs(trace) <= 1.0e-8:
+            return "C3"
+        if abs(trace + 1.0) <= 1.0e-8:
+            return "C2"
+    if det < 0.0:
+        if abs(trace + 1.0) <= 1.0e-8:
+            return "S4"
+        if abs(trace - 1.0) <= 1.0e-8:
+            return "sigma_d"
+    return None
+
+
+def _oh_candidate_class(matrix: np.ndarray) -> str | None:
+    operation_class = _polyhedral_matrix_class(matrix)
+    if operation_class is None:
+        return None
+    return operation_class.replace("*", "_")
+
+
+def _unique_cubic_label(
+    operation_class: str | None,
+    prefix: str,
+    counters: Counter[str],
+) -> str | None:
+    if operation_class is None:
+        return None
+    if operation_class == "E":
+        return f"{prefix}_E"
+    if operation_class == "i_E":
+        return "i"
+    counters[f"{prefix}_{operation_class}"] += 1
+    return f"{prefix}_{operation_class}_{counters[f'{prefix}_{operation_class}']}"
+
+
+def _icosahedral_candidate_ops() -> list[tuple[str, np.ndarray]]:
+    ops: list[tuple[str, np.ndarray]] = []
+    counters: Counter[str] = Counter()
+    for matrix in _icosahedral_operation_matrices():
+        operation_class = _icosahedral_candidate_class(matrix)
+        if operation_class is None:
+            continue
+        label = _unique_icosahedral_label(operation_class, counters)
+        ops.append((label, matrix))
+    return ops
+
+
+@lru_cache(maxsize=1)
+def _icosahedral_operation_matrices() -> tuple[np.ndarray, ...]:
+    vertices = _icosahedral_vertices()
+    source_indices = _independent_vertex_triple(vertices)
+    source = vertices[list(source_indices)]
+    source_inverse = np.linalg.inv(source)
+    matrices: list[np.ndarray] = []
+    seen: set[tuple[float, ...]] = set()
+    for target_indices in permutations(range(len(vertices)), 3):
+        target = vertices[list(target_indices)]
+        if abs(float(np.linalg.det(target))) <= 1.0e-8:
+            continue
+        matrix = target.T @ source_inverse.T
+        if not np.allclose(matrix.T @ matrix, np.eye(3), atol=1.0e-8):
+            continue
+        if not _maps_vertices_to_self(matrix, vertices):
+            continue
+        key = tuple(round(float(value), 10) for value in matrix.reshape(-1))
+        if key in seen:
+            continue
+        seen.add(key)
+        matrices.append(matrix)
+    return tuple(matrices)
+
+
+def _icosahedral_vertices() -> np.ndarray:
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+    vertices = []
+    for y in (-1.0, 1.0):
+        for z in (-phi, phi):
+            vertices.append((0.0, y, z))
+    for x in (-1.0, 1.0):
+        for y in (-phi, phi):
+            vertices.append((x, y, 0.0))
+    for x in (-phi, phi):
+        for z in (-1.0, 1.0):
+            vertices.append((x, 0.0, z))
+    return np.array(vertices, dtype=float)
+
+
+def _independent_vertex_triple(vertices: np.ndarray) -> tuple[int, int, int]:
+    for candidate in permutations(range(len(vertices)), 3):
+        if abs(float(np.linalg.det(vertices[list(candidate)]))) > 1.0e-8:
+            return tuple(int(item) for item in candidate)
+    raise ValueError("no independent icosahedral vertex triple")
+
+
+def _maps_vertices_to_self(matrix: np.ndarray, vertices: np.ndarray) -> bool:
+    transformed = vertices @ matrix.T
+    for vertex in transformed:
+        if not np.any(np.all(np.isclose(vertices, vertex, atol=1.0e-8), axis=1)):
+            return False
+    return True
+
+
+def _icosahedral_candidate_class(matrix: np.ndarray) -> str | None:
+    if np.allclose(matrix, np.eye(3), atol=1.0e-8):
+        return "E"
+    det = float(np.linalg.det(matrix))
+    proper = matrix if det > 0.0 else -matrix
+    proper_class = _icosahedral_proper_class(proper)
+    if proper_class is None:
+        return None
+    return f"i*{proper_class}" if det < 0.0 else proper_class
+
+
+def _icosahedral_proper_class(matrix: np.ndarray) -> str | None:
+    if np.allclose(matrix, np.eye(3), atol=1.0e-8):
+        return "E"
+    trace = float(np.trace(matrix))
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+    phi_bar = (1.0 - np.sqrt(5.0)) / 2.0
+    if abs(trace) <= 1.0e-8:
+        return "C3"
+    if abs(trace + 1.0) <= 1.0e-8:
+        return "C2"
+    if abs(trace - phi) <= 1.0e-8:
+        return "C5"
+    if abs(trace - phi_bar) <= 1.0e-8:
+        return "C5_2"
+    return None
+
+
+def _unique_icosahedral_label(operation_class: str, counters: Counter[str]) -> str:
+    if operation_class == "E":
+        return "ih_E"
+    if operation_class == "i*E":
+        return "i"
+    key = operation_class.replace("*", "_")
+    counters[key] += 1
+    return f"ih_{key}_{counters[key]}"
 
 
 def _rotation_matrix(axis, theta):

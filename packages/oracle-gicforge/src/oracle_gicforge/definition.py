@@ -1102,7 +1102,12 @@ def _project_gic_block(
     projected_vectors: list[tuple[str, np.ndarray]] = []
     basis: list[np.ndarray] = []
     operation_labels = tuple(operation.label for operation in operations)
-    for irrep, characters in irrep_characters_for_operations(operation_labels, point_group):
+    operation_matrices = tuple(operation.rotation for operation in operations)
+    for irrep, characters in irrep_characters_for_operations(
+        operation_labels,
+        point_group,
+        operation_matrices=operation_matrices,
+    ):
         if len(characters) != len(operations):
             return None
         if all(abs(character) <= 1.0e-14 for character in characters):

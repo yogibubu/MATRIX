@@ -103,3 +103,8 @@ Paper/benchmark generation
 - Fragment/Nano-LEGO direction is covered by `oracle-fragments`.
 - Unified geometry/Gaussian/Z-matrix parsing is started but not complete for
   all QM programs (`Molpro`, `MRCC`, FCHK/QFF details still need migration).
+- GIC symmetry is an ORACLE strength and must preserve Merlino3.0 behavior.
+  The current ORACLE projector covers tested low-symmetry, `C/D/Dnh/Dnd`
+  families plus matrix-classified `Td`, `Oh` and `Ih`. Remaining parity work is
+  strict Fortran77 projector diagnostics equivalent to Python and regression
+  fixtures for ring/butterfly/special coordinates under symmetry.

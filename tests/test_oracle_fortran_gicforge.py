@@ -32,6 +32,8 @@ def test_legacy_merlino_group_dispatch_matches_classifier_families():
     assert "FAM .EQ. 'Dn'" in symm
     assert "GROUP .EQ. 'td'" in symm
     assert "GROUP .EQ. 'oh'" in symm
+    assert "GROUP .EQ. 'ih'" in symm
+    assert "CALL OPS_IH" in symm
 
 
 def test_legacy_merlino_gicforge_backend_compiles():
@@ -52,6 +54,39 @@ def test_legacy_merlino_gicforge_backend_compiles():
 
     assert layout.legacy_executable.is_file()
     assert str(layout.legacy_executable) in result.stdout
+
+
+def test_legacy_merlino_icosahedral_group_builder_runs(tmp_path):
+    gfortran = shutil.which("gfortran")
+    if gfortran is None:
+        pytest.skip("gfortran is not available")
+
+    root = Path(__file__).resolve().parents[1]
+    source = root / "engines" / "fortran" / "gicforge" / "legacy_merlino" / "symm.f"
+    driver = tmp_path / "test_ih.f"
+    executable = tmp_path / "test_ih"
+    driver.write_text(
+        """
+      Program TIH
+      Double Precision R(3,3,200)
+      Integer NOPS
+      Call OPS_IH(R,NOPS)
+      If (NOPS .NE. 120) Stop 1
+      Call OPS_I(R,NOPS)
+      If (NOPS .NE. 60) Stop 2
+      End
+""",
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [gfortran, "-std=legacy", str(driver), str(source), "-o", str(executable)],
+        check=True,
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run([str(executable)], check=True, capture_output=True, text=True)
 
 
 def test_fortran_fragment_tric_bmat_compiles_and_runs(tmp_path):

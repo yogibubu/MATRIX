@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from oracle_core import section_content
-from oracle_chem import preprocess_to_enriched_xyz, write_validation_section
+from oracle_chem import (
+    MolecularGeometry,
+    analyze_molecular_symmetry,
+    preprocess_to_enriched_xyz,
+    write_validation_section,
+)
 from oracle_fragments import write_fragment_build_section
 from oracle_gaussian import read_gaussian_cartesian_input
 from oracle_gicforge import (
@@ -24,6 +30,7 @@ from oracle_gicforge import (
     special_symmetry_source_blocks,
     symmetrize_gic_definition,
     irrep_characters_for_operations,
+    irrep_sequence,
     total_symmetric_gic_names,
     write_gicforge_build_sections,
     write_gicforge_gaussian_input,
@@ -34,6 +41,192 @@ from oracle_gicforge.definition import (
     _finite_difference_b_row,
     _select_ranked_primitives,
 )
+
+
+def _tetrahedral_methane_coordinates() -> np.ndarray:
+    return np.array(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 1.0, 1.0),
+            (1.0, -1.0, -1.0),
+            (-1.0, 1.0, -1.0),
+            (-1.0, -1.0, 1.0),
+        ],
+        dtype=float,
+    )
+
+
+def _tetrahedral_operations() -> tuple[GICPointGroupOperation, ...]:
+    from itertools import permutations, product
+
+    vertices = _tetrahedral_methane_coordinates()[1:]
+    operations: list[GICPointGroupOperation] = []
+    counters: Counter[str] = Counter()
+    for permutation in permutations(range(3)):
+        for signs in product((-1.0, 1.0), repeat=3):
+            if signs[0] * signs[1] * signs[2] != 1.0:
+                continue
+            matrix = np.zeros((3, 3), dtype=float)
+            for row, column in enumerate(permutation):
+                matrix[row, column] = signs[row]
+            operation_class = _tetrahedral_operation_class(matrix)
+            counters[operation_class] += 1
+            label = "E" if operation_class == "E" else f"{operation_class}_{counters[operation_class]}"
+            operations.append(
+                GICPointGroupOperation(
+                    label,
+                    tuple(tuple(float(value) for value in row) for row in matrix),
+                    _tetrahedral_permutation(matrix, vertices),
+                )
+            )
+    return tuple(sorted(operations, key=lambda operation: operation.label != "E"))
+
+
+def _octahedral_operation_matrices() -> tuple[tuple[tuple[float, ...], ...], ...]:
+    from itertools import permutations, product
+
+    matrices: list[tuple[tuple[float, ...], ...]] = []
+    for permutation in permutations(range(3)):
+        for signs in product((-1.0, 1.0), repeat=3):
+            matrix = np.zeros((3, 3), dtype=float)
+            for row, column in enumerate(permutation):
+                matrix[row, column] = signs[row]
+            matrices.append(tuple(tuple(float(value) for value in row) for row in matrix))
+    return tuple(matrices)
+
+
+def _dnd_operations(n: int) -> tuple[GICPointGroupOperation, ...]:
+    sd = np.array(((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0)))
+    operations = [
+        GICPointGroupOperation(
+            "E",
+            ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+            (),
+        )
+    ]
+    for power in range(1, n):
+        matrix = _rotation_matrix((0.0, 0.0, 1.0), 2.0 * np.pi * power / n)
+        operations.append(_operation_without_permutation(f"C{n}z^{power}", matrix))
+    for k in range(n):
+        matrix = _rotation_matrix((np.cos(np.pi * k / n), np.sin(np.pi * k / n), 0.0), np.pi)
+        operations.append(_operation_without_permutation(f"C2_xy_{n}_{k}", matrix))
+    for power in range(n):
+        matrix = sd @ _rotation_matrix((0.0, 0.0, 1.0), 2.0 * np.pi * power / n)
+        operations.append(
+            _operation_without_permutation(
+                f"Dnd_C2_xy_{2 * n}_{(2 * power + 1) % (2 * n)}",
+                matrix,
+            )
+        )
+    for k in range(n):
+        c2 = _rotation_matrix((np.cos(np.pi * k / n), np.sin(np.pi * k / n), 0.0), np.pi)
+        operations.append(
+            _operation_without_permutation(
+                f"Dnd_C{2 * n}z^{(2 * k + 1) % (2 * n)}",
+                sd @ c2,
+            )
+        )
+    return tuple(operations)
+
+
+def _operation_without_permutation(label: str, matrix: np.ndarray) -> GICPointGroupOperation:
+    return GICPointGroupOperation(
+        label,
+        tuple(tuple(float(value) for value in row) for row in matrix),
+        (),
+    )
+
+
+def _rotation_matrix(axis: tuple[float, float, float], theta: float) -> np.ndarray:
+    axis_array = np.array(axis, dtype=float)
+    axis_array /= np.linalg.norm(axis_array)
+    x, y, z = axis_array
+    c = np.cos(theta)
+    s = np.sin(theta)
+    one_c = 1.0 - c
+    return np.array(
+        [
+            [c + x * x * one_c, x * y * one_c - z * s, x * z * one_c + y * s],
+            [y * x * one_c + z * s, c + y * y * one_c, y * z * one_c - x * s],
+            [z * x * one_c - y * s, z * y * one_c + x * s, c + z * z * one_c],
+        ],
+        dtype=float,
+    )
+
+
+def _d2d_stretch_operations() -> tuple[GICPointGroupOperation, ...]:
+    ligand_coords = _tetrahedral_methane_coordinates()[1:]
+    operations = []
+    for operation in _dnd_operations(2):
+        matrix = np.asarray(operation.rotation, dtype=float)
+        transformed = ligand_coords @ matrix.T
+        permutation = [1]
+        for position in transformed:
+            matches = np.where(
+                np.all(np.isclose(ligand_coords, position, atol=1.0e-8), axis=1)
+            )[0]
+            assert len(matches) == 1
+            permutation.append(int(matches[0]) + 2)
+        operations.append(
+            GICPointGroupOperation(operation.label, operation.rotation, tuple(permutation))
+        )
+    return tuple(operations)
+
+
+def _icosahedral_vertices() -> np.ndarray:
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+    vertices = []
+    for y in (-1.0, 1.0):
+        for z in (-phi, phi):
+            vertices.append((0.0, y, z))
+    for x in (-1.0, 1.0):
+        for y in (-phi, phi):
+            vertices.append((x, y, 0.0))
+    for x in (-phi, phi):
+        for z in (-1.0, 1.0):
+            vertices.append((x, 0.0, z))
+    return np.array(vertices, dtype=float)
+
+
+def _tetrahedral_operation_class(matrix: np.ndarray) -> str:
+    if np.allclose(matrix, np.eye(3)):
+        return "E"
+    det = float(np.linalg.det(matrix))
+    trace = float(np.trace(matrix))
+    if det > 0.0 and abs(trace) <= 1.0e-8:
+        return "C3"
+    if det > 0.0 and abs(trace + 1.0) <= 1.0e-8:
+        return "C2"
+    if det < 0.0 and abs(trace + 1.0) <= 1.0e-8:
+        return "S4"
+    if det < 0.0 and abs(trace - 1.0) <= 1.0e-8:
+        return "sigma_d"
+    raise AssertionError(f"unexpected Td operation:\n{matrix}")
+
+
+def _tetrahedral_permutation(matrix: np.ndarray, vertices: np.ndarray) -> tuple[int, ...]:
+    transformed = vertices @ matrix.T
+    permutation = [1]
+    for position in transformed:
+        matches = np.where(np.all(np.isclose(vertices, position, atol=1.0e-8), axis=1))[0]
+        assert len(matches) == 1
+        permutation.append(int(matches[0]) + 2)
+    return tuple(permutation)
+
+
+def _assert_character_rows_orthonormal(
+    irreps: dict[str, tuple[float, ...]],
+    *,
+    group_order: int,
+) -> None:
+    names = tuple(irreps)
+    for left in names:
+        for right in names:
+            overlap = sum(
+                float(a) * float(b)
+                for a, b in zip(irreps[left], irreps[right])
+            ) / float(group_order)
+            assert overlap == pytest.approx(1.0 if left == right else 0.0, abs=1.0e-8)
 
 
 def test_gicforge_plan_requires_validation_pass(tmp_path):
@@ -755,6 +948,152 @@ def test_gicforge_irrep_characters_cover_merlino_family_groups():
         abs=1.0e-12,
     )
 
+    d2d_ops = _dnd_operations(2)
+    d2d = dict(
+        irrep_characters_for_operations(
+            tuple(operation.label for operation in d2d_ops),
+            "D2d",
+            operation_matrices=tuple(operation.rotation for operation in d2d_ops),
+        )
+    )
+    assert tuple(d2d) == ("A1", "A2", "B1", "B2", "E")
+    _assert_character_rows_orthonormal(d2d, group_order=8)
+
+    d3d_ops = _dnd_operations(3)
+    d3d = dict(
+        irrep_characters_for_operations(
+            tuple(operation.label for operation in d3d_ops),
+            "D3d",
+            operation_matrices=tuple(operation.rotation for operation in d3d_ops),
+        )
+    )
+    assert tuple(d3d) == ("A1g", "A2g", "Eg", "A1u", "A2u", "Eu")
+    _assert_character_rows_orthonormal(d3d, group_order=12)
+
+
+def test_oracle_symmetry_detects_tetrahedral_operations():
+    coords = _tetrahedral_methane_coordinates()
+    symmetry = analyze_molecular_symmetry(
+        MolecularGeometry(
+            atoms=("C", "H", "H", "H", "H"),
+            coordinates_angstrom=coords,
+            comment="methane td",
+        ),
+        distance_tolerance=1.0e-5,
+        inertia_tolerance=1.0e-5,
+        max_rotation_order=6,
+    )
+
+    assert symmetry.point_group == "Td"
+    assert len(symmetry.operations) == 24
+
+
+def test_oracle_symmetry_detects_icosahedral_operations():
+    vertices = _icosahedral_vertices()
+    symmetry = analyze_molecular_symmetry(
+        MolecularGeometry(
+            atoms=tuple("B" for _ in range(len(vertices))),
+            coordinates_angstrom=vertices,
+            comment="icosahedron ih",
+        ),
+        distance_tolerance=1.0e-5,
+        inertia_tolerance=1.0e-5,
+        max_rotation_order=6,
+    )
+
+    assert symmetry.point_group == "Ih"
+    assert len(symmetry.operations) == 120
+
+
+def test_gicforge_polyhedral_irrep_characters_use_operation_matrices():
+    operations = _tetrahedral_operations()
+    irreps = dict(
+        irrep_characters_for_operations(
+            tuple(operation.label for operation in operations),
+            "Td",
+            operation_matrices=tuple(operation.rotation for operation in operations),
+        )
+    )
+
+    assert tuple(irreps) == ("A1", "A2", "E", "T1", "T2")
+    assert Counter(round(value) for value in irreps["E"]) == Counter(
+        {2: 4, -1: 8, 0: 12}
+    )
+    assert Counter(round(value) for value in irreps["T2"]) == Counter(
+        {3: 1, 0: 8, -1: 9, 1: 6}
+    )
+
+
+def test_gicforge_octahedral_irrep_characters_use_operation_matrices():
+    matrices = _octahedral_operation_matrices()
+    labels = tuple("E" if np.allclose(matrix, np.eye(3)) else f"Oh{idx}" for idx, matrix in enumerate(matrices))
+    irreps = dict(
+        irrep_characters_for_operations(
+            labels,
+            "Oh",
+            operation_matrices=matrices,
+        )
+    )
+
+    assert tuple(irreps) == (
+        "A1g",
+        "A2g",
+        "Eg",
+        "T1g",
+        "T2g",
+        "A1u",
+        "A2u",
+        "Eu",
+        "T1u",
+        "T2u",
+    )
+    assert Counter(round(value) for value in irreps["A1g"]) == Counter({1: 48})
+    assert Counter(round(value) for value in irreps["A1u"]) == Counter({1: 24, -1: 24})
+    assert irreps["T1u"] == pytest.approx(
+        tuple(float(np.trace(np.asarray(matrix, dtype=float))) for matrix in matrices)
+    )
+
+
+def test_gicforge_icosahedral_irrep_characters_use_operation_matrices():
+    vertices = _icosahedral_vertices()
+    symmetry = analyze_molecular_symmetry(
+        MolecularGeometry(
+            atoms=tuple("B" for _ in range(len(vertices))),
+            coordinates_angstrom=vertices,
+            comment="icosahedron ih",
+        ),
+        distance_tolerance=1.0e-5,
+        inertia_tolerance=1.0e-5,
+        max_rotation_order=6,
+    )
+    irreps = dict(
+        irrep_characters_for_operations(
+            tuple(operation.label for operation in symmetry.operations),
+            "Ih",
+            operation_matrices=tuple(operation.rotation for operation in symmetry.operations),
+        )
+    )
+
+    assert tuple(irreps) == (
+        "Ag",
+        "T1g",
+        "T2g",
+        "Gg",
+        "Hg",
+        "Au",
+        "T1u",
+        "T2u",
+        "Gu",
+        "Hu",
+    )
+    _assert_character_rows_orthonormal(irreps, group_order=120)
+    assert irreps["T1u"] == pytest.approx(
+        tuple(
+            float(np.trace(np.asarray(operation.rotation, dtype=float)))
+            for operation in symmetry.operations
+        )
+    )
+
 
 def test_gicforge_point_group_projector_uses_operations_without_type_mixing():
     primitives = (
@@ -888,6 +1227,106 @@ def test_gicforge_point_group_projector_handles_c3v_degenerate_irrep():
         "EStr002",
     ]
     assert [gic.irrep for gic in symmetrized.gics] == ["A1", "E", "E"]
+    assert total_symmetric_gic_names(symmetrized) == ("A1Str001",)
+
+
+def test_gicforge_point_group_projector_handles_dnd_even_group():
+    primitives = tuple(
+        GICPrimitive(
+            identifier=f"P{idx:03d}",
+            name=f"Str{idx:04d}",
+            family="STRETCH",
+            function="R",
+            atoms=(1, idx + 1),
+        )
+        for idx in range(1, 5)
+    )
+    definition = GICDefinition(
+        backend="test",
+        point_group="D2d",
+        symmetrize=False,
+        target_rank=4,
+        rank=4,
+        candidate_count=4,
+        reference_coordinates_angstrom=((0.0, 0.0, 0.0),) * 5,
+        primitives=primitives,
+        gics=tuple(
+            FrozenGIC(
+                identifier=f"GIC{idx:03d}",
+                name=primitive.name,
+                family=primitive.family,
+                irrep="UNASSIGNED",
+                primitive_id=primitive.identifier,
+                gaussian_expression=primitive.gaussian_expression(),
+                coefficients=((primitive.identifier, 1.0),),
+            )
+            for idx, primitive in enumerate(primitives, start=1)
+        ),
+    )
+
+    symmetrized = symmetrize_gic_definition(
+        definition,
+        atom_symbols=("C", "H", "H", "H", "H"),
+        symmetry_operations=_d2d_stretch_operations(),
+    )
+
+    assert symmetrized.symmetry_diagnostics is not None
+    assert symmetrized.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert Counter(gic.irrep for gic in symmetrized.gics) == Counter(
+        {"A1": 1, "B2": 1, "E": 2}
+    )
+    assert total_symmetric_gic_names(symmetrized) == ("A1Str001",)
+
+
+def test_gicforge_point_group_projector_handles_tetrahedral_stretches():
+    primitives = tuple(
+        GICPrimitive(
+            identifier=f"P{idx:03d}",
+            name=f"Str{idx:04d}",
+            family="STRETCH",
+            function="R",
+            atoms=(1, idx + 1),
+        )
+        for idx in range(1, 5)
+    )
+    definition = GICDefinition(
+        backend="test",
+        point_group="Td",
+        symmetrize=False,
+        target_rank=4,
+        rank=4,
+        candidate_count=4,
+        reference_coordinates_angstrom=tuple(map(tuple, _tetrahedral_methane_coordinates())),
+        primitives=primitives,
+        gics=tuple(
+            FrozenGIC(
+                identifier=f"GIC{idx:03d}",
+                name=primitive.name,
+                family=primitive.family,
+                irrep="UNASSIGNED",
+                primitive_id=primitive.identifier,
+                gaussian_expression=primitive.gaussian_expression(),
+                coefficients=((primitive.identifier, 1.0),),
+            )
+            for idx, primitive in enumerate(primitives, start=1)
+        ),
+    )
+
+    symmetrized = symmetrize_gic_definition(
+        definition,
+        atom_symbols=("C", "H", "H", "H", "H"),
+        symmetry_operations=_tetrahedral_operations(),
+    )
+
+    assert symmetrized.symmetry_diagnostics is not None
+    assert symmetrized.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert [gic.name for gic in symmetrized.gics] == [
+        "A1Str001",
+        "T2Str001",
+        "T2Str002",
+        "T2Str003",
+    ]
+    assert [gic.irrep for gic in symmetrized.gics] == ["A1", "T2", "T2", "T2"]
     assert total_symmetric_gic_names(symmetrized) == ("A1Str001",)
 
 
