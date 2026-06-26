@@ -29,7 +29,11 @@ def validate_gicforge_prerequisites(path: Path) -> None:
         raise GICForgeContractError(f"#VALIDATION status must be PASS; found {status or 'UNKNOWN'}")
 
 
-def gic_plan_section_lines(*, symmetrize: bool = False) -> list[str]:
+def gic_plan_section_lines(
+    *,
+    symmetrize: bool = False,
+    improper_dihedrals: bool = False,
+) -> list[str]:
     return [
         f"SCHEMA {ORACLE_XYZ_GIC_SCHEMA}",
         "STATUS PLANNED",
@@ -38,6 +42,8 @@ def gic_plan_section_lines(*, symmetrize: bool = False) -> list[str]:
         "SYMMETRY=oracle.xyz.symmetry.v1",
         "INDEXING ATOMS=ONE_BASED",
         f"SYMMETRIZE {_bool_text(symmetrize)}",
+        "OUT_OF_PLANE_MODE "
+        f"{'IMPROPER_DIHEDRAL' if improper_dihedrals else 'OUT_OF_PLANE'}",
         "BACKEND UNASSIGNED",
         "[FROZEN_GICS]",
         "PENDING GICFORGE_IMPLEMENTATION",
@@ -60,10 +66,18 @@ def write_gicforge_plan_sections(
     *,
     symmetrize: bool = False,
     sycart: bool = False,
+    improper_dihedrals: bool = False,
 ) -> None:
     target = Path(path)
     validate_gicforge_prerequisites(target)
-    replace_section(target, "GIC", gic_plan_section_lines(symmetrize=symmetrize))
+    replace_section(
+        target,
+        "GIC",
+        gic_plan_section_lines(
+            symmetrize=symmetrize,
+            improper_dihedrals=improper_dihedrals,
+        ),
+    )
     if sycart:
         replace_section(target, "SYCART", sycart_plan_section_lines())
 

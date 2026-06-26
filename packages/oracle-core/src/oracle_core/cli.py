@@ -86,10 +86,12 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     gic_plan.add_argument("xyzin", type=Path)
     gic_plan.add_argument("--symmetrize", action="store_true")
     gic_plan.add_argument("--sycart", action="store_true")
+    gic_plan.add_argument("--improper-dihedrals", action="store_true")
     gic_build = gicforge_sub.add_parser("build", help="Build frozen #GIC/#SYCART sections")
     gic_build.add_argument("xyzin", type=Path)
     gic_build.add_argument("--symmetrize", action="store_true")
     gic_build.add_argument("--sycart", action="store_true")
+    gic_build.add_argument("--improper-dihedrals", action="store_true")
     bmatrix = gicforge_sub.add_parser("bmatrix", help="Evaluate the frozen GIC B matrix")
     bmatrix.add_argument("xyzin", type=Path)
     bmatrix.add_argument("output", type=Path, nargs="?")
@@ -227,20 +229,30 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
     if args.command == "gicforge" and args.gicforge_command == "plan":
         from oracle_gicforge import write_gicforge_plan_sections
 
+        plan_kwargs = {
+            "symmetrize": args.symmetrize,
+            "sycart": args.sycart,
+        }
+        if args.improper_dihedrals:
+            plan_kwargs["improper_dihedrals"] = True
         write_gicforge_plan_sections(
             args.xyzin,
-            symmetrize=args.symmetrize,
-            sycart=args.sycart,
+            **plan_kwargs,
         )
         print(f"Planned GICForge workflow: {args.xyzin}")
         return 0
     if args.command == "gicforge" and args.gicforge_command == "build":
         from oracle_gicforge import write_gicforge_build_sections
 
+        build_kwargs = {
+            "symmetrize": args.symmetrize,
+            "sycart": args.sycart,
+        }
+        if args.improper_dihedrals:
+            build_kwargs["improper_dihedrals"] = True
         definition = write_gicforge_build_sections(
             args.xyzin,
-            symmetrize=args.symmetrize,
-            sycart=args.sycart,
+            **build_kwargs,
         )
         print(
             "Built GICForge definition: "

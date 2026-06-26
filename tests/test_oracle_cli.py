@@ -238,6 +238,34 @@ def test_gicforge_build_cli_calls_writer(tmp_path, monkeypatch, capsys):
     assert "Built GICForge definition" in capsys.readouterr().out
 
 
+def test_gicforge_cli_passes_improper_dihedrals_flag(tmp_path, monkeypatch, capsys):
+    calls = {}
+    path = tmp_path / "molecule.xyzin"
+
+    class FakeDefinition:
+        gics = (object(),)
+        rank = 1
+
+    def fake_plan(target, *, symmetrize=False, sycart=False, improper_dihedrals=False):
+        calls["plan"] = (target, symmetrize, sycart, improper_dihedrals)
+
+    def fake_build(target, *, symmetrize=False, sycart=False, improper_dihedrals=False):
+        calls["build"] = (target, symmetrize, sycart, improper_dihedrals)
+        return FakeDefinition()
+
+    monkeypatch.setattr("oracle_gicforge.write_gicforge_plan_sections", fake_plan)
+    monkeypatch.setattr("oracle_gicforge.write_gicforge_build_sections", fake_build)
+
+    rc_plan = oracle_run.main(["gicforge", "plan", str(path), "--improper-dihedrals"])
+    rc_build = oracle_run.main(["gicforge", "build", str(path), "--improper-dihedrals"])
+
+    assert rc_plan == 0
+    assert rc_build == 0
+    assert calls["plan"] == (path, False, False, True)
+    assert calls["build"] == (path, False, False, True)
+    assert "Built GICForge definition" in capsys.readouterr().out
+
+
 def test_gicforge_bmatrix_cli_calls_writer(tmp_path, monkeypatch, capsys):
     calls = {}
     path = tmp_path / "molecule.xyzin"

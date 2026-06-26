@@ -349,8 +349,33 @@ def test_gicforge_plan_writes_gic_and_sycart_sections(tmp_path):
     assert gic[0] == "SCHEMA oracle.xyz.gic.v1"
     assert "STATUS PLANNED" in gic
     assert "SYMMETRIZE TRUE" in gic
+    assert "OUT_OF_PLANE_MODE OUT_OF_PLANE" in gic
     assert "PENDING GICFORGE_IMPLEMENTATION" in gic
     assert sycart[0] == "SCHEMA oracle.xyz.sycart.v1"
+
+
+def test_gicforge_plan_can_request_improper_dihedrals(tmp_path):
+    path = tmp_path / "molecule.xyz"
+    path.write_text(
+        "\n".join(
+            [
+                "1",
+                "h",
+                "H 0 0 0",
+                "",
+                "#VALIDATION",
+                "SCHEMA oracle.xyz.validation.v1",
+                "STATUS PASS",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    write_gicforge_plan_sections(path, improper_dihedrals=True)
+    gic = section_content(path.read_text(encoding="utf-8").splitlines(), "GIC")
+
+    assert "OUT_OF_PLANE_MODE IMPROPER_DIHEDRAL" in gic
 
 
 def test_preprocess_validate_then_gicforge_plan_pipeline(tmp_path):
@@ -605,6 +630,79 @@ def test_gicforge_native_analytic_b_rows_match_diagnostic_finite_difference():
             step_angstrom=1.0e-6,
         )
         assert np.max(np.abs(analytic - diagnostic_fd)) < 1.0e-5
+
+
+def test_gicforge_generates_out_of_plane_or_improper_dihedral_mode():
+    coords = np.asarray(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.2],
+            [0.0, 1.0, -0.1],
+            [0.0, 0.0, 1.1],
+        ],
+        dtype=float,
+    )
+    bonds = ((1, 2), (1, 3), (1, 4))
+
+    oop_candidates = _primitive_candidates(bonds, coords=coords, natoms=4)
+    oop = next(primitive for primitive in oop_candidates if primitive.family == "OUT_OF_PLANE")
+    assert oop.function == "U"
+    assert oop.name == "OuPl0001"
+    assert oop.gaussian_expression() == "U(1,2,3,4)"
+
+    improper_candidates = _primitive_candidates(
+        bonds,
+        coords=coords,
+        natoms=4,
+        improper_dihedrals=True,
+    )
+    improper = next(
+        primitive
+        for primitive in improper_candidates
+        if primitive.family == "IMPROPER_DIHEDRAL"
+    )
+    assert improper.function == "IMPD"
+    assert improper.name == "ImpD0001"
+    assert improper.gaussian_expression() == "D(2,1,4,3)"
+    assert _primitive_value(improper, coords) == pytest.approx(
+        _test_dihedral_value(coords, (2, 1, 4, 3))
+    )
+    assert np.max(
+        np.abs(_analytic_b_row(improper, coords) - _finite_difference_b_row(improper, coords))
+    ) < 1.0e-5
+
+
+def test_gicforge_skips_all_cyclic_out_of_plane_candidates_like_merlino():
+    coords = np.asarray(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [-0.4, -0.3, 0.8],
+        ],
+        dtype=float,
+    )
+    bonds = ((1, 2), (1, 3), (1, 4))
+    rings = ((1, (1, 2, 3, 4)),)
+
+    oop_candidates = _primitive_candidates(
+        bonds,
+        rings=rings,
+        coords=coords,
+        natoms=4,
+    )
+    improper_candidates = _primitive_candidates(
+        bonds,
+        rings=rings,
+        coords=coords,
+        natoms=4,
+        improper_dihedrals=True,
+    )
+
+    assert "OUT_OF_PLANE" not in {primitive.family for primitive in oop_candidates}
+    assert "IMPROPER_DIHEDRAL" not in {
+        primitive.family for primitive in improper_candidates
+    }
 
 
 def test_gicforge_build_handles_corpus_zmatrix_case(tmp_path):

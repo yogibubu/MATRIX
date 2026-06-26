@@ -58,6 +58,9 @@ class GICPrimitive:
     ref_frame_atoms: tuple[int, ...] = ()
 
     def gaussian_expression(self) -> str:
+        if self.function == "IMPD":
+            atoms = ",".join(str(atom) for atom in _improper_dihedral_atoms(self.atoms))
+            return f"D({atoms})"
         if not self.is_gaussian_native:
             return "NONE"
         atoms = ",".join(str(atom) for atom in self.atoms)
@@ -159,11 +162,13 @@ def build_gic_definition_from_xyzin(
     path: Path,
     *,
     symmetrize: bool = False,
+    improper_dihedrals: bool | None = None,
     rank_tolerance: float = RANK_TOLERANCE,
 ) -> GICDefinition:
     """Build a frozen ORACLE GIC definition from saved xyzin state."""
     definition, atom_symbols, operations = construct_gic_definition_from_xyzin(
         path,
+        improper_dihedrals=improper_dihedrals,
         rank_tolerance=rank_tolerance,
     )
     if not symmetrize:
@@ -178,6 +183,7 @@ def build_gic_definition_from_xyzin(
 def construct_gic_definition_from_xyzin(
     path: Path,
     *,
+    improper_dihedrals: bool | None = None,
     rank_tolerance: float = RANK_TOLERANCE,
 ) -> tuple[GICDefinition, tuple[str, ...], tuple[GICPointGroupOperation, ...]]:
     """Construct and reduce GICs without applying symmetry adaptation."""
@@ -188,6 +194,8 @@ def construct_gic_definition_from_xyzin(
     coords = np.asarray(geometry.coordinates_angstrom, dtype=float)
     point_group = _point_group(lines)
     symmetry_operations = _symmetry_operations(lines)
+    if improper_dihedrals is None:
+        improper_dihedrals = _planned_improper_dihedrals(lines)
 
     bonds = _topology_bonds(lines, natoms=geometry.natoms)
     rings = _topology_rings(lines, natoms=geometry.natoms)
@@ -196,6 +204,7 @@ def construct_gic_definition_from_xyzin(
         rings=rings,
         coords=coords,
         natoms=geometry.natoms,
+        improper_dihedrals=improper_dihedrals,
         fragment_records=_fragment_records(target),
         interaction_centers=_interaction_center_definition(target),
     )
@@ -305,6 +314,7 @@ def gic_definition_section_lines(definition: GICDefinition) -> list[str]:
         f"TOTAL_SYMMETRIC_GICS {_csv_or_none(total_symmetric_gic_names(definition))}",
         f"SYMMETRIZE {_bool_text(definition.symmetrize)}",
         f"SYMMETRY_MODE {_symmetry_mode(definition)}",
+        f"OUT_OF_PLANE_MODE {_out_of_plane_mode(definition.primitives)}",
         f"TARGET_RANK {definition.target_rank}",
         f"RANK {definition.rank}",
         f"CANDIDATE_COUNT {definition.candidate_count}",
@@ -374,9 +384,14 @@ def write_gicforge_build_sections(
     *,
     symmetrize: bool = False,
     sycart: bool = False,
+    improper_dihedrals: bool | None = None,
 ) -> GICDefinition:
     target = Path(path)
-    definition = build_gic_definition_from_xyzin(target, symmetrize=symmetrize)
+    definition = build_gic_definition_from_xyzin(
+        target,
+        symmetrize=symmetrize,
+        improper_dihedrals=improper_dihedrals,
+    )
     replace_section(target, "GIC", gic_definition_section_lines(definition))
     if sycart:
         sycart_definition = build_sycart_definition_from_xyzin(target)
@@ -607,6 +622,7 @@ def _primitive_candidates(
     rings: tuple[tuple[int, tuple[int, ...]], ...] = (),
     coords: np.ndarray,
     natoms: int,
+    improper_dihedrals: bool = False,
     fragment_records: tuple[object, ...] = (),
     interaction_centers: object | None = None,
 ) -> tuple[GICPrimitive, ...]:
@@ -672,13 +688,23 @@ def _primitive_candidates(
     for family, torsion in ordinary_torsions:
         candidates.append(_make_primitive(family, "D", torsion, counters))
 
+    cyclic_atoms = _cyclic_atom_set(rings)
+    out_of_plane_family = "IMPROPER_DIHEDRAL" if improper_dihedrals else "OUT_OF_PLANE"
+    out_of_plane_function = "IMPD" if improper_dihedrals else "U"
     for center in range(1, natoms + 1):
         neighbors = sorted(adjacency[center])
         if len(neighbors) < 3:
             continue
         for n1, n2, n3 in combinations(neighbors, 3):
+            if {center, n1, n2, n3}.issubset(cyclic_atoms):
+                continue
             candidates.append(
-                _make_primitive("OUT_OF_PLANE", "U", (center, n1, n2, n3), counters)
+                _make_primitive(
+                    out_of_plane_family,
+                    out_of_plane_function,
+                    (center, n1, n2, n3),
+                    counters,
+                )
             )
 
     return tuple(candidates)
@@ -1611,9 +1637,9 @@ def _primitive_projector_key(primitive: GICPrimitive) -> tuple[object, ...] | No
             return None
         key, _sign = signature
         return ("RING_PUCKER_COMPONENT", key)
-    if primitive.family == "OUT_OF_PLANE" and len(primitive.atoms) == 4:
+    if primitive.family in {"OUT_OF_PLANE", "IMPROPER_DIHEDRAL"} and len(primitive.atoms) == 4:
         return (
-            "OUT_OF_PLANE",
+            primitive.family,
             primitive.atoms[0],
             tuple(sorted(primitive.atoms[1:])),
         )
@@ -1699,14 +1725,14 @@ def _mapped_primitive_projector_terms(
             return None
         key, sign = signature
         return ((("RING_PUCKER_COMPONENT", key), sign),)
-    if primitive.family == "OUT_OF_PLANE" and len(mapped_atoms) == 4:
+    if primitive.family in {"OUT_OF_PLANE", "IMPROPER_DIHEDRAL"} and len(mapped_atoms) == 4:
         center = mapped_atoms[0]
         substituents = mapped_atoms[1:]
         sorted_substituents = tuple(sorted(substituents))
         return (
             (
                 (
-                    "OUT_OF_PLANE",
+                    primitive.family,
                     center,
                     sorted_substituents,
                 ),
@@ -1934,10 +1960,10 @@ def _local_symmetry_signature(
         )
     if primitive.family == "TORSION" and len(primitive.atoms) == 4:
         return "D:" + "-".join(_atom_symbol(atom, atom_symbols) for atom in primitive.atoms)
-    if primitive.family == "OUT_OF_PLANE" and len(primitive.atoms) == 4:
+    if primitive.family in {"OUT_OF_PLANE", "IMPROPER_DIHEDRAL"} and len(primitive.atoms) == 4:
         substituents = _sorted_atom_symbols(primitive.atoms[1:], atom_symbols)
         return (
-            f"U:{_atom_symbol(primitive.atoms[0], atom_symbols)}:"
+            f"{primitive.function}:{_atom_symbol(primitive.atoms[0], atom_symbols)}:"
             f"{'-'.join(substituents)}"
         )
     if primitive.family == "FRAG_DISTANCE":
@@ -2405,7 +2431,7 @@ def _finite_difference_b_row(
                 plus.reshape(coords.shape),
                 minus.reshape(coords.shape),
             )
-        elif primitive.function == "D":
+        elif primitive.function in {"D", "IMPD"}:
             delta = _periodic_delta(value_plus, value_minus)
         else:
             delta = value_plus - value_minus
@@ -2504,6 +2530,8 @@ def _dual_primitive_value(
         return _dual_dihedral_value(dcoords, primitive.atoms)
     if primitive.function == "U":
         return _dual_out_of_plane_value(dcoords, primitive.atoms)
+    if primitive.function == "IMPD":
+        return _dual_dihedral_value(dcoords, _improper_dihedral_atoms(primitive.atoms))
     if primitive.function == "FROT":
         return _dual_fragment_rotation_value(
             dcoords,
@@ -2733,6 +2761,8 @@ def _primitive_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
         return _dihedral_value(coords, primitive.atoms)
     if primitive.function == "U":
         return _out_of_plane_value(coords, primitive.atoms)
+    if primitive.function == "IMPD":
+        return _dihedral_value(coords, _improper_dihedral_atoms(primitive.atoms))
     if primitive.function == "FC_DIST":
         return _fragment_center_distance_value(coords, primitive.atoms, primitive.ref_atoms)
     if primitive.function == "FCA_DIST":
@@ -3204,6 +3234,15 @@ def _adjacency(bonds: tuple[tuple[int, int], ...], *, natoms: int) -> dict[int, 
     return graph
 
 
+def _cyclic_atom_set(rings: tuple[tuple[int, tuple[int, ...]], ...]) -> set[int]:
+    return {atom for _ring_index, atoms in rings for atom in atoms}
+
+
+def _improper_dihedral_atoms(atoms: tuple[int, ...]) -> tuple[int, ...]:
+    center, n1, n2, n3 = atoms
+    return (n1, center, n3, n2)
+
+
 def _point_group(lines: list[str]) -> str:
     for line in section_content(lines, "SYMMETRY"):
         parts = line.split()
@@ -3459,6 +3498,17 @@ def _parse_bool(text: str | None) -> bool:
     return bool((text or "").strip().upper() == "TRUE")
 
 
+def _planned_improper_dihedrals(lines: list[str]) -> bool:
+    mode = _section_value(section_content(lines, "GIC"), "OUT_OF_PLANE_MODE")
+    return (mode or "").strip().upper() in {"IMPROPER_DIHEDRAL", "IMPROPER", "IMPD", "G16"}
+
+
+def _out_of_plane_mode(primitives: tuple[GICPrimitive, ...]) -> str:
+    if any(primitive.function == "IMPD" for primitive in primitives):
+        return "IMPROPER_DIHEDRAL"
+    return "OUT_OF_PLANE"
+
+
 def _parse_int(text: str | None) -> int:
     if text is None:
         return 0
@@ -3695,6 +3745,8 @@ def _gaussian_expression_for_primitive(primitive: GICPrimitive) -> str | None:
             expression = "D(" + ",".join(str(atom) for atom in atoms) + ")"
             terms.append(_gaussian_linear_term(coefficient, expression, first=not terms))
         return "".join(terms) if terms else None
+    if primitive.function == "IMPD":
+        return primitive.gaussian_expression()
     return None
 
 

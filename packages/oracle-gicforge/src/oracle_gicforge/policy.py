@@ -89,6 +89,13 @@ PRIMITIVE_FAMILY_POLICIES = (
         "OUT_OF_PLANE",
     ),
     PrimitiveFamilyPolicy(
+        "IMPROPER_DIHEDRAL",
+        "IMPD",
+        "ImpD",
+        ORDINARY_REDUCTION_CLASS,
+        "OUT_OF_PLANE",
+    ),
+    PrimitiveFamilyPolicy(
         "FRAG_DISTANCE",
         "FC_DIST",
         "FCDi",
