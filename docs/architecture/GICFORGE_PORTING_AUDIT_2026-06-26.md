@@ -24,9 +24,9 @@ regression test and noted in the method documentation.
 | Area | Merlino3.0 source | ORACLE status | Action |
 | --- | --- | --- | --- |
 | Ordinary primitives | `survibfit/primitives.py`, `mkprim.f` | Present: stretch, bend, linear bend, torsion, out-of-plane | Keep parity tests against analytic/FD B rows. |
-| Ring bend/torsion blocks | `survibfit/transforms.py`, `mkcyc.f`, `mksalc.f`, Overleaf GICForge manual | Port started: `CYCLIC_BEND`, `CYCLIC_TORSION`, `CONDENSED_RING_TORSION`, `BUTTERFLY` families now exist in Python and remain separate for symmetry/reduction | Next: implement full Merlino ring SALC/puckering combinations `QPck/PhiP/RPck` instead of only family classification. |
-| Butterfly coordinates | `mksalc.f:BtFly`, `survibfit/transforms.py:ring_butterfly_u` | Port started: fused-ring shared-bond torsions are classified as `BUTTERFLY` | Next: compare coefficient vectors with Merlino for polycyclic corpus fixtures. |
-| Non-redundant reduction | `gicprune.f`, `locsvd.f`, `transforms.py` | Present: analytic B-row MGS, protected special-first policy, ring families not mixed with ordinary blocks | Next: add corpus-level count/golden tests for ring systems. |
+| Ring bend/torsion blocks | `survibfit/transforms.py`, `mkcyc.f`, `mksalc.f`, Overleaf GICForge manual | Present: `CYCLIC_BEND`, `RING_PUCKER_COMPONENT`/`RPck`, `CONDENSED_RING_TORSION`, `BUTTERFLY`; Gaussian export derives `QPck`/`PhiP` from selected `RPck` pairs with the Merlino `PrtPckQP` rule | Next: add symmetry-projector corpus tests specifically involving selected `RPck` source blocks. |
+| Butterfly coordinates | `mksalc.f:BtFly`, `survibfit/transforms.py:ring_butterfly_u` | Present: fused-ring shared-bond torsions are classified as `BUTTERFLY`; corpus tests keep fused ring rank with RPck enabled | Next: compare coefficient vectors with executable Merlino output when the harness emits machine-readable ring blocks. |
+| Non-redundant reduction | `gicprune.f`, `locsvd.f`, `transforms.py` | Present: analytic B-row MGS, protected special-first policy, ring families not mixed with ordinary blocks; fused corpus tests cover selected `RPck` value and B rows | Next: extend golden cases to bridged saturated rings where bend rank can saturate before puckering rows. |
 | Symmetrization | `gic_symmetry.py`, `symmetry_global.py`, `gic_type_symmetry.f`, `symm.f` | Present: Merlino label-only parity plus matrix projectors; no type mixing; total-symmetric subset stored | Next: full strict Fortran projector diagnostics, not only local SALC/static source checks. |
 | Fragment/TRIC coordinates | Merlino TRIC roadmap, Overleaf manual, geomeTRIC reference model | Present: fragment center distance, fragment center-atom distance, translations, orientations, analytic B rows, Gaussian symbolic export | Next: add atom-frame angle/torsion and center-frame tilt/orientation modes. |
 | Ring/bond/interaction centers | Fragment roadmap, topology ring docs | Present: bond centers, ring centers, atom-center distance candidates, analytic chain-rule B row | Next: add center-angle, center-torsion and hapticity/coordination center scoring. |
@@ -38,11 +38,16 @@ regression test and noted in the method documentation.
 - `tests/test_oracle_gicforge.py::test_gicforge_label_only_characters_match_merlino3`
   freezes Merlino3.0 label-only character behavior.
 - `tests/test_oracle_gicforge.py::test_gicforge_classifies_ring_and_butterfly_primitives_like_merlino`
-  freezes the Merlino ring-family separation for cyclic bend/torsion,
-  condensed-ring torsion and butterfly torsion.
+  freezes the Merlino ring-family separation for cyclic bend, RPck ring
+  puckering, condensed-ring torsion and butterfly torsion.
+- `tests/test_oracle_gicforge.py::test_gicforge_ring_puckering_coefficients_match_merlino_six_ring`
+  freezes the six-membered-ring RPck coefficient vectors against Merlino3.0.
+- `tests/test_oracle_gicforge.py::test_gicforge_ring_puckering_numeric_corpus_fused`
+  compares selected RPck values and analytic B rows numerically on fused
+  naphthalene/phenanthrene/pyrene corpus cases.
 - `tests/test_oracle_fortran_gicforge.py::test_legacy_merlino_ring_and_butterfly_blocks_remain_reference`
-  prevents accidental removal of the strict Fortran77 ring/butterfly reference
-  routines.
+  prevents accidental removal of the strict Fortran77 ring/butterfly and
+  `PrtPckQP` reference routines.
 
 ## Known Merlino Fragilities To Correct In ORACLE
 
@@ -58,10 +63,10 @@ regression test and noted in the method documentation.
 
 ## Immediate Remaining Work
 
-1. Port the full ring-puckering coordinate construction (`QPck`, `PhiP`, `RPck`)
-   from the Merlino/Overleaf specification.
-2. Add golden corpus cases for pyridine, pyrene, naphthalene/coronene-like fused
-   rings and norcamphor/testosterone-like bridged systems.
+1. Add projector/symmetry golden cases for selected `RPck` source blocks and
+   the derived Gaussian `QPck`/`PhiP` functionals.
+2. Add golden corpus cases for pyridine, coronene-like fused rings and
+   norcamphor/testosterone-like bridged systems.
 3. Extend the strict Fortran executable harness to emit comparable primitive
    lists and B rows for the same frozen `#GIC` contract.
 4. Add center-angle, center-torsion and atom-frame coordinates for

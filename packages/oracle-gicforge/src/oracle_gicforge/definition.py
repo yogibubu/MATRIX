@@ -643,6 +643,9 @@ def _primitive_candidates(
                 candidates.append(_make_primitive(family, "A", (i, center, k), counters))
 
     seen_torsions: set[tuple[int, int, int, int]] = set()
+    butterfly_torsions: list[tuple[str, tuple[int, int, int, int]]] = []
+    condensed_torsions: list[tuple[str, tuple[int, int, int, int]]] = []
+    ordinary_torsions: list[tuple[str, tuple[int, int, int, int]]] = []
     for j, k in bonds:
         for i in sorted(adjacency[j] - {k}):
             for l in sorted(adjacency[k] - {j}):
@@ -651,14 +654,23 @@ def _primitive_candidates(
                 if canonical in seen_torsions:
                     continue
                 seen_torsions.add(canonical)
-                candidates.append(
-                    _make_primitive(
-                        _torsion_family(canonical, rings),
-                        "D",
-                        canonical,
-                        counters,
-                    )
-                )
+                family = _torsion_family(canonical, rings)
+                if family == "CYCLIC_TORSION":
+                    continue
+                if family == "BUTTERFLY":
+                    butterfly_torsions.append((family, canonical))
+                elif family == "CONDENSED_RING_TORSION":
+                    condensed_torsions.append((family, canonical))
+                else:
+                    ordinary_torsions.append((family, canonical))
+
+    for family, torsion in butterfly_torsions:
+        candidates.append(_make_primitive(family, "D", torsion, counters))
+    candidates.extend(_ring_pucker_component_candidates(rings, counters=counters))
+    for family, torsion in condensed_torsions:
+        candidates.append(_make_primitive(family, "D", torsion, counters))
+    for family, torsion in ordinary_torsions:
+        candidates.append(_make_primitive(family, "D", torsion, counters))
 
     for center in range(1, natoms + 1):
         neighbors = sorted(adjacency[center])
@@ -684,6 +696,120 @@ def _torsion_family(
     if component is not None and len(component) > 1:
         return "CONDENSED_RING_TORSION"
     return "TORSION"
+
+
+def _ring_pucker_component_candidates(
+    rings: tuple[tuple[int, tuple[int, ...]], ...],
+    *,
+    counters: dict[str, int],
+) -> tuple[GICPrimitive, ...]:
+    candidates: list[GICPrimitive] = []
+    for _ring_index, ring_atoms in rings:
+        for terms in _ring_pucker_component_terms(ring_atoms):
+            candidates.append(
+                _make_primitive(
+                    "RING_PUCKER_COMPONENT",
+                    "RPCK",
+                    tuple(ring_atoms),
+                    counters,
+                    refs=tuple(
+                        _encode_ring_pucker_term(coefficient, atoms)
+                        for coefficient, atoms in terms
+                    ),
+                )
+            )
+    return tuple(candidates)
+
+
+def _ring_pucker_component_terms(
+    ring_atoms: tuple[int, ...],
+) -> tuple[tuple[tuple[float, tuple[int, int, int, int]], ...], ...]:
+    """Return Merlino-style RPck linear combinations for one ordered ring."""
+    ncyc = len(ring_atoms)
+    if ncyc <= 3:
+        return ()
+    vnorm = float(np.sqrt(2.0 / float(ncyc)))
+    vnorm1 = float(np.sqrt(1.0 / float(ncyc)))
+    istart = ncyc
+    components: list[tuple[tuple[float, tuple[int, int, int, int]], ...]] = []
+    for ivar in range(1, ncyc - 2):
+        even = ivar == 2 * (ivar // 2)
+        terms: list[tuple[float, tuple[int, int, int, int]]] = []
+        for iterm in range(1, ncyc + 1):
+            iang1 = _cyclic_index(iterm + istart - 1, ncyc)
+            iang2 = _cyclic_index(iterm + istart, ncyc)
+            iang3 = _cyclic_index(iterm + istart + 1, ncyc)
+            iang4 = _cyclic_index(iterm + istart + 2, ncyc)
+            ivar1 = ivar
+            if ivar == 1:
+                ivar1 = 2
+            elif ivar == 4:
+                ivar1 = 3
+            elif ivar in {5, 6}:
+                ivar1 = 4
+            value = np.pi * (2.0 * float(ivar1) * float(iterm - 1)) / float(ncyc)
+            if even:
+                coefficient = vnorm * float(np.sin(value))
+            elif ivar < ncyc - 3:
+                coefficient = vnorm * float(np.cos(value))
+            else:
+                coefficient = vnorm1 * float(np.cos(float(iterm - 1) * np.pi))
+            if abs(coefficient) <= 1.0e-14:
+                coefficient = 0.0
+            terms.append(
+                (
+                    coefficient,
+                    (
+                        ring_atoms[iang1],
+                        ring_atoms[iang2],
+                        ring_atoms[iang3],
+                        ring_atoms[iang4],
+                    ),
+                )
+            )
+        components.append(tuple(terms))
+    return tuple(components)
+
+
+def _cyclic_index(index_1based: int, ncyc: int) -> int:
+    while index_1based > ncyc:
+        index_1based -= ncyc
+    while index_1based <= 0:
+        index_1based += ncyc
+    return index_1based - 1
+
+
+def _encode_ring_pucker_term(
+    coefficient: float,
+    atoms: tuple[int, int, int, int],
+) -> str:
+    atom_text = "-".join(str(atom) for atom in atoms)
+    return f"{float(coefficient):.17g}:{atom_text}"
+
+
+def _ring_pucker_terms_from_refs(
+    primitive: GICPrimitive,
+) -> tuple[tuple[float, tuple[int, int, int, int]], ...]:
+    terms: list[tuple[float, tuple[int, int, int, int]]] = []
+    for ref in primitive.refs:
+        if ":" not in ref:
+            raise GICForgeContractError(
+                f"invalid RPck term {ref!r} in primitive {primitive.identifier}"
+            )
+        coefficient_text, atom_text = ref.split(":", 1)
+        try:
+            coefficient = float(coefficient_text)
+            atoms = tuple(int(atom) for atom in atom_text.split("-") if atom)
+        except ValueError as exc:
+            raise GICForgeContractError(
+                f"invalid RPck term {ref!r} in primitive {primitive.identifier}"
+            ) from exc
+        if len(atoms) != 4:
+            raise GICForgeContractError(
+                f"invalid RPck dihedral term {ref!r} in primitive {primitive.identifier}"
+            )
+        terms.append((coefficient, atoms))
+    return tuple(terms)
 
 
 def _ring_index_for_atoms(
@@ -2068,6 +2194,8 @@ def _analytic_b_row(primitive: GICPrimitive, coords: np.ndarray) -> np.ndarray:
             primitive.ref_atoms,
             mode=primitive.mode,
         )
+    if primitive.function == "RPCK":
+        return _ring_pucker_component_b_row(primitive, coords)
     return _dual_b_row(primitive, coords)
 
 
@@ -2159,6 +2287,25 @@ def _fragment_translation_b_row(
     return row
 
 
+def _ring_pucker_component_b_row(
+    primitive: GICPrimitive,
+    coords: np.ndarray,
+) -> np.ndarray:
+    row = np.zeros(coords.size, dtype=float)
+    for coefficient, atoms in _ring_pucker_terms_from_refs(primitive):
+        if coefficient == 0.0:
+            continue
+        term = GICPrimitive(
+            identifier=f"{primitive.identifier}_D",
+            name="RPckD",
+            family="TORSION",
+            function="D",
+            atoms=atoms,
+        )
+        row += coefficient * _dual_b_row(term, coords)
+    return row
+
+
 def _accumulate_center_gradient(
     row: np.ndarray,
     atoms: tuple[int, ...],
@@ -2197,7 +2344,13 @@ def _finite_difference_b_row(
         except FloatingPointError:
             row[idx] = np.nan
             continue
-        if primitive.function == "D":
+        if primitive.function == "RPCK":
+            delta = _ring_pucker_component_periodic_delta(
+                primitive,
+                plus.reshape(coords.shape),
+                minus.reshape(coords.shape),
+            )
+        elif primitive.function == "D":
             delta = _periodic_delta(value_plus, value_minus)
         else:
             delta = value_plus - value_minus
@@ -2206,6 +2359,20 @@ def _finite_difference_b_row(
         else:
             row[idx] = delta / (2.0 * step_angstrom)
     return row
+
+
+def _ring_pucker_component_periodic_delta(
+    primitive: GICPrimitive,
+    plus_coords: np.ndarray,
+    minus_coords: np.ndarray,
+) -> float:
+    delta = 0.0
+    for coefficient, atoms in _ring_pucker_terms_from_refs(primitive):
+        delta += coefficient * _periodic_delta(
+            _dihedral_value(plus_coords, atoms),
+            _dihedral_value(minus_coords, atoms),
+        )
+    return float(delta)
 
 
 class _Dual:
@@ -2524,6 +2691,8 @@ def _primitive_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
             primitive.ref_atoms,
             mode=primitive.mode,
         )
+    if primitive.function == "RPCK":
+        return _ring_pucker_component_value(primitive, coords)
     if primitive.function == "FROT":
         return _fragment_rotation_value(
             coords,
@@ -2534,6 +2703,13 @@ def _primitive_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
             ref_frame_atoms=primitive.ref_frame_atoms,
         )
     raise GICForgeContractError(f"unsupported primitive function: {primitive.function}")
+
+
+def _ring_pucker_component_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
+    value = 0.0
+    for coefficient, atoms in _ring_pucker_terms_from_refs(primitive):
+        value += coefficient * _dihedral_value(coords, atoms)
+    return float(value)
 
 
 def _distance_value(coords: np.ndarray, atoms: tuple[int, ...]) -> float:
@@ -3304,12 +3480,53 @@ def _gaussian_gic_block_lines(definition: GICDefinition) -> list[str]:
     for gic in definition.gics:
         expression = _gaussian_expression_for_gic(definition, gic)
         if expression:
-            lines.append(f"{_gaussian_label_for_gic(definition, gic)} = {expression}")
+            label = _gaussian_label_for_gic(definition, gic)
+            if gic.family == "RING_PUCKER_COMPONENT":
+                label = f"{label}(Inactive)"
+            lines.append(f"{label} = {expression}")
+    lines.extend(_gaussian_ring_puckering_function_lines(definition))
     return lines
 
 
 def _gaussian_label_for_gic(definition: GICDefinition, gic: FrozenGIC) -> str:
+    if gic.family == "RING_PUCKER_COMPONENT":
+        return gic.name
     return gic.name if definition.symmetrize else gic.identifier
+
+
+def _gaussian_ring_puckering_function_lines(definition: GICDefinition) -> list[str]:
+    primitive_by_id = {primitive.identifier: primitive for primitive in definition.primitives}
+    groups: dict[tuple[int, ...], list[tuple[str, GICPrimitive]]] = {}
+    for gic in definition.gics:
+        if gic.family != "RING_PUCKER_COMPONENT":
+            continue
+        primitive = _single_source_primitive(gic, primitive_by_id)
+        if primitive is None or primitive.function != "RPCK":
+            continue
+        groups.setdefault(primitive.atoms, []).append(
+            (_gaussian_label_for_gic(definition, gic), primitive)
+        )
+
+    lines: list[str] = []
+    pair_index = 0
+    for components in groups.values():
+        if len(components) == 1 and len(components[0][1].atoms) == 4:
+            label = components[0][0]
+            pair_index += 1
+            lines.append(f"QPck{pair_index:04d} = SQRT({label}*{label})")
+            lines.append(f"PhiP{pair_index:04d} = {label}")
+            continue
+        component_index = 0
+        while component_index + 1 < len(components):
+            left = components[component_index][0]
+            right = components[component_index + 1][0]
+            pair_index += 1
+            lines.append(
+                f"QPck{pair_index:04d} = SQRT({left}*{left}+{right}*{right})"
+            )
+            lines.append(f"PhiP{pair_index:04d} = ATAN2({right},{left})")
+            component_index += 2
+    return lines
 
 
 def _gaussian_expression_for_gic(
@@ -3391,6 +3608,12 @@ def _gaussian_expression_for_primitive(primitive: GICPrimitive) -> str | None:
         frag_id, ref_id = primitive.refs
         axis = ("x", "y", "z")[primitive.mode]
         return f"E{axis}{frag_id}{ref_id}"
+    if primitive.function == "RPCK":
+        terms: list[str] = []
+        for coefficient, atoms in _ring_pucker_terms_from_refs(primitive):
+            expression = "D(" + ",".join(str(atom) for atom in atoms) + ")"
+            terms.append(_gaussian_linear_term(coefficient, expression, first=not terms))
+        return "".join(terms) if terms else None
     return None
 
 

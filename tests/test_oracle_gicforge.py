@@ -40,6 +40,8 @@ from oracle_gicforge.definition import (
     _analytic_b_row,
     _finite_difference_b_row,
     _primitive_candidates,
+    _primitive_value,
+    _ring_pucker_component_terms,
     _select_ranked_primitives,
 )
 
@@ -55,6 +57,39 @@ def _tetrahedral_methane_coordinates() -> np.ndarray:
         ],
         dtype=float,
     )
+
+
+def _test_molecule_path(name: str) -> Path:
+    return (
+        Path(__file__).resolve().parents[1]
+        / "tests"
+        / "fixtures"
+        / "test_molecules"
+        / "molecules"
+        / name
+    )
+
+
+def _test_dihedral_value(coords: np.ndarray, atoms: tuple[int, int, int, int]) -> float:
+    i, j, k, l = (atom - 1 for atom in atoms)
+    p0, p1, p2, p3 = coords[i], coords[j], coords[k], coords[l]
+    b0 = -(p1 - p0)
+    b1 = p2 - p1
+    b2 = p3 - p2
+    b1 = b1 / np.linalg.norm(b1)
+    v = b0 - np.dot(b0, b1) * b1
+    w = b2 - np.dot(b2, b1) * b1
+    return float(np.arctan2(np.dot(np.cross(b1, v), w), np.dot(v, w)))
+
+
+def _manual_rpck_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
+    total = 0.0
+    for ref in primitive.refs:
+        coefficient_text, atoms_text = ref.split(":", 1)
+        atoms = tuple(int(atom) for atom in atoms_text.split("-"))
+        assert len(atoms) == 4
+        total += float(coefficient_text) * _test_dihedral_value(coords, atoms)
+    return float(total)
 
 
 def _tetrahedral_operations() -> tuple[GICPointGroupOperation, ...]:
@@ -572,14 +607,7 @@ def test_gicforge_build_handles_corpus_zmatrix_case(tmp_path):
 
 
 def test_gicforge_corpus_fused_ring_case_keeps_merlino_ring_families(tmp_path):
-    source = (
-        Path(__file__).resolve().parents[1]
-        / "tests"
-        / "fixtures"
-        / "test_molecules"
-        / "molecules"
-        / "naphtalene.inp"
-    )
+    source = _test_molecule_path("naphtalene.inp")
     xyzin = tmp_path / "naphtalene.xyzin"
 
     preprocess_to_enriched_xyz(source, xyzin)
@@ -590,8 +618,101 @@ def test_gicforge_corpus_fused_ring_case_keeps_merlino_ring_families(tmp_path):
     assert definition.target_rank == 48
     assert definition.rank == 48
     assert families["CYCLIC_BEND"] > 0
-    assert families["CYCLIC_TORSION"] > 0
+    assert families["RING_PUCKER_COMPONENT"] > 0
     assert families["BUTTERFLY"] > 0
+
+
+def test_gicforge_ring_puckering_coefficients_match_merlino_six_ring():
+    ring = (6, 4, 1, 3, 5, 2)
+    components = _ring_pucker_component_terms(ring)
+
+    assert len(components) == 3
+    assert [term[1] for term in components[0]] == [
+        (2, 6, 4, 1),
+        (6, 4, 1, 3),
+        (4, 1, 3, 5),
+        (1, 3, 5, 2),
+        (3, 5, 2, 6),
+        (5, 2, 6, 4),
+    ]
+    np.testing.assert_allclose(
+        [[coefficient for coefficient, _atoms in component] for component in components],
+        [
+            [
+                0.5773502691896257,
+                -0.28867513459481275,
+                -0.2886751345948132,
+                0.5773502691896257,
+                -0.2886751345948125,
+                -0.28867513459481325,
+            ],
+            [
+                0.0,
+                0.5,
+                -0.5,
+                0.0,
+                0.5,
+                -0.5,
+            ],
+            [
+                0.408248290463863,
+                -0.408248290463863,
+                0.408248290463863,
+                -0.408248290463863,
+                0.408248290463863,
+                -0.408248290463863,
+            ],
+        ],
+        atol=1.0e-14,
+    )
+
+
+@pytest.mark.parametrize(
+    ("molecule", "expected_rank"),
+    [
+        ("naphtalene.inp", 48),
+        ("phenantrene.inp", 66),
+        ("pyrene.inp", 72),
+    ],
+)
+def test_gicforge_ring_puckering_numeric_corpus_fused(
+    tmp_path,
+    molecule,
+    expected_rank,
+):
+    source = _test_molecule_path(molecule)
+    xyzin = tmp_path / f"{molecule}.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin)
+    coords = np.asarray(definition.reference_coordinates_angstrom, dtype=float)
+    rpck = [
+        primitive
+        for primitive in definition.primitives
+        if primitive.family == "RING_PUCKER_COMPONENT"
+    ]
+    gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
+
+    assert definition.target_rank == expected_rank
+    assert definition.rank == expected_rank
+    assert rpck
+    assert any(line.startswith("RPck") and "(Inactive)" in line for line in gaussian_lines)
+    assert any(line.startswith("QPck") for line in gaussian_lines)
+    assert any(line.startswith("PhiP") for line in gaussian_lines)
+    for primitive in rpck:
+        assert primitive.function == "RPCK"
+        assert primitive.refs
+        assert _primitive_value(primitive, coords) == pytest.approx(
+            _manual_rpck_value(primitive, coords),
+            abs=1.0e-10,
+        )
+        np.testing.assert_allclose(
+            _analytic_b_row(primitive, coords),
+            _finite_difference_b_row(primitive, coords),
+            rtol=2.0e-5,
+            atol=2.0e-5,
+        )
 
 
 def test_gicforge_build_uses_built_fragments_for_relative_coordinates(tmp_path):
@@ -696,12 +817,13 @@ def test_gicforge_classifies_ring_and_butterfly_primitives_like_merlino():
     by_atoms = {primitive.atoms: primitive.family for primitive in candidates}
 
     assert families["CYCLIC_BEND"] > 0
-    assert families["CYCLIC_TORSION"] > 0
+    assert families["RING_PUCKER_COMPONENT"] == 6
     assert families["CONDENSED_RING_TORSION"] > 0
     assert families["BUTTERFLY"] > 0
     assert by_atoms[(4, 5, 6, 7)] == "BUTTERFLY"
     assert by_atoms[(4, 5, 10, 9)] == "CONDENSED_RING_TORSION"
-    assert by_atoms[(1, 2, 3, 4)] == "CYCLIC_TORSION"
+    assert by_atoms[(1, 2, 3, 4, 5, 6)] == "RING_PUCKER_COMPONENT"
+    assert by_atoms[(5, 6, 7, 8, 9, 10)] == "RING_PUCKER_COMPONENT"
 
 
 def test_gicforge_symmetrizes_special_fragment_coordinates(tmp_path):

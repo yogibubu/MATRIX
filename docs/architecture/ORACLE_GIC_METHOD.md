@@ -38,7 +38,10 @@ Ordinary primitives describe local molecular deformations:
 - `CYCLIC_BEND` / `A`;
 - `LINEAR_BEND` / `L`;
 - `TORSION` / `D`;
-- `CYCLIC_TORSION` / `D`;
+- `RING_PUCKER_COMPONENT` / `RPCK`, the Merlino `RPck` linear combination of
+  endocyclic dihedrals;
+- `CYCLIC_TORSION` / `D`, retained as a legacy/parser family but not emitted as
+  the normal final ring-puckering coordinate;
 - `CONDENSED_RING_TORSION` / `D`;
 - `BUTTERFLY` / `D`;
 - `OUT_OF_PLANE` / `U`.
@@ -66,6 +69,10 @@ Distance, angle and center-distance rows use closed-form derivatives. Fragment
 translations use direct centroid derivatives. Fragment orientations use the
 relative frame quaternion and its exponential-map components, with the same
 small-rotation limit used by the Gaussian symbolic export.
+`RPck` rows are analytic linear combinations of the component dihedral B rows.
+Gaussian export marks the selected `RPck` components inactive and derives active
+`QPck`/`PhiP` functionals from consecutive pairs using the Merlino `PrtPckQP`
+rule.
 
 This makes the B matrix a shared service. Python and Fortran backends must use
 the same mathematical definitions, and downstream programs must call the

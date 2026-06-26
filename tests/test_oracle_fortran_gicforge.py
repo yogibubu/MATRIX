@@ -45,6 +45,9 @@ def test_legacy_merlino_ring_and_butterfly_blocks_remain_reference():
 
     assert "Subroutine BtFly" in mksalc
     assert "Subroutine CySalc" in mksalc
+    assert "Subroutine PrtPckQP" in mksalc
+    assert "SQRT(RPck" in mksalc
+    assert "ATAN2(RPck" in mksalc
     assert "Subroutine CycAng" in mkcyc
     assert "Subroutine CyGNSVD" in mkcyc
     assert "Subroutine PruneGICBlocks" in gicprune

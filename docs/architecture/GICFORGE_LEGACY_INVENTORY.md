@@ -44,10 +44,11 @@ the implementation is split into shared libraries and independent tools.
   fall back explicitly to the local Merlino-style SALC path or stop cleanly
   when a downstream workflow requires a true point-group projector.
 - Ring-specialized coordinate family tagging is now present in ORACLE-native
-  Python: `CYCLIC_BEND`, `CYCLIC_TORSION`, `CONDENSED_RING_TORSION` and
-  `BUTTERFLY`. Full Merlino ring-puckering combinations (`QPck`, `PhiP`,
-  `RPck`) remain porting targets from the legacy Fortran/Python stack and must
-  be tested under symmetry.
+  Python: `CYCLIC_BEND`, `RING_PUCKER_COMPONENT`, `CONDENSED_RING_TORSION` and
+  `BUTTERFLY`. Merlino ring-puckering combinations are ported as selected
+  `RPck` linear components with Gaussian `QPck`/`PhiP` functionals generated
+  from consecutive pairs. Symmetry-specific projector tests for these
+  coordinates remain follow-up work.
 
 ## Porting Order
 

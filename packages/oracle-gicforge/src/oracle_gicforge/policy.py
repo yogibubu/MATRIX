@@ -61,6 +61,13 @@ PRIMITIVE_FAMILY_POLICIES = (
         "CYCLIC_TORSION",
     ),
     PrimitiveFamilyPolicy(
+        "RING_PUCKER_COMPONENT",
+        "RPCK",
+        "RPck",
+        ORDINARY_REDUCTION_CLASS,
+        "RING_PUCKER_COMPONENT",
+    ),
+    PrimitiveFamilyPolicy(
         "CONDENSED_RING_TORSION",
         "D",
         "CoTo",
