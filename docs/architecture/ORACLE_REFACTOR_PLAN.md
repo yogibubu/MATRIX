@@ -116,6 +116,22 @@ ORACLE/
     migrate_merlino.py
 ```
 
+## Central Architecture Constraint
+
+All ORACLE modules must reuse the same libraries for the same tasks. The suite
+must not grow duplicate XYZ parsers, topology builders, isotope tables, GIC
+builders, Gaussian parsers, manifest writers or backend launchers.
+
+The canonical communication file is an enriched XYZ container. It starts with a
+plain XYZ block and is progressively enriched by named uppercase sections. Each
+tool owns only its own section, replaces only that section and preserves all
+others. External formats are import/export adapters; downstream ORACLE modules
+consume the enriched XYZ container.
+
+This constraint is formalized in
+`ADR-0001-SHARED-LIBRARIES-AND-XYZ-CONTAINER.md` and
+`ORACLE_XYZ_CONTAINER.md`.
+
 ## Subproject Responsibilities
 
 `oracle-core`
@@ -123,6 +139,7 @@ ORACLE/
 - Workspace layout: `inputs/`, `runs/`, `outputs/`, `reports/`, `cache`,
   `logs`.
 - Run manifests, checksums, config, logging and shared typed errors.
+- Shared sectioned enriched-XYZ utilities.
 - No chemistry, GUI, Gaussian or Fortran-specific logic.
 
 `oracle-chem`
@@ -210,6 +227,11 @@ Every run writes an `oracle.run.v1` manifest with:
 
 During compatibility migration, accept and emit `merlino.run.v1` where needed,
 but the new ORACLE manifest should be the forward contract.
+
+Every workflow should also accept or produce an enriched XYZ file as the
+canonical state handoff. Workflow-specific files may be generated in `runs/`,
+`outputs/` or `reports/`, but the reusable state must be written back to the
+appropriate XYZ section through the shared section API.
 
 ## Migration Phases
 
@@ -368,4 +390,3 @@ Exit criteria:
 - DVR: Gaussian log/grid to DVR args, manifest and output reader tests.
 - VPT2/VCI: QFF load, basis construction, VPT2, VCI and Davidson tests.
 - GUI: smoke tests only after service/CLI tests pass.
-

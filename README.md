@@ -27,6 +27,17 @@ packages are separated behind stable service, CLI and manifest contracts.
 Scientific behavior is migrated package by package. Existing `merlino_*`
 imports stay valid until ORACLE-native tests cover the new public APIs.
 
+## Core Architecture Rule
+
+ORACLE modules must not reinvent shared operations. Common tasks such as
+sectioned XYZ I/O, atom and isotope data, topology, symmetry, GIC construction,
+Gaussian parsing, backend execution and manifests belong to shared libraries.
+
+The enriched XYZ file is the canonical communication object between modules:
+tools append or replace their own uppercase sections and preserve all unrelated
+sections. See
+`docs/architecture/ADR-0001-SHARED-LIBRARIES-AND-XYZ-CONTAINER.md`.
+
 ## Workspace Contract
 
 Project workspaces use:
@@ -42,4 +53,3 @@ logs/
 
 Every workflow run writes an `oracle.run.v1` manifest containing input/output
 paths, SHA256 hashes, parameters, backend metadata and status.
-
