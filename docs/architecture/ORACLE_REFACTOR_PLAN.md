@@ -87,6 +87,8 @@ ORACLE/
       src/oracle_gf/
     oracle-gaussian/
       src/oracle_gaussian/
+    oracle-fragments/
+      src/oracle_fragments/
     oracle-engines/
       src/oracle_engines/
     oracle-dvr/
@@ -201,6 +203,17 @@ reuse the saved sections.
   `oracle_chem.MolecularGeometry`; downstream tools must not parse Gaussian text
   directly.
 - Gaussian Z-matrix input delegates to the shared `oracle-chem` Z-matrix parser.
+
+`oracle-fragments`
+
+- Nano-LEGO-like fragmentation, fragment-library search and future assembly
+  workflows.
+- It is a client of `#TOPOLOGY` and `#SYNTHONS`, not a separate topology
+  engine.
+- LCB25 molecules are first imported/preprocessed by ORACLE-Babel, then indexed
+  here as full references or topology/synthon fragments.
+- Query molecule fragmentation and LCB25 fragment-library lookup are inverse
+  uses of the same service contract.
 
 `oracle-engines`
 

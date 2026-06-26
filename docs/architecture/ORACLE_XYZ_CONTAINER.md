@@ -24,6 +24,7 @@ by other tools.
 plain XYZ
   -> oracle-chem adds #TOPOLOGY and #SYMMETRY
   -> oracle-gicforge adds #GIC and optionally #SYCART
+  -> oracle-fragments adds #FRAGMENTS, #FRAGMENT_LIBRARY or #ASSEMBLY
   -> oracle-gaussian adds #GAUSSIAN, #VIBRATIONAL or correction sections
   -> oracle-morpheus adds #ISOTOPOLOGUES and #MORPHEUS
   -> oracle-gf adds #GF_PED
@@ -44,4 +45,3 @@ The Merlino `xyzin` format is the historical source:
 
 ORACLE keeps this behavior and upgrades schema names from `merlino.xyzin.*` to
 `oracle.xyz.*` as modules migrate.
-

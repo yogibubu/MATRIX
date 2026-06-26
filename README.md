@@ -22,6 +22,8 @@ packages are separated behind stable service, CLI and manifest contracts.
 - `oracle-gaussian`: Gaussian input/output adapters.
 - `oracle-babel`: import adapters for external sources and molecular databases
   such as LCB25.
+- `oracle-fragments`: topology-backed fragmentation, fragment-library search
+  and future assembly contracts.
 - `oracle-engines`: Fortran and vendored backend discovery/build wrappers.
 - `oracle-dvr`: scan/grid to DVR workflows.
 - `oracle-vpt2-vci`: QFF, VPT2/VCI and Davidson workflows.
@@ -32,6 +34,12 @@ committed source files:
 
 ```bash
 python tools/oracle_run.py lcb25 fetch
+```
+
+Fragment workflows are planned against existing topology/synthon sections:
+
+```bash
+python tools/oracle_run.py fragments plan molecule.xyzin
 ```
 
 ## Migration Rule

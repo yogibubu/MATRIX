@@ -31,7 +31,8 @@ downloaded database remains an explicit project decision.
 LCB25 molecules can be used in two directions:
 
 - as whole-molecule references for MORPHEUS/reference-assisted workflows;
-- as fragment libraries after ORACLE topology/synthon preprocessing.
+- as fragment libraries through `oracle-fragments` after ORACLE
+  topology/synthon preprocessing.
 
 Conversely, an arbitrary query molecule can be fragmented by the same
 `#TOPOLOGY/#SYNTHONS` state and compared against LCB25-derived fragments.

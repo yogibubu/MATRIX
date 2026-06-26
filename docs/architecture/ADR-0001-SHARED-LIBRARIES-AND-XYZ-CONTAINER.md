@@ -120,6 +120,9 @@ Initial section ownership:
 - `#SYMMETRY`: `oracle-chem`.
 - `#GIC`: `oracle-gicforge`.
 - `#SYCART`: `oracle-gicforge`.
+- `#FRAGMENTS`: `oracle-fragments`.
+- `#FRAGMENT_LIBRARY`: `oracle-fragments`.
+- `#ASSEMBLY`: `oracle-fragments`.
 - `#ROTATIONAL`: `oracle-chem` for derived constants, `oracle-morpheus` for
   fitted/equilibrium records.
 - `#VIBRATIONAL`: `oracle-gaussian`, `oracle-gf` or `oracle-vpt2-vci` depending
@@ -147,6 +150,8 @@ oracle-gaussian
   Gaussian adapters only
 oracle-gicforge
   GIC/SYCART schemas, B matrices and Python/Fortran77 backend adapters
+oracle-fragments
+  topology/synthon-backed fragmentation, fragment search and assembly contracts
 oracle-morpheus, oracle-gf, oracle-dvr, oracle-vpt2-vci
   consume shared models, select backends and append their own sections
 oracle-gui

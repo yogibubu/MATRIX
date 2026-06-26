@@ -30,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--dataset", action="append", help="PCS2, SE or HPCS2; repeatable")
     fetch.add_argument("--force", action="store_true")
 
+    fragments = sub.add_parser("fragments", help="Manage topology-backed fragment workflows")
+    fragments_sub = fragments.add_subparsers(dest="fragments_command")
+    plan = fragments_sub.add_parser("plan", help="Write the initial #FRAGMENTS section")
+    plan.add_argument("xyzin", type=Path)
+
     sub.add_parser("merlino", help="Delegate to the current Merlino CLI during migration")
     return parser
 
@@ -48,6 +53,12 @@ def main(argv: list[str] | None = None) -> int:
 
         manifest = sync_lcb25_library(args.root, datasets=args.dataset, force=args.force)
         print(f"Synced LCB25 library: {manifest}")
+        return 0
+    if args.command == "fragments" and args.fragments_command == "plan":
+        from oracle_fragments import write_fragment_plan_section
+
+        write_fragment_plan_section(args.xyzin)
+        print(f"Planned ORACLE fragment workflow: {args.xyzin}")
         return 0
     if args.command == "merlino":
         sys.argv = ["merlino", *remainder]
