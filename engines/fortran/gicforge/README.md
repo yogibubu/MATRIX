@@ -44,6 +44,14 @@ contract: symmetrized coordinate names begin with their assigned irrep and the
 header records the total-symmetric active subset used by optimizers and
 least-squares fits.
 
+`legacy_merlino/mkcyc.f`, `legacy_merlino/mksalc.f` and
+`legacy_merlino/gicprune.f` are the strict Fortran77 reference for ring
+coordinate construction, cyclic SALCs, fused-ring butterfly coordinates and
+block-local pruning. ORACLE-native Python now exposes the corresponding family
+names `CYCLIC_BEND`, `CYCLIC_TORSION`, `CONDENSED_RING_TORSION` and
+`BUTTERFLY`; these are ordinary rank coordinates, but they must remain separate
+homogeneous blocks and must not be collapsed into generic bend/torsion families.
+
 `legacy_merlino/symm.f` is the reference source for Merlino-style point-group
 families and operation builders. ORACLE keeps its classifier families aligned
 with the Python character/projector layer for `Cn`, `Cnv`, `Cnh`, `Dn` and

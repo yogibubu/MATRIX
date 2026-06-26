@@ -43,8 +43,11 @@ the implementation is split into shared libraries and independent tools.
   homogeneous source-block protection. Remaining unsupported combinations must
   fall back explicitly to the local Merlino-style SALC path or stop cleanly
   when a downstream workflow requires a true point-group projector.
-- Ring-specialized coordinates and butterfly coordinates remain porting targets
-  from the legacy Fortran/Python stack and must be tested under symmetry.
+- Ring-specialized coordinate family tagging is now present in ORACLE-native
+  Python: `CYCLIC_BEND`, `CYCLIC_TORSION`, `CONDENSED_RING_TORSION` and
+  `BUTTERFLY`. Full Merlino ring-puckering combinations (`QPck`, `PhiP`,
+  `RPck`) remain porting targets from the legacy Fortran/Python stack and must
+  be tested under symmetry.
 
 ## Porting Order
 

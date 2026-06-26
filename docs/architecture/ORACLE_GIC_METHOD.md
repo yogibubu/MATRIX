@@ -35,8 +35,12 @@ Ordinary primitives describe local molecular deformations:
 
 - `STRETCH` / `R`;
 - `BEND` / `A`;
+- `CYCLIC_BEND` / `A`;
 - `LINEAR_BEND` / `L`;
 - `TORSION` / `D`;
+- `CYCLIC_TORSION` / `D`;
+- `CONDENSED_RING_TORSION` / `D`;
+- `BUTTERFLY` / `D`;
 - `OUT_OF_PLANE` / `U`.
 
 Special primitives describe objects that are not ordinary valence graph edges:
@@ -91,8 +95,12 @@ ORACLE-specific rule is the reduction order:
 This policy is different from a global SVD or a pure candidate-order greedy
 selection. It preserves chemically meaningful inter-fragment, atom-center and
 fragment-orientation coordinates even when an ordinary primitive spans a similar
-first-order displacement. Python uses the same MGS selector as the Fortran
-`ORCGSEL` kernel in `engines/fortran/gicforge/frag_tric_bmat.f`.
+first-order displacement. Ring-specific Merlino families are ordinary for rank
+purposes but remain separate homogeneous blocks: a cyclic bend, cyclic torsion,
+condensed-ring torsion or butterfly coordinate is not relabelled as a generic
+bend or torsion before reduction or symmetry adaptation. Python uses the same
+MGS selector as the Fortran `ORCGSEL` kernel in
+`engines/fortran/gicforge/frag_tric_bmat.f`.
 
 The `#GIC` header records the policy as:
 

@@ -36,6 +36,20 @@ def test_legacy_merlino_group_dispatch_matches_classifier_families():
     assert "CALL OPS_IH" in symm
 
 
+def test_legacy_merlino_ring_and_butterfly_blocks_remain_reference():
+    root = Path(__file__).resolve().parents[1]
+    legacy = root / "engines" / "fortran" / "gicforge" / "legacy_merlino"
+    mksalc = (legacy / "mksalc.f").read_text(encoding="utf-8")
+    mkcyc = (legacy / "mkcyc.f").read_text(encoding="utf-8")
+    gicprune = (legacy / "gicprune.f").read_text(encoding="utf-8")
+
+    assert "Subroutine BtFly" in mksalc
+    assert "Subroutine CySalc" in mksalc
+    assert "Subroutine CycAng" in mkcyc
+    assert "Subroutine CyGNSVD" in mkcyc
+    assert "Subroutine PruneGICBlocks" in gicprune
+
+
 def test_legacy_merlino_gicforge_backend_compiles():
     gfortran = shutil.which("gfortran")
     if gfortran is None:

@@ -190,8 +190,10 @@ def construct_gic_definition_from_xyzin(
     symmetry_operations = _symmetry_operations(lines)
 
     bonds = _topology_bonds(lines, natoms=geometry.natoms)
+    rings = _topology_rings(lines, natoms=geometry.natoms)
     candidates = _primitive_candidates(
         bonds,
+        rings=rings,
         coords=coords,
         natoms=geometry.natoms,
         fragment_records=_fragment_records(target),
@@ -559,9 +561,50 @@ def _topology_bonds(lines: list[str], *, natoms: int) -> tuple[tuple[int, int], 
     return tuple(sorted(bonds))
 
 
+def _topology_rings(lines: list[str], *, natoms: int) -> tuple[tuple[int, tuple[int, ...]], ...]:
+    topology = section_content(lines, "TOPOLOGY")
+    expected = "SCHEMA oracle.xyz.topology.v1"
+    if not topology or topology[0].strip() != expected:
+        raise GICForgeContractError("missing valid #TOPOLOGY section")
+    ring_lines = _subsection(topology, "RINGS")
+    rings: list[tuple[int, tuple[int, ...]]] = []
+    for line in ring_lines:
+        if line.strip().upper() == "NONE":
+            continue
+        parts = line.replace(",", " ").replace("[", " ").replace("]", " ").split()
+        if not parts:
+            continue
+        try:
+            ring_index = int(parts[0])
+        except ValueError:
+            continue
+        atoms: list[int] = []
+        reading_atoms = False
+        for part in parts[1:]:
+            token = part.strip()
+            if token.upper().startswith("ATOMS="):
+                reading_atoms = True
+                token = token.split("=", 1)[1]
+            elif "=" in token and reading_atoms:
+                break
+            if not reading_atoms or not token:
+                continue
+            try:
+                atoms.append(int(token))
+            except ValueError as exc:
+                raise GICForgeContractError(f"invalid #TOPOLOGY ring line: {line}") from exc
+        if len(atoms) < 3:
+            continue
+        if any(atom < 1 or atom > natoms for atom in atoms):
+            raise GICForgeContractError(f"invalid #TOPOLOGY ring atom indexes: {line}")
+        rings.append((ring_index, tuple(dict.fromkeys(atoms))))
+    return tuple(rings)
+
+
 def _primitive_candidates(
     bonds: tuple[tuple[int, int], ...],
     *,
+    rings: tuple[tuple[int, tuple[int, ...]], ...] = (),
     coords: np.ndarray,
     natoms: int,
     fragment_records: tuple[object, ...] = (),
@@ -592,7 +635,12 @@ def _primitive_candidates(
                     _make_primitive("LINEAR_BEND", "L", (i, center, k), counters, mode=-2)
                 )
             else:
-                candidates.append(_make_primitive("BEND", "A", (i, center, k), counters))
+                family = (
+                    "CYCLIC_BEND"
+                    if _ring_index_for_atoms((i, center, k), rings) is not None
+                    else "BEND"
+                )
+                candidates.append(_make_primitive(family, "A", (i, center, k), counters))
 
     seen_torsions: set[tuple[int, int, int, int]] = set()
     for j, k in bonds:
@@ -603,7 +651,14 @@ def _primitive_candidates(
                 if canonical in seen_torsions:
                     continue
                 seen_torsions.add(canonical)
-                candidates.append(_make_primitive("TORSION", "D", canonical, counters))
+                candidates.append(
+                    _make_primitive(
+                        _torsion_family(canonical, rings),
+                        "D",
+                        canonical,
+                        counters,
+                    )
+                )
 
     for center in range(1, natoms + 1):
         neighbors = sorted(adjacency[center])
@@ -615,6 +670,121 @@ def _primitive_candidates(
             )
 
     return tuple(candidates)
+
+
+def _torsion_family(
+    atoms: tuple[int, int, int, int],
+    rings: tuple[tuple[int, tuple[int, ...]], ...],
+) -> str:
+    if _butterfly_torsion(atoms, rings):
+        return "BUTTERFLY"
+    if _ring_index_for_atoms(atoms, rings) is not None:
+        return "CYCLIC_TORSION"
+    component = _ring_component_for_atoms(atoms, rings)
+    if component is not None and len(component) > 1:
+        return "CONDENSED_RING_TORSION"
+    return "TORSION"
+
+
+def _ring_index_for_atoms(
+    atoms: tuple[int, ...],
+    rings: tuple[tuple[int, tuple[int, ...]], ...],
+) -> int | None:
+    atom_set = set(atoms)
+    best_index: int | None = None
+    best_size: int | None = None
+    for ring_index, ring_atoms in rings:
+        ring_set = set(ring_atoms)
+        if not atom_set.issubset(ring_set):
+            continue
+        ring_size = len(ring_atoms)
+        if best_size is None or ring_size < best_size or (
+            ring_size == best_size and ring_index < (best_index or ring_index)
+        ):
+            best_index = ring_index
+            best_size = ring_size
+    return best_index
+
+
+def _ring_component_for_atoms(
+    atoms: tuple[int, ...],
+    rings: tuple[tuple[int, tuple[int, ...]], ...],
+) -> tuple[int, ...] | None:
+    atom_set = set(atoms)
+    for component in _ring_components(rings):
+        component_atoms: set[int] = set()
+        for ring_index in component:
+            component_atoms.update(dict(rings)[ring_index])
+        if atom_set.issubset(component_atoms):
+            return component
+    return None
+
+
+def _ring_components(
+    rings: tuple[tuple[int, tuple[int, ...]], ...],
+) -> tuple[tuple[int, ...], ...]:
+    if not rings:
+        return ()
+    ring_ids = tuple(ring_index for ring_index, _atoms in rings)
+    bond_to_rings = _ring_bond_to_rings(rings)
+    neighbors: dict[int, set[int]] = {ring_index: set() for ring_index in ring_ids}
+    for ring_indices in bond_to_rings.values():
+        if len(ring_indices) < 2:
+            continue
+        for left, right in combinations(ring_indices, 2):
+            neighbors[left].add(right)
+            neighbors[right].add(left)
+    components: list[tuple[int, ...]] = []
+    seen: set[int] = set()
+    for ring_index in ring_ids:
+        if ring_index in seen:
+            continue
+        stack = [ring_index]
+        seen.add(ring_index)
+        component: list[int] = []
+        while stack:
+            current = stack.pop()
+            component.append(current)
+            for neighbor in sorted(neighbors[current]):
+                if neighbor in seen:
+                    continue
+                seen.add(neighbor)
+                stack.append(neighbor)
+        components.append(tuple(sorted(component)))
+    return tuple(components)
+
+
+def _butterfly_torsion(
+    atoms: tuple[int, int, int, int],
+    rings: tuple[tuple[int, tuple[int, ...]], ...],
+) -> bool:
+    if not rings:
+        return False
+    i, j, k, l = atoms
+    central_bond = tuple(sorted((j, k)))
+    ring_by_index = {ring_index: set(ring_atoms) for ring_index, ring_atoms in rings}
+    sharing_rings = _ring_bond_to_rings(rings).get(central_bond, ())
+    if len(sharing_rings) < 2:
+        return False
+    for left_index, right_index in combinations(sharing_rings, 2):
+        left_only = ring_by_index[left_index] - ring_by_index[right_index]
+        right_only = ring_by_index[right_index] - ring_by_index[left_index]
+        if (i in left_only and l in right_only) or (i in right_only and l in left_only):
+            return True
+    return False
+
+
+def _ring_bond_to_rings(
+    rings: tuple[tuple[int, tuple[int, ...]], ...],
+) -> dict[tuple[int, int], tuple[int, ...]]:
+    mapping: dict[tuple[int, int], list[int]] = {}
+    for ring_index, ring_atoms in rings:
+        if len(ring_atoms) < 2:
+            continue
+        for left, right in zip(ring_atoms, ring_atoms[1:] + ring_atoms[:1]):
+            bond = tuple(sorted((left, right)))
+            mapping.setdefault(bond, []).append(ring_index)
+    return {bond: tuple(indices) for bond, indices in mapping.items()}
 
 
 def _make_primitive(

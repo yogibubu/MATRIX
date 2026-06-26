@@ -39,6 +39,13 @@ PRIMITIVE_FAMILY_POLICIES = (
     PrimitiveFamilyPolicy("STRETCH", "R", "Str", ORDINARY_REDUCTION_CLASS, "STRETCH"),
     PrimitiveFamilyPolicy("BEND", "A", "Bend", ORDINARY_REDUCTION_CLASS, "BEND"),
     PrimitiveFamilyPolicy(
+        "CYCLIC_BEND",
+        "A",
+        "CyBe",
+        ORDINARY_REDUCTION_CLASS,
+        "CYCLIC_BEND",
+    ),
+    PrimitiveFamilyPolicy(
         "LINEAR_BEND",
         "L",
         "LinB",
@@ -46,6 +53,27 @@ PRIMITIVE_FAMILY_POLICIES = (
         "LINEAR_BEND",
     ),
     PrimitiveFamilyPolicy("TORSION", "D", "Tors", ORDINARY_REDUCTION_CLASS, "TORSION"),
+    PrimitiveFamilyPolicy(
+        "CYCLIC_TORSION",
+        "D",
+        "CyTo",
+        ORDINARY_REDUCTION_CLASS,
+        "CYCLIC_TORSION",
+    ),
+    PrimitiveFamilyPolicy(
+        "CONDENSED_RING_TORSION",
+        "D",
+        "CoTo",
+        ORDINARY_REDUCTION_CLASS,
+        "CONDENSED_RING_TORSION",
+    ),
+    PrimitiveFamilyPolicy(
+        "BUTTERFLY",
+        "D",
+        "BtFl",
+        ORDINARY_REDUCTION_CLASS,
+        "BUTTERFLY",
+    ),
     PrimitiveFamilyPolicy(
         "OUT_OF_PLANE",
         "U",

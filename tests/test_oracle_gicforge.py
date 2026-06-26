@@ -39,6 +39,7 @@ from oracle_gicforge import (
 from oracle_gicforge.definition import (
     _analytic_b_row,
     _finite_difference_b_row,
+    _primitive_candidates,
     _select_ranked_primitives,
 )
 
@@ -570,6 +571,29 @@ def test_gicforge_build_handles_corpus_zmatrix_case(tmp_path):
     assert len(definition.gics) == 6
 
 
+def test_gicforge_corpus_fused_ring_case_keeps_merlino_ring_families(tmp_path):
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "tests"
+        / "fixtures"
+        / "test_molecules"
+        / "molecules"
+        / "naphtalene.inp"
+    )
+    xyzin = tmp_path / "naphtalene.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin)
+    families = Counter(primitive.family for primitive in definition.primitives)
+
+    assert definition.target_rank == 48
+    assert definition.rank == 48
+    assert families["CYCLIC_BEND"] > 0
+    assert families["CYCLIC_TORSION"] > 0
+    assert families["BUTTERFLY"] > 0
+
+
 def test_gicforge_build_uses_built_fragments_for_relative_coordinates(tmp_path):
     source = tmp_path / "dimer.xyz"
     source.write_text(
@@ -631,6 +655,53 @@ def test_gicforge_build_uses_built_fragments_for_relative_coordinates(tmp_path):
     assert any("ExF002F001" in line for line in gaussian_lines)
     assert any("1.0D-24" in line and line.startswith("KnF002F001") for line in gaussian_lines)
     assert any(" = ExF002F001" in line for line in gaussian_lines)
+
+
+def test_gicforge_classifies_ring_and_butterfly_primitives_like_merlino():
+    coords = np.asarray(
+        [
+            (-1.2, 1.4, 0.0),
+            (-2.0, 0.7, 0.0),
+            (-2.0, -0.7, 0.0),
+            (-1.2, -1.4, 0.0),
+            (0.0, -0.7, 0.0),
+            (0.0, 0.7, 0.0),
+            (1.2, 1.4, 0.0),
+            (2.0, 0.7, 0.0),
+            (2.0, -0.7, 0.0),
+            (1.2, -1.4, 0.0),
+        ],
+        dtype=float,
+    )
+    bonds = (
+        (1, 2),
+        (2, 3),
+        (3, 4),
+        (4, 5),
+        (5, 6),
+        (1, 6),
+        (6, 7),
+        (7, 8),
+        (8, 9),
+        (9, 10),
+        (5, 10),
+    )
+    rings = (
+        (1, (1, 2, 3, 4, 5, 6)),
+        (2, (5, 6, 7, 8, 9, 10)),
+    )
+
+    candidates = _primitive_candidates(bonds, rings=rings, coords=coords, natoms=10)
+    families = Counter(primitive.family for primitive in candidates)
+    by_atoms = {primitive.atoms: primitive.family for primitive in candidates}
+
+    assert families["CYCLIC_BEND"] > 0
+    assert families["CYCLIC_TORSION"] > 0
+    assert families["CONDENSED_RING_TORSION"] > 0
+    assert families["BUTTERFLY"] > 0
+    assert by_atoms[(4, 5, 6, 7)] == "BUTTERFLY"
+    assert by_atoms[(4, 5, 10, 9)] == "CONDENSED_RING_TORSION"
+    assert by_atoms[(1, 2, 3, 4)] == "CYCLIC_TORSION"
 
 
 def test_gicforge_symmetrizes_special_fragment_coordinates(tmp_path):
