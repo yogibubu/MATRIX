@@ -29,6 +29,8 @@ plain XYZ
   -> branches:
        oracle-gaussian writes Gaussian inputs or imports QM outputs
        oracle-gf adds #GF_PED from Cartesian Hessian plus frozen #GIC
+       oracle-rovib adds #ROTATIONAL, #VIBRATIONAL, #DELTABVIB, #CORIOLIS or #QCENT
+       oracle-thermo adds #THERMO from BASIC/ROTATIONAL/VIBRATIONAL state
        oracle-morpheus adds #ISOTOPOLOGUES and #MORPHEUS
        oracle-vpt2-vci adds #VPT2_VCI from normalized anharmonic data
        oracle-dvr adds #DVR
@@ -36,6 +38,9 @@ plain XYZ
 
 The GUI should display and orchestrate this state, not own a parallel data
 model.
+
+The same file is also the standalone input contract. A tool may be run directly
+from an already prepared `xyzin` file when the sections it needs are present.
 
 ## Compatibility
 

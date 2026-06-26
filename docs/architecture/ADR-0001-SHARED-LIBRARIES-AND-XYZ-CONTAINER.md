@@ -125,10 +125,14 @@ Initial section ownership:
 - `#FRAGMENTS`: `oracle-fragments`.
 - `#FRAGMENT_LIBRARY`: `oracle-fragments`.
 - `#ASSEMBLY`: `oracle-fragments`.
-- `#ROTATIONAL`: `oracle-chem` for derived constants, `oracle-morpheus` for
-  fitted/equilibrium records.
+- `#ROTATIONAL`: `oracle-rovib` for derived constants and DeltaVib bridge
+  metadata, `oracle-morpheus` for fitted/equilibrium records.
 - `#VIBRATIONAL`: `oracle-gaussian`, `oracle-gf` or `oracle-vpt2-vci` depending
   on source, with schema-specific ownership.
+- `#DELTABVIB`: `oracle-rovib`.
+- `#CORIOLIS`: `oracle-rovib`.
+- `#QCENT`: `oracle-rovib`.
+- `#THERMO`: `oracle-thermo`.
 - `#ISOTOPOLOGUES`: shared schema owned by `oracle-core`/`oracle-morpheus`.
 - `#MORPHEUS`: `oracle-morpheus`.
 - `#GF_PED`: `oracle-gf`.
@@ -154,6 +158,10 @@ oracle-gicforge
   GIC/SYCART schemas, B matrices and Python/Fortran77 backend adapters
 oracle-fragments
   topology/synthon-backed fragmentation, fragment search and assembly contracts
+oracle-rovib
+  rotational, vibrational, DeltaVib, Coriolis and Q-cent compatibility sections
+oracle-thermo
+  thermochemistry from BASIC/ROTATIONAL/VIBRATIONAL state
 oracle-morpheus, oracle-gf, oracle-dvr, oracle-vpt2-vci
   consume shared models, select backends and append their own sections
 oracle-gui

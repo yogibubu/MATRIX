@@ -24,6 +24,9 @@ packages are separated behind stable service, CLI and manifest contracts.
   such as LCB25.
 - `oracle-fragments`: topology-backed fragmentation, fragment-library search
   and future assembly contracts.
+- `oracle-rovib`: rotational, vibrational and rovibrational compatibility
+  sections.
+- `oracle-thermo`: thermochemistry from enriched XYZ state.
 - `oracle-engines`: Fortran and vendored backend discovery/build wrappers.
 - `oracle-dvr`: scan/grid to DVR workflows.
 - `oracle-vpt2-vci`: QFF, VPT2/VCI and Davidson workflows.
@@ -77,6 +80,10 @@ The enriched XYZ file is the canonical communication object between modules:
 tools append or replace their own uppercase sections and preserve all unrelated
 sections. See
 `docs/architecture/ADR-0001-SHARED-LIBRARIES-AND-XYZ-CONTAINER.md`.
+
+Scientific tools also support standalone `xyzin` mode: a sufficiently populated
+enriched XYZ can be passed directly to SEFit/MORPHEUS, GF/PED, Thermo, DVR or
+anharmonic workflows without rerunning the whole ORACLE preprocessing pipeline.
 
 ## Workspace Contract
 

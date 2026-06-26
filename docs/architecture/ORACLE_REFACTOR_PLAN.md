@@ -89,6 +89,10 @@ ORACLE/
       src/oracle_gaussian/
     oracle-fragments/
       src/oracle_fragments/
+    oracle-rovib/
+      src/oracle_rovib/
+    oracle-thermo/
+      src/oracle_thermo/
     oracle-engines/
       src/oracle_engines/
     oracle-dvr/
@@ -222,6 +226,21 @@ reuse the saved sections.
 - Query molecule fragmentation and LCB25 fragment-library lookup are inverse
   uses of the same service contract.
 
+`oracle-rovib`
+
+- Rotational and vibrational section contracts, DeltaVib/alpha bridge values,
+  Coriolis and Q-cent compatibility.
+- Migrates Merlino `geometry/rotational_pipeline.py`, `vibrational.py`,
+  `vib_anh.py`, `rovib_pipeline.py`, `coriolis.py` and `qcent.py`.
+- Treats external CeDiTT/alpha-resonances payloads as imported data that enrich
+  `#ROTATIONAL`, not as private parser logic in downstream tools.
+
+`oracle-thermo`
+
+- Thermochemistry from enriched XYZ state.
+- Reads `#BASIC`, `#ROTATIONAL` and optional `#VIBRATIONAL`.
+- Owns `#THERMO` and migrates Merlino `geometry/thermo_*` modules.
+
 `oracle-engines`
 
 - Discovery, build checks and subprocess wrappers for Fortran and vendored
@@ -281,6 +300,11 @@ Every workflow should also accept or produce an enriched XYZ file as the
 canonical state handoff. Workflow-specific files may be generated in `runs/`,
 `outputs/` or `reports/`, but the reusable state must be written back to the
 appropriate XYZ section through the shared section API.
+
+Standalone mode is mandatory for scientific packages. SEFit/MORPHEUS, GF/PED,
+Thermo, DVR and VPT2/VCI must accept a sufficiently populated `xyzin` directly
+and validate only the sections they consume; a full ORACLE project workspace is
+recommended but not required for those direct runs.
 
 ## Migration Phases
 

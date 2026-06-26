@@ -48,8 +48,8 @@ Downstream ownership:
 - `oracle-gf`: consumes frozen `#GIC` plus Cartesian Hessian data.
 - `oracle-morpheus`: consumes rotational data, corrections and frozen
   coordinate models for SEFit.
-- future `oracle-thermo`: consumes normalized frequencies, rotational
-  constants and electronic energies.
+- `oracle-thermo`: consumes normalized frequencies, rotational constants and
+  electronic energies.
 - `oracle-vpt2-vci`: consumes normalized QFF/anharmonic force-field data.
 
 ## Consequences

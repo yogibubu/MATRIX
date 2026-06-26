@@ -53,6 +53,12 @@ Keep as migration sources:
 - `merlino_vpt2_vci`
 - `merlino_gui`
 - stable parts of `geometry`, `topology` and `merlino_fit`
+- `geometry/rotational_pipeline.py`, `geometry/vibrational.py`,
+  `geometry/vib_anh.py`, `geometry/rovib_pipeline.py`,
+  `geometry/coriolis.py` and `geometry/qcent.py` as `oracle-rovib` sources
+- `geometry/thermo_trasl.py`, `geometry/thermo_rot.py`,
+  `geometry/thermo_vib.py`, `geometry/thermo_pipeline.py` and
+  `geometry/thermo_writer.py` as `oracle-thermo` sources
 - `merlino_fit/topology`, especially `AtomicSynthons`,
   `descriptor_parameters`, continuous/discrete topology, rings, aromaticity and
   topology writers. The top-level `topology/` package in Merlino is mostly a
@@ -62,6 +68,8 @@ Keep as migration sources:
 - `examples`
 - `benchmarks`
 - `doc/manuals`
+- `data/se_geometries`, as a separate local SE reference-library source to
+  review alongside LCB25
 
 Treat as runtime/generated unless explicitly reviewed:
 
@@ -112,3 +120,10 @@ wrappers around ORACLE:
 - `merlino_vpt2_vci/gaussian_qff.py`
 
 No new parser logic should be added to these paths.
+
+## Standalone XYzin Workflows
+
+Merlino scientific tools can be launched directly from a populated `xyzin`
+file. ORACLE must preserve this mode. SEFit/MORPHEUS, GF/PED, Thermo, DVR and
+VPT2/VCI should validate the sections they need and run without forcing a full
+ORACLE preprocessing workspace in the same command.
