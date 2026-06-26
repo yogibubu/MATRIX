@@ -20,8 +20,8 @@ def test_fortran_fragment_tric_bmat_compiles_and_runs(tmp_path):
         """
       Program TFRAG
       Implicit Real*8(A-H,O-Z)
-      Integer FAT(3),RAT(3)
-      Dimension C(3,6),B(18)
+      Integer FAT(3),RAT(3),IPROT(3),ISEL(3)
+      Dimension C(3,6),B(18),BMAT(3,3),Q(3,3),WORK(3)
       Data FAT /4,5,6/
       Data RAT /1,2,3/
 C
@@ -72,6 +72,49 @@ C
        SUM=SUM+DAbs(B(I))
    40 Continue
       If(SUM.le.1.0D-8) Stop 10
+C
+      Call ORCGSPC('FRAG_DISTANCE',ISPEC)
+      If(ISPEC.ne.1) Stop 11
+      Call ORCGSPC('CENTER_ATOM_DISTANCE',ISPEC)
+      If(ISPEC.ne.1) Stop 12
+      Call ORCGSPC('STRETCH',ISPEC)
+      If(ISPEC.ne.0) Stop 13
+C
+      Do 50 I=1,3
+       IPROT(I)=0
+       ISEL(I)=0
+       WORK(I)=0.0D0
+       Do 60 J=1,3
+        BMAT(J,I)=0.0D0
+        Q(J,I)=0.0D0
+   60  Continue
+   50 Continue
+      BMAT(1,1)=1.0D0
+      BMAT(1,2)=1.0D0
+      BMAT(2,3)=1.0D0
+      IPROT(2)=1
+      Call ORCGSEL(3,3,BMAT,IPROT,1,1.0D-7,ISEL,NSEL,IRANK,
+     $  Q,WORK,IFAIL)
+      If(IFAIL.ne.0) Stop 14
+      If(NSEL.ne.1) Stop 15
+      If(IRANK.ne.1) Stop 16
+      If(ISEL(1).ne.2) Stop 17
+C
+      IPROT(1)=1
+      IPROT(2)=1
+      IPROT(3)=0
+      BMAT(1,1)=1.0D0
+      BMAT(2,1)=0.0D0
+      BMAT(3,1)=0.0D0
+      BMAT(1,2)=0.0D0
+      BMAT(2,2)=1.0D0
+      BMAT(3,2)=0.0D0
+      BMAT(1,3)=0.0D0
+      BMAT(2,3)=0.0D0
+      BMAT(3,3)=1.0D0
+      Call ORCGSEL(3,3,BMAT,IPROT,1,1.0D-7,ISEL,NSEL,IRANK,
+     $  Q,WORK,IFAIL)
+      If(IFAIL.ne.2) Stop 18
       End
 """,
         encoding="ascii",

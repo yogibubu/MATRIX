@@ -20,6 +20,7 @@ from .contracts import (
 GIC_BACKEND = "oracle-native-primitive.v1"
 SYCART_BACKEND = "oracle-native-cartesian-nullspace.v1"
 B_MATRIX_BACKEND = "oracle-native-analytic-bmatrix.v1"
+RANK_METHOD = "analytic_b_matrix_mgs_greedy"
 RANK_TOLERANCE = 1.0e-7
 DIAGNOSTIC_FINITE_DIFFERENCE_STEP = 1.0e-5
 LINEAR_ANGLE_DEGREES = 175.0
@@ -212,7 +213,7 @@ def gic_definition_section_lines(definition: GICDefinition) -> list[str]:
         f"PRIMITIVE_COUNT {len(definition.primitives)}",
         f"GIC_COUNT {len(definition.gics)}",
         f"PROTECTED_GIC_COUNT {_protected_gic_count(definition.primitives)}",
-        "RANK_METHOD analytic_b_matrix_greedy",
+        f"RANK_METHOD {RANK_METHOD}",
         f"REDUCTION_POLICY {REDUCTION_POLICY}",
         "B_MATRIX_DERIVATIVE_MODE ANALYTIC",
         f"RANK_TOLERANCE {RANK_TOLERANCE:.12g}",
@@ -555,7 +556,7 @@ def _select_ranked_primitives(
     if target_rank == 0:
         return (), 0
     selected: list[GICPrimitive] = []
-    rows: list[np.ndarray] = []
+    basis: list[np.ndarray] = []
     rank = 0
 
     special_candidates = [
@@ -569,7 +570,7 @@ def _select_ranked_primitives(
             _raise_if_remaining_special_independent(
                 special_candidates[index:],
                 coords,
-                rows,
+                basis,
                 rank,
                 rank_tolerance=rank_tolerance,
             )
@@ -578,7 +579,7 @@ def _select_ranked_primitives(
             primitive,
             coords,
             selected,
-            rows,
+            basis,
             rank,
             rank_tolerance=rank_tolerance,
         )
@@ -590,7 +591,7 @@ def _select_ranked_primitives(
             primitive,
             coords,
             selected,
-            rows,
+            basis,
             rank,
             rank_tolerance=rank_tolerance,
         )
@@ -612,7 +613,7 @@ def _try_select_ranked_primitive(
     primitive: GICPrimitive,
     coords: np.ndarray,
     selected: list[GICPrimitive],
-    rows: list[np.ndarray],
+    basis: list[np.ndarray],
     rank: int,
     *,
     rank_tolerance: float,
@@ -624,18 +625,22 @@ def _try_select_ranked_primitive(
     )
     if normalized is None:
         return rank
-    trial_rank = _trial_rank(rows, normalized, rank_tolerance=rank_tolerance)
-    if trial_rank <= rank:
+    orthonormal = _orthonormal_residual_or_none(
+        basis,
+        normalized,
+        rank_tolerance=rank_tolerance,
+    )
+    if orthonormal is None:
         return rank
     selected.append(primitive)
-    rows.append(normalized)
-    return trial_rank
+    basis.append(orthonormal)
+    return rank + 1
 
 
 def _raise_if_remaining_special_independent(
     primitives: list[GICPrimitive],
     coords: np.ndarray,
-    rows: list[np.ndarray],
+    basis: list[np.ndarray],
     rank: int,
     *,
     rank_tolerance: float,
@@ -648,14 +653,16 @@ def _raise_if_remaining_special_independent(
         )
         if normalized is None:
             continue
-        trial_rank = _trial_rank(rows, normalized, rank_tolerance=rank_tolerance)
-        if trial_rank > rank:
+        if _orthonormal_residual_or_none(
+            basis,
+            normalized,
+            rank_tolerance=rank_tolerance,
+        ) is not None:
             raise GICForgeContractError(
                 "protected special primitive set exceeds the vibrational rank: "
                 f"{primitive.identifier} {primitive.name} would add an independent "
                 "row after the target rank was reached"
             )
-        rows.append(normalized)
 
 
 def _normalized_b_row_or_none(
@@ -674,14 +681,19 @@ def _normalized_b_row_or_none(
     return row / norm
 
 
-def _trial_rank(
-    rows: list[np.ndarray],
+def _orthonormal_residual_or_none(
+    basis: list[np.ndarray],
     normalized: np.ndarray,
     *,
     rank_tolerance: float,
-) -> int:
-    trial = np.vstack([*rows, normalized]) if rows else normalized.reshape(1, -1)
-    return int(np.linalg.matrix_rank(trial, tol=rank_tolerance))
+) -> np.ndarray | None:
+    residual = np.array(normalized, dtype=float, copy=True)
+    for vector in basis:
+        residual -= float(np.dot(residual, vector)) * vector
+    norm = float(np.linalg.norm(residual))
+    if not np.isfinite(norm) or norm <= rank_tolerance:
+        return None
+    return residual / norm
 
 
 def _analytic_b_row(primitive: GICPrimitive, coords: np.ndarray) -> np.ndarray:

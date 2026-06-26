@@ -68,8 +68,9 @@ The reduction target is the vibrational rank:
 - `3N-6` for nonlinear molecules;
 - `3N-5` for linear molecules.
 
-All rank decisions use normalized analytic B rows and a single numerical
-tolerance. The important ORACLE-specific rule is the reduction order:
+All rank decisions use normalized analytic B rows, a modified Gram-Schmidt
+incremental rank basis and a single numerical tolerance. The important
+ORACLE-specific rule is the reduction order:
 
 1. Special protected primitives are tested first.
 2. Ordinary primitives are used only to complete the rank after the protected
@@ -84,12 +85,13 @@ tolerance. The important ORACLE-specific rule is the reduction order:
 This policy is different from a global SVD or a pure candidate-order greedy
 selection. It preserves chemically meaningful inter-fragment, atom-center and
 fragment-orientation coordinates even when an ordinary primitive spans a similar
-first-order displacement.
+first-order displacement. Python uses the same MGS selector as the Fortran
+`ORCGSEL` kernel in `engines/fortran/gicforge/frag_tric_bmat.f`.
 
 The `#GIC` header records the policy as:
 
 ```text
-RANK_METHOD analytic_b_matrix_greedy
+RANK_METHOD analytic_b_matrix_mgs_greedy
 REDUCTION_POLICY SPECIAL_PROTECTED_FIRST_THEN_ORDINARY_ANALYTIC_RANK
 ```
 

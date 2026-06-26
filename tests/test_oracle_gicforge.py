@@ -339,6 +339,11 @@ def test_gicforge_build_uses_built_fragments_for_relative_coordinates(tmp_path):
     assert definition.target_rank == 12
     assert definition.rank == 12
     assert len(definition.gics) == 12
+    assert "RANK_METHOD analytic_b_matrix_mgs_greedy" in gic
+    assert (
+        "REDUCTION_POLICY SPECIAL_PROTECTED_FIRST_THEN_ORDINARY_ANALYTIC_RANK"
+        in gic
+    )
     assert any(
         "FAMILY=FRAG_DISTANCE CLASS=SPECIAL_PROTECTED FUNCTION=FC_DIST" in line
         for line in primitive_lines

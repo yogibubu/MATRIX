@@ -443,9 +443,10 @@ virtual-center distances for ring centers, bond centers and contact centers.
 They are not ordinary valence-graph primitives, and they can carry chemical
 information that no single stretch, bend or torsion should be allowed to erase.
 For this reason \program{} first tests all protected special coordinates
-against each other by analytic B-matrix rank.  Only after that protected pass
-does it use ordinary primitives to complete the vibrational rank.  A special
-coordinate may be skipped only when its own row is singular or linearly
+against each other by the same analytic B-matrix modified Gram--Schmidt rank
+test used by the Fortran77 routine \texttt{ORCGSEL}.  Only after that protected
+pass does it use ordinary primitives to complete the vibrational rank.  A
+special coordinate may be skipped only when its own row is singular or linearly
 dependent on previously accepted special rows.  If the independent protected
 set alone is larger than the vibrational rank, \program{} stops with a contract
 error instead of silently deleting a protected coordinate.
@@ -453,8 +454,11 @@ error instead of silently deleting a protected coordinate.
 The frozen \xyzin{} schema records this distinction explicitly.  Ordinary
 coordinates are written with \texttt{CLASS=ORDINARY}.  Fragment and
 virtual-center coordinates are written with the protected class token
-\texttt{SPECIAL\_PROTECTED}.  The header also records the reduction policy
-\texttt{SPECIAL\_PROTECTED\_FIRST\_THEN\_ORDINARY\_}
+\texttt{SPECIAL\_PROTECTED}.  The header also records the rank method
+\texttt{analytic\_b\_matrix\_mgs\_greedy}.  The reduction policy is the
+protected-first policy described above, serialized in \xyzin{} as
+two adjacent tokens:
+\texttt{SPECIAL\_PROTECTED\_FIRST\_THEN\_ORDINARY\_} and
 \texttt{ANALYTIC\_RANK}.
 This makes restarts reproducible and tells downstream programs that the
 protected coordinates are part of the molecular model, not disposable

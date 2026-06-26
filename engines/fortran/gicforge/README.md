@@ -12,6 +12,14 @@ the native Python GICForge definitions for:
 - `FROT`: TRIC/geomeTRIC-style exponential-map rotation component between two
   fragment local frames.
 
+It also mirrors the Python non-redundant reduction contract:
+
+- `ORCGSPC` classifies the same special protected primitive families used by
+  Python (`FRAG_DISTANCE`, `FRAG_CENTER_ATOM_DISTANCE`, `FRAG_TRANSLATION`,
+  `FRAG_ORIENTATION`, `CENTER_ATOM_DISTANCE`);
+- `ORCGSEL` performs the same protected-first modified Gram-Schmidt rank
+  selection used by `oracle_gicforge.definition`.
+
 The `FROT` B row is analytic: derivatives are propagated through the centroid,
 local frame, relative rotation matrix, quaternion and exponential-map
 small-rotation limit. It is intended to be called from the imported legacy

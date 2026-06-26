@@ -1,9 +1,9 @@
 C ORACLE GICForge fragment-coordinate analytic Wilson B rows.
 C
-C This file is deliberately strict Fortran77-style code.  It is the shared
+C This file is strict Fortran77-style code.  It is the shared
 C Fortran implementation for fragment-center and TRIC/geomeTRIC-style
 C inter-fragment rotation coordinates.  It is meant to be called by the
-C imported legacy GICForge MkBNew path instead of reimplementing fragment
+C imported legacy GICForge MkBNew path instead of duplicating fragment
 C derivatives locally.
 C
 C Public entry points use one-based atom indices:
@@ -11,7 +11,130 @@ C   ORCFCDI : center-center distance B row
 C   ORCFCAD : fragment-center / atom distance B row
 C   ORCFTRN : center-center Cartesian translation component B row
 C   ORCFROT : exponential-map fragment rotation component B row
+C   ORCGSPC : classify ORACLE special protected primitive families
+C   ORCGSEL : protected-first modified Gram-Schmidt rank selection
 C
+      Subroutine ORCGSPC(FAMILY,ISPEC)
+      Character*(*) FAMILY
+      Integer ISPEC
+C
+      ISPEC=0
+      If(FAMILY.eq.'FRAG_DISTANCE') ISPEC=1
+      If(FAMILY.eq.'FRAG_CENTER_ATOM_DISTANCE') ISPEC=1
+      If(FAMILY.eq.'FRAG_TRANSLATION') ISPEC=1
+      If(FAMILY.eq.'FRAG_ORIENTATION') ISPEC=1
+      If(FAMILY.eq.'CENTER_ATOM_DISTANCE') ISPEC=1
+      Return
+      End
+
+      Subroutine ORCGSEL(NCAND,NCOL,BMAT,IPROT,TARGET,TOL,ISEL,
+     $  NSEL,RANK,Q,WORK,IFAIL)
+      Implicit Real*8(A-H,O-Z)
+      Integer NCAND,NCOL,IPROT(*),TARGET,ISEL(*),NSEL,RANK,IFAIL
+      Dimension BMAT(NCOL,*),Q(NCOL,*),WORK(*)
+C
+C     Protected-first non-redundant reduction.  BMAT(:,I) is the
+C     analytic B row for candidate I.  IPROT(I).ne.0 marks
+C     CLASS=SPECIAL_PROTECTED.  IFAIL=2 means that independent
+C     protected rows alone exceed TARGET.
+C
+      NSEL=0
+      RANK=0
+      IFAIL=0
+      If(TARGET.lt.0) then
+       IFAIL=1
+       Return
+      EndIf
+C
+      Do 10 IC=1,NCAND
+       If(IPROT(IC).eq.0) Goto 10
+       If(RANK.ge.TARGET) then
+        Call ORCGIND(NCOL,BMAT(1,IC),RANK,Q,TOL,WORK,IADD)
+        If(IADD.ne.0) then
+         IFAIL=2
+         Return
+        EndIf
+        Goto 10
+       EndIf
+       Call ORCGADD(NCOL,BMAT(1,IC),RANK,Q,TOL,WORK,IADD)
+       If(IADD.ne.0) then
+        NSEL=NSEL+1
+        ISEL(NSEL)=IC
+       EndIf
+   10 Continue
+C
+      If(RANK.ge.TARGET) Return
+C
+      Do 20 IC=1,NCAND
+       If(IPROT(IC).ne.0) Goto 20
+       If(RANK.ge.TARGET) Goto 30
+       Call ORCGADD(NCOL,BMAT(1,IC),RANK,Q,TOL,WORK,IADD)
+       If(IADD.ne.0) then
+        NSEL=NSEL+1
+        ISEL(NSEL)=IC
+       EndIf
+   20 Continue
+   30 Continue
+      If(RANK.ne.TARGET) IFAIL=3
+      Return
+      End
+
+      Subroutine ORCGADD(NCOL,ROW,RANK,Q,TOL,WORK,IADD)
+      Implicit Real*8(A-H,O-Z)
+      Integer NCOL,RANK,IADD
+      Dimension ROW(*),Q(NCOL,*),WORK(*)
+C
+      Call ORCGIND(NCOL,ROW,RANK,Q,TOL,WORK,IADD)
+      If(IADD.eq.0) Return
+      RANK=RANK+1
+      RN=DSQRT(ORCGDOT(NCOL,WORK,WORK))
+      Do 10 J=1,NCOL
+       Q(J,RANK)=WORK(J)/RN
+   10 Continue
+      Return
+      End
+
+      Subroutine ORCGIND(NCOL,ROW,RANK,Q,TOL,WORK,IADD)
+      Implicit Real*8(A-H,O-Z)
+      Integer NCOL,RANK,IADD
+      Dimension ROW(*),Q(NCOL,*),WORK(*)
+C
+      IADD=0
+      Do 10 J=1,NCOL
+       WORK(J)=ROW(J)
+   10 Continue
+      RN=DSQRT(ORCGDOT(NCOL,WORK,WORK))
+      If(RN.le.TOL) Return
+      Do 20 J=1,NCOL
+       WORK(J)=WORK(J)/RN
+   20 Continue
+      Do 30 K=1,RANK
+       PROJ=0.0D0
+       Do 40 J=1,NCOL
+        PROJ=PROJ+WORK(J)*Q(J,K)
+   40  Continue
+       Do 50 J=1,NCOL
+        WORK(J)=WORK(J)-PROJ*Q(J,K)
+   50  Continue
+   30 Continue
+      RN=DSQRT(ORCGDOT(NCOL,WORK,WORK))
+      If(RN.le.TOL) Return
+      IADD=1
+      Return
+      End
+
+      Double Precision Function ORCGDOT(N,A,B)
+      Implicit Real*8(A-H,O-Z)
+      Integer N
+      Dimension A(*),B(*)
+C
+      ORCGDOT=0.0D0
+      Do 10 I=1,N
+       ORCGDOT=ORCGDOT+A(I)*B(I)
+   10 Continue
+      Return
+      End
+
       Subroutine ORCFTRN(NAT,NF,FAT,NR,RAT,MODE,BROW)
       Implicit Real*8(A-H,O-Z)
       Integer NAT,NF,NR,MODE,FAT(*),RAT(*)
