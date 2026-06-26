@@ -313,23 +313,23 @@ C     ---- gruppi Dn, Dnd, Dnh ----
       NOPS = 0
 
 C     ---- C groups ----
-      IF (FAM .EQ. 'C') THEN
+      IF (FAM .EQ. 'C' .OR. FAM .EQ. 'Cn') THEN
          CALL OPS_CN(N, R, NOPS)
          RETURN
       END IF
 
-      IF (FAM .EQ. 'Cv') THEN
+      IF (FAM .EQ. 'Cv' .OR. FAM .EQ. 'Cnv') THEN
          CALL OPS_CNV(N, R, NOPS)
          RETURN
       END IF
 
-      IF (FAM .EQ. 'Ch') THEN
+      IF (FAM .EQ. 'Ch' .OR. FAM .EQ. 'Cnh') THEN
          CALL OPS_CNH(N, R, NOPS)
          RETURN
       END IF
 
 C     ---- D groups ----
-      IF (FAM .EQ. 'D') THEN
+      IF (FAM .EQ. 'D' .OR. FAM .EQ. 'Dn') THEN
          CALL OPS_DN(N, R, NOPS)
          RETURN
       END IF
@@ -345,12 +345,12 @@ C     ---- D groups ----
       END IF
 
 C     ---- Cubic groups ----
-      IF (GROUP .EQ. 'Td') THEN
+      IF (GROUP .EQ. 'Td' .OR. GROUP .EQ. 'td') THEN
          CALL OPS_TD(R, NOPS)
          RETURN
       END IF
 
-      IF (GROUP .EQ. 'Oh') THEN
+      IF (GROUP .EQ. 'Oh' .OR. GROUP .EQ. 'oh') THEN
          CALL OPS_OH(R, NOPS)
          RETURN
       END IF

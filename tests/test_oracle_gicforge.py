@@ -23,6 +23,7 @@ from oracle_gicforge import (
     gic_definition_section_lines,
     special_symmetry_source_blocks,
     symmetrize_gic_definition,
+    irrep_characters_for_operations,
     total_symmetric_gic_names,
     write_gicforge_build_sections,
     write_gicforge_gaussian_input,
@@ -699,6 +700,62 @@ def test_gicforge_symmetry_labels_use_point_group_irreps():
     assert total_symmetric_gic_names(symmetrized) == ("A1StrS001",)
 
 
+def test_gicforge_irrep_characters_cover_merlino_family_groups():
+    c3v = dict(
+        irrep_characters_for_operations(
+            ("E", "C3z^1", "C3z^2", "sigma_v_3_0"),
+            "C3v",
+        )
+    )
+    assert c3v["A1"] == pytest.approx((1.0, 1.0, 1.0, 1.0))
+    assert c3v["A2"] == pytest.approx((1.0, 1.0, 1.0, -1.0))
+    assert c3v["E"] == pytest.approx((2.0, -1.0, -1.0, 0.0))
+
+    c4v = dict(
+        irrep_characters_for_operations(
+            ("E", "C4z^1", "C4z^2", "C4z^3", "sigma_v_4_0", "sigma_v_4_1"),
+            "C4v",
+        )
+    )
+    assert c4v["B1"] == pytest.approx((1.0, -1.0, 1.0, -1.0, 1.0, -1.0))
+    assert c4v["B2"] == pytest.approx((1.0, -1.0, 1.0, -1.0, -1.0, 1.0))
+    assert c4v["E"] == pytest.approx((2.0, 0.0, -2.0, 0.0, 0.0, 0.0), abs=1.0e-12)
+
+    c2h = dict(irrep_characters_for_operations(("E", "C2z", "i", "sigma_xy"), "C2h"))
+    assert c2h["Ag"] == pytest.approx((1.0, 1.0, 1.0, 1.0))
+    assert c2h["Bu"] == pytest.approx((1.0, -1.0, -1.0, 1.0))
+
+    d2h = dict(
+        irrep_characters_for_operations(
+            ("E", "C2z", "C2y", "C2x", "i", "sigma_xy", "sigma_xz", "sigma_yz"),
+            "D2h",
+        )
+    )
+    assert d2h["B1g"] == pytest.approx((1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0))
+    assert d2h["B3u"] == pytest.approx((1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0))
+
+    d3h = dict(
+        irrep_characters_for_operations(
+            (
+                "E",
+                "C3z^1",
+                "C3z^2",
+                "C2_xy_3_0",
+                "sigma_xy",
+                "sigma_h*C3z^1",
+                "sigma_v_3_0",
+            ),
+            "D3h",
+        )
+    )
+    assert d3h["A1'"] == pytest.approx((1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0))
+    assert d3h["A2'"] == pytest.approx((1.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0))
+    assert d3h["E'"] == pytest.approx(
+        (2.0, -1.0, -1.0, 0.0, 2.0, -1.0, 0.0),
+        abs=1.0e-12,
+    )
+
+
 def test_gicforge_point_group_projector_uses_operations_without_type_mixing():
     primitives = (
         GICPrimitive("P001", "Str0001", "STRETCH", "R", (1, 2)),
@@ -772,6 +829,66 @@ def test_gicforge_point_group_projector_uses_operations_without_type_mixing():
         ("BEND", "BEND", ("A1Bend001",)),
     ]
     assert total_symmetric_gic_names(symmetrized) == ("A1Str001", "A1Bend001")
+
+
+def test_gicforge_point_group_projector_handles_c3v_degenerate_irrep():
+    primitives = tuple(
+        GICPrimitive(
+            identifier=f"P{idx:03d}",
+            name=f"Str{idx:04d}",
+            family="STRETCH",
+            function="R",
+            atoms=(1, idx + 1),
+        )
+        for idx in range(1, 4)
+    )
+    definition = GICDefinition(
+        backend="test",
+        point_group="C3v",
+        symmetrize=False,
+        target_rank=3,
+        rank=3,
+        candidate_count=3,
+        reference_coordinates_angstrom=((0.0, 0.0, 0.0),) * 4,
+        primitives=primitives,
+        gics=tuple(
+            FrozenGIC(
+                identifier=f"GIC{idx:03d}",
+                name=primitive.name,
+                family=primitive.family,
+                irrep="UNASSIGNED",
+                primitive_id=primitive.identifier,
+                gaussian_expression=primitive.gaussian_expression(),
+                coefficients=((primitive.identifier, 1.0),),
+            )
+            for idx, primitive in enumerate(primitives, start=1)
+        ),
+    )
+    identity = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    operations = (
+        GICPointGroupOperation("E", identity, (1, 2, 3, 4)),
+        GICPointGroupOperation("C3z^1", identity, (1, 3, 4, 2)),
+        GICPointGroupOperation("C3z^2", identity, (1, 4, 2, 3)),
+        GICPointGroupOperation("sigma_v_3_0", identity, (1, 2, 4, 3)),
+        GICPointGroupOperation("sigma_v_3_1", identity, (1, 4, 3, 2)),
+        GICPointGroupOperation("sigma_v_3_2", identity, (1, 3, 2, 4)),
+    )
+
+    symmetrized = symmetrize_gic_definition(
+        definition,
+        atom_symbols=("N", "H", "H", "H"),
+        symmetry_operations=operations,
+    )
+
+    assert symmetrized.symmetry_diagnostics is not None
+    assert symmetrized.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert [gic.name for gic in symmetrized.gics] == [
+        "A1Str001",
+        "EStr001",
+        "EStr002",
+    ]
+    assert [gic.irrep for gic in symmetrized.gics] == ["A1", "E", "E"]
+    assert total_symmetric_gic_names(symmetrized) == ("A1Str001",)
 
 
 def test_gicforge_projector_symmetrizes_special_fragment_center_atom_coordinates():

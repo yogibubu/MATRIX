@@ -21,6 +21,19 @@ def test_legacy_merlino_gicforge_sources_are_vendored():
     assert "gicprune.f" in LEGACY_GICFORGE_FILES
 
 
+def test_legacy_merlino_group_dispatch_matches_classifier_families():
+    root = Path(__file__).resolve().parents[1]
+    symm = (
+        root / "engines" / "fortran" / "gicforge" / "legacy_merlino" / "symm.f"
+    ).read_text(encoding="utf-8")
+
+    assert "FAM .EQ. 'Cnv'" in symm
+    assert "FAM .EQ. 'Cnh'" in symm
+    assert "FAM .EQ. 'Dn'" in symm
+    assert "GROUP .EQ. 'td'" in symm
+    assert "GROUP .EQ. 'oh'" in symm
+
+
 def test_legacy_merlino_gicforge_backend_compiles():
     gfortran = shutil.which("gfortran")
     if gfortran is None:

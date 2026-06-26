@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from math import gcd
 import re
 
 import numpy as np
@@ -281,12 +280,17 @@ def candidate_ops(max_n=6):
         ops.append((name, matrix))
     for n in range(2, max_n + 1):
         for power in range(1, n):
-            if gcd(n, power) != 1:
-                continue
             theta = 2.0 * np.pi * power / n
             ops.append((f"C{n}z^{power}", _rotation_matrix((0, 0, 1), theta)))
             ops.append((f"C{n}x^{power}", _rotation_matrix((1, 0, 0), theta)))
             ops.append((f"C{n}y^{power}", _rotation_matrix((0, 1, 0), theta)))
+            sigma_h = np.diag((1.0, 1.0, -1.0))
+            ops.append(
+                (
+                    f"sigma_h*C{n}z^{power}",
+                    sigma_h @ _rotation_matrix((0, 0, 1), theta),
+                )
+            )
     for n in range(2, max_n + 1):
         for k in range(n):
             theta = np.pi * k / n

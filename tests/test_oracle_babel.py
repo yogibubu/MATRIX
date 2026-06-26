@@ -18,6 +18,7 @@ from oracle_chem import (
     read_geometry,
 )
 from oracle_core import read_sectioned_lines, section_content
+from oracle_chem.symmetry import candidate_ops
 
 
 CORPUS = Path(__file__).resolve().parent / "fixtures" / "test_molecules" / "molecules"
@@ -64,6 +65,15 @@ def test_babel_preprocess_writes_avogadro_compatible_enriched_xyz(tmp_path):
     geometry = read_enriched_xyz(target)
     assert geometry.atoms == ("O", "H", "H")
     assert set(geometry.metadata["sections"]) >= {"SOURCE", "SYMMETRY", "TOPOLOGY", "SYNTHONS"}
+
+
+def test_symmetry_candidate_operations_include_nonprimitive_rotation_powers():
+    labels = {label for label, _operation in candidate_ops(max_n=4)}
+
+    assert "C4z^1" in labels
+    assert "C4z^2" in labels
+    assert "C4z^3" in labels
+    assert "sigma_h*C4z^1" in labels
 
 
 def test_legacy_smiles_input_extraction_reads_title_charge_and_smiles():

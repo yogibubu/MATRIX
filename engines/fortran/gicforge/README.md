@@ -44,6 +44,12 @@ contract: symmetrized coordinate names begin with their assigned irrep and the
 header records the total-symmetric active subset used by optimizers and
 least-squares fits.
 
+`legacy_merlino/symm.f` is the reference source for Merlino-style point-group
+families and operation builders. ORACLE keeps its classifier families aligned
+with the Python character/projector layer for `Cn`, `Cnv`, `Cnh`, `Dn` and
+`Dnh`; `Dnd`, `Td` and `Oh` remain legacy operation sources until matching
+Python projector character tests are added.
+
 Construction, symmetrization and B evaluation are intentionally separate.
 Fortran optimizers should read the frozen primitive/GIC coefficient table once,
 then call `ORCGLCB` at each geometry iteration to combine the current primitive

@@ -125,6 +125,14 @@ final linear combinations to `[FROZEN_GICS]`. The method is recorded as
 `POINT_GROUP_PROJECTOR` with policy
 `HOMOGENEOUS_TYPE_BLOCK_POINT_GROUP_PROJECTOR`.
 
+The Python projector character layer is aligned with the Merlino family
+notation for `Cn`, `Cnv`, `Cnh`, `Dn` and `Dnh`, with explicit tested handling
+for `C2h`, `D2`, `D2h` and the low-symmetry cases `C1`, `Cs`, `Ci`, `C2` and
+`C2v`. The vendored Fortran `symm.f` still owns the legacy group-operation
+builders for the wider Merlino set, including `Dnd`, `Td` and `Oh`; those
+families must not be marked as production projector-complete in Python until
+their operation labels and character rows are covered by regression tests.
+
 Scalar primitives transform by atom permutation and, where appropriate, a sign:
 stretches, bends and center distances are invariant scalars; torsions change
 sign when the mapped torsion is reversed; out-of-plane coordinates use the
