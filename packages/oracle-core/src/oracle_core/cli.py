@@ -80,6 +80,14 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     rovib_summary = rovib_sub.add_parser("summarize", help="Summarize rovib sections")
     rovib_summary.add_argument("xyzin", type=Path)
 
+    gf = sub.add_parser("gf", help="Run GF/PED analysis from a Cartesian Hessian")
+    gf.add_argument("--fchk", type=Path, required=True)
+    gf.add_argument("--xyzin", type=Path, help="Frozen ORACLE xyzin with a BUILT #GIC section")
+    gf.add_argument("--out", type=Path, help="Write the GF/PED report")
+    gf.add_argument("--csv-dir", type=Path, help="Write GF/PED CSV tables")
+    gf.add_argument("--scale-file", type=Path)
+    gf.add_argument("--scale", action="append", default=[])
+
     gicforge = sub.add_parser("gicforge", help="Plan GICForge post-validation sections")
     gicforge_sub = gicforge.add_subparsers(dest="gicforge_command")
     gic_plan = gicforge_sub.add_parser("plan", help="Write planned #GIC/#SYCART sections")
@@ -225,6 +233,34 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
         from oracle_rovib import rovib_summary_lines, summarize_xyzin
 
         print("\n".join(rovib_summary_lines(summarize_xyzin(args.xyzin))))
+        return 0
+    if args.command == "gf":
+        from oracle_gf import (
+            run_gf_report_from_fchk,
+            run_xyzin_gf_report_from_fchk,
+            write_csv_tables,
+        )
+
+        if args.xyzin is None:
+            report = run_gf_report_from_fchk(args.fchk)
+            prefix = "gf"
+        else:
+            report = run_xyzin_gf_report_from_fchk(
+                args.fchk,
+                args.xyzin,
+                scale_path=args.scale_file,
+                scale_records=tuple(args.scale),
+            )
+            prefix = "gic_gf"
+        if args.out is not None:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(report.text + "\n", encoding="utf-8")
+            print(f"Wrote GF/PED report: {args.out}")
+        else:
+            print(report.text)
+        if args.csv_dir is not None:
+            written = write_csv_tables(report, args.csv_dir, prefix=prefix)
+            print(f"Wrote GF/PED CSV tables: {len(written)} files in {args.csv_dir}")
         return 0
     if args.command == "gicforge" and args.gicforge_command == "plan":
         from oracle_gicforge import write_gicforge_plan_sections

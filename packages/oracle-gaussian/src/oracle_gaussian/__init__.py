@@ -11,10 +11,20 @@ from .writers import (
     GaussianWriteError,
     write_gicforge_gaussian_input,
 )
+from .fchk import (
+    FCHKData,
+    hessian_input_from_gaussian_fchk,
+    lower_to_symmetric,
+    read_gaussian_fchk,
+)
 
 __all__ = [
     "GaussianWriteError",
+    "FCHKData",
     "GaussianLogSummary",
+    "hessian_input_from_gaussian_fchk",
+    "lower_to_symmetric",
+    "read_gaussian_fchk",
     "read_gaussian_input",
     "read_gaussian_cartesian_input",
     "read_gaussian_zmatrix_input",

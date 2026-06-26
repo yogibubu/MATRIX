@@ -266,6 +266,47 @@ def test_gicforge_cli_passes_improper_dihedrals_flag(tmp_path, monkeypatch, caps
     assert "Built GICForge definition" in capsys.readouterr().out
 
 
+def test_gf_cli_runs_xyzin_report_and_csv_export(tmp_path, monkeypatch, capsys):
+    calls = {}
+    fchk = tmp_path / "job.fchk"
+    xyzin = tmp_path / "molecule.xyzin"
+    out = tmp_path / "gf.txt"
+    csv_dir = tmp_path / "csv"
+
+    def fake_run(fchk_path, xyzin_path, *, scale_path=None, scale_records=()):
+        calls["run"] = (fchk_path, xyzin_path, scale_path, scale_records)
+        return SimpleNamespace(text="gf report")
+
+    def fake_csv(report, outdir, *, prefix="gf"):
+        calls["csv"] = (report.text, outdir, prefix)
+        return {"frequencies.csv": outdir / "gic_gf_frequencies.csv"}
+
+    monkeypatch.setattr("oracle_gf.run_xyzin_gf_report_from_fchk", fake_run)
+    monkeypatch.setattr("oracle_gf.write_csv_tables", fake_csv)
+
+    rc = oracle_run.main(
+        [
+            "gf",
+            "--fchk",
+            str(fchk),
+            "--xyzin",
+            str(xyzin),
+            "--out",
+            str(out),
+            "--csv-dir",
+            str(csv_dir),
+            "--scale",
+            "GIC003=0.9",
+        ]
+    )
+
+    assert rc == 0
+    assert calls["run"] == (fchk, xyzin, None, ("GIC003=0.9",))
+    assert calls["csv"] == ("gf report", csv_dir, "gic_gf")
+    assert out.read_text(encoding="utf-8") == "gf report\n"
+    assert "Wrote GF/PED report" in capsys.readouterr().out
+
+
 def test_gicforge_bmatrix_cli_calls_writer(tmp_path, monkeypatch, capsys):
     calls = {}
     path = tmp_path / "molecule.xyzin"
