@@ -12,6 +12,7 @@ normal entry point for external molecular sources:
 - QM-program inputs and outputs;
 - SMILES through RDKit;
 - future Z-matrix and legacy formats.
+- remote/local molecular libraries such as LCB25.
 
 Its output is always an Avogadro-compatible enriched XYZ file. The file starts
 with a normal XYZ block so Avogadro can view and edit the molecular geometry.
@@ -41,6 +42,13 @@ The initial structural analysis is done once:
 GICForge then consumes the saved geometry/topology/symmetry state to determine
 GICs and symmetrize them when requested. MORPHEUS, GF/PED, DVR, VPT2/VCI and
 GUI workflows must not redo import parsing or private topology perception.
+
+LCB25 is a remote ORACLE-Babel source. PCS2, SE and HPCS2 XYZ archives can be
+downloaded into a local library cache, imported through the same enriched-XYZ
+pipeline, then used as full-molecule references or fragmented into
+topology/synthon-based fragment libraries. Query molecules are fragmented by the
+same mechanism, so "use LCB25 as fragments" and "fragment a molecule to compare
+against LCB25" are inverse uses of one fragment service.
 
 ## Avogadro Contract
 
@@ -83,4 +91,3 @@ to a topology-derived depiction, but that fallback must use the saved
   ORACLE tools.
 - GUI rendering is a view of the file state, not a parallel in-memory model.
 - Editing geometry invalidates or regenerates dependent sections.
-

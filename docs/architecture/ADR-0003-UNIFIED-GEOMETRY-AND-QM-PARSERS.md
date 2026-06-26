@@ -30,9 +30,11 @@ they must not define their own incompatible geometry containers.
 ## Initial Parser Ownership
 
 - `oracle-chem`: plain XYZ, enriched XYZ first block, canonical
-  `MolecularGeometry`, element normalization and geometry serialization.
+  `MolecularGeometry`, element normalization, Z-matrix parsing and geometry
+  serialization.
 - `oracle-gaussian`: Gaussian `.com`/`.gjf` Cartesian input, Gaussian log/out
-  summaries, FCHK/QFF adapters.
+  summaries, Gaussian Z-matrix input through the shared Z-matrix parser and
+  FCHK/QFF adapters.
 - Future program packages: Molpro, MRCC and other QM formats. They must consume
   the same shared data model.
 
@@ -43,6 +45,7 @@ they must not define their own incompatible geometry containers.
   parsers.
 - Separate atom-symbol tables in different modules.
 - Separate Gaussian Cartesian-input parsers in semiexperimental and GUI code.
+- Separate Z-matrix parsers in GUI, Gaussian or workflow code.
 - Direct downstream consumption of raw QM text when an ORACLE adapter exists.
 
 ## Migration Targets From Merlino
@@ -63,4 +66,3 @@ Known Merlino parser locations to replace or wrap:
 
 The first ORACLE migration step is not to delete these files in Merlino, but to
 make the ORACLE parser stack the only new implementation path.
-

@@ -20,6 +20,8 @@ packages are separated behind stable service, CLI and manifest contracts.
   predicates, parameter classes, diagnostics and ensemble refinement.
 - `oracle-gf`: frozen-GIC GF/PED analysis.
 - `oracle-gaussian`: Gaussian input/output adapters.
+- `oracle-babel`: import adapters for external sources and molecular databases
+  such as LCB25.
 - `oracle-engines`: Fortran and vendored backend discovery/build wrappers.
 - `oracle-dvr`: scan/grid to DVR workflows.
 - `oracle-vpt2-vci`: QFF, VPT2/VCI and Davidson workflows.

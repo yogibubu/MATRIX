@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import pytest
-
-from oracle_chem import MolecularGeometry, read_enriched_xyz, read_xyz
-from oracle_gaussian import read_gaussian_cartesian_input, summarize_gaussian_log
+from oracle_chem import MolecularGeometry, read_enriched_xyz, read_xyz, read_zmatrix
+from oracle_gaussian import read_gaussian_cartesian_input, read_gaussian_zmatrix_input, summarize_gaussian_log
 
 
 def test_xyz_parser_normalizes_symbols_and_numbers(tmp_path):
@@ -89,7 +87,34 @@ def test_gaussian_cartesian_input_parser_returns_shared_geometry(tmp_path):
     assert geometry.metadata["route"] == ("#p hf/sto-3g opt",)
 
 
-def test_gaussian_zmatrix_input_is_rejected_until_unified_adapter_exists(tmp_path):
+def test_zmatrix_parser_handles_variables_and_dummy_atoms(tmp_path):
+    path = tmp_path / "water.zmat"
+    path.write_text(
+        "\n".join(
+            [
+                "O",
+                "X 1 1.0",
+                "H 1 rOH 2 aHOX",
+                "H 1 rOH 2 aHOX 3 dih",
+                "",
+                "Variables:",
+                "rOH = 0.96",
+                "aHOX = 52.25",
+                "dih = 180.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    geometry = read_zmatrix(path)
+
+    assert geometry.atoms == ("O", "H", "H")
+    assert geometry.metadata["dummy_atoms"] == 1
+    assert geometry.coordinates_angstrom.shape == (3, 3)
+
+
+def test_gaussian_zmatrix_input_uses_unified_zmatrix_adapter(tmp_path):
     path = tmp_path / "zmat.gjf"
     path.write_text(
         "\n".join(
@@ -100,7 +125,11 @@ def test_gaussian_zmatrix_input_is_rejected_until_unified_adapter_exists(tmp_pat
                 "",
                 "0 1",
                 "O",
-                "H 1 r1",
+                "H 1 rOH",
+                "H 1 rOH 2 aHOH",
+                "",
+                "rOH=0.96",
+                "aHOH=104.5",
                 "",
             ]
         )
@@ -108,8 +137,12 @@ def test_gaussian_zmatrix_input_is_rejected_until_unified_adapter_exists(tmp_pat
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="Z-matrix"):
-        read_gaussian_cartesian_input(path)
+    geometry = read_gaussian_zmatrix_input(path)
+
+    assert geometry.atoms == ("O", "H", "H")
+    assert geometry.charge == 0
+    assert geometry.multiplicity == 1
+    assert geometry.source_format == "gaussian_zmatrix_input"
 
 
 def test_gaussian_log_summary_uses_shared_geometry_for_last_orientation(tmp_path):

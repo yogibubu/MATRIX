@@ -159,6 +159,8 @@ reuse the saved sections.
 - Atoms, masses, isotopes, XYZ, inertia, topology, rings, symmetry and primitive
   geometry utilities.
 - Owns canonical geometry data models and plain/enriched XYZ parsers.
+- Owns the unified Z-matrix parser. GUI, Gaussian and legacy adapters must call
+  this parser rather than keeping private Z-matrix readers.
 - This should absorb the stable parts of `geometry`, `topology` and topology
   pieces now under `merlino_fit`.
 - Descriptor topology and atomic synthons are first-class chemistry primitives,
@@ -198,6 +200,7 @@ reuse the saved sections.
 - Gaussian geometry/log parsers must return shared ORACLE models such as
   `oracle_chem.MolecularGeometry`; downstream tools must not parse Gaussian text
   directly.
+- Gaussian Z-matrix input delegates to the shared `oracle-chem` Z-matrix parser.
 
 `oracle-engines`
 

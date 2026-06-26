@@ -115,5 +115,8 @@ def read_geometry(path: Path) -> MolecularGeometry:
         return read_enriched_xyz(target)
     if suffix == ".xyz" or suffix == "":
         return read_xyz(target)
-    raise GeometryParseError(f"unsupported geometry format: {target}")
+    if suffix in {".zmat", ".zmt"}:
+        from .zmatrix import read_zmatrix
 
+        return read_zmatrix(target)
+    raise GeometryParseError(f"unsupported geometry format: {target}")

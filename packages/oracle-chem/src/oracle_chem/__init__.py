@@ -9,6 +9,13 @@ from .geometry_io import (
     read_geometry,
     read_xyz,
 )
+from .zmatrix import (
+    ZMatrix,
+    ZMatrixAtom,
+    parse_zmatrix_text,
+    read_zmatrix,
+    zmatrix_to_geometry,
+)
 from .babel import (
     BabelPreprocessResult,
     SymmetryThresholds,
@@ -23,6 +30,8 @@ __all__ = [
     "MolecularGeometry",
     "BabelPreprocessResult",
     "SymmetryThresholds",
+    "ZMatrix",
+    "ZMatrixAtom",
     "build_topology_objects",
     "normalize_atom_symbol",
     "parse_xyz_lines",
@@ -30,4 +39,7 @@ __all__ = [
     "read_enriched_xyz",
     "read_geometry",
     "read_xyz",
+    "read_zmatrix",
+    "parse_zmatrix_text",
+    "zmatrix_to_geometry",
 ]

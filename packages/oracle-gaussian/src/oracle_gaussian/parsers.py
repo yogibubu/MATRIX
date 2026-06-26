@@ -8,6 +8,7 @@ import numpy as np
 
 from oracle_chem import MolecularGeometry
 from oracle_chem.geometry_io import GeometryParseError, normalize_atom_symbol
+from oracle_chem.zmatrix import parse_zmatrix_text, zmatrix_to_geometry
 
 
 SCF_RE = re.compile(r"SCF Done:\s+E\([^)]+\)\s+=\s+([-+]?\d+\.\d+)")
@@ -37,7 +38,7 @@ def read_gaussian_cartesian_input(path: Path) -> MolecularGeometry:
         raise GeometryParseError("Gaussian input needs a route section starting with #")
     route_lines = _route_lines(lines)
     if _route_requests_zmatrix(route_lines):
-        raise GeometryParseError("Gaussian Z-matrix input needs the unified Z-matrix adapter")
+        return read_gaussian_zmatrix_input(target)
 
     idx = route_end + 1 if route_end < len(lines) else route_end
     title_start = idx
@@ -72,6 +73,22 @@ def read_gaussian_cartesian_input(path: Path) -> MolecularGeometry:
         fixed_parameters=_modredundant_fixed_patterns(modredundant),
         metadata={"route": tuple(route_lines)},
     )
+
+
+def read_gaussian_zmatrix_input(path: Path) -> MolecularGeometry:
+    target = Path(path)
+    lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
+    route_end = _route_end(lines)
+    if route_end is None:
+        raise GeometryParseError("Gaussian input needs a route section starting with #")
+    idx = route_end + 1 if route_end < len(lines) else route_end
+    title_start = idx
+    while idx < len(lines) and lines[idx].strip():
+        idx += 1
+    title = " ".join(line.strip() for line in lines[title_start:idx] if line.strip()) or target.stem
+    body = "\n".join(lines[idx:])
+    zmat = parse_zmatrix_text(body, title=title)
+    return zmatrix_to_geometry(zmat, source_path=target, source_format="gaussian_zmatrix_input")
 
 
 def summarize_gaussian_log(path: Path) -> GaussianLogSummary:
@@ -234,4 +251,3 @@ def _parse_last_orientation(lines: list[str], *, source_path: Path) -> Molecular
         source_path=source_path,
         metadata={"orientation": orientation_kind},
     )
-
