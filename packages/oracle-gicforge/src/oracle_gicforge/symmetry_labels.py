@@ -240,6 +240,8 @@ def _generic_family_characters(
     if family == "D" and suffix == "H":
         return _dnh_characters(labels, n)
     if family == "D" and suffix == "D":
+        if operation_matrices is None:
+            return _merlino_dnd_label_characters(labels, n)
         return _dnd_characters(labels, n, operation_matrices=operation_matrices)
     return ()
 
@@ -623,6 +625,129 @@ def _dnd_odd_underlying_label(label: str, n: int) -> tuple[str | None, bool]:
     return None, False
 
 
+def _merlino_dnd_label_characters(
+    labels: tuple[str, ...],
+    n: int,
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    canonical = tuple(_merlino_canonical_operation_label(label) for label in labels)
+    base = _merlino_dn_label_characters(canonical, n)
+    if "i" in canonical:
+        return _merlino_gerade_ungerade(base, canonical)
+    return _merlino_prime_doubleprime(base, canonical)
+
+
+def _merlino_dn_label_characters(
+    labels: tuple[str, ...],
+    n: int,
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    rows: list[tuple[str, tuple[float, ...]]] = [
+        ("A1", tuple(1.0 for _label in labels)),
+        (
+            "A2",
+            tuple(-1.0 if _merlino_is_c2_perpendicular(label) else 1.0 for label in labels),
+        ),
+    ]
+    if n % 2 == 0:
+        rows.extend(
+            (
+                (
+                    "B1",
+                    tuple((-1.0) ** _merlino_rotation_power(label) for label in labels),
+                ),
+                (
+                    "B2",
+                    tuple(
+                        -((-1.0) ** _merlino_rotation_power(label))
+                        if _merlino_is_c2_perpendicular(label)
+                        else (-1.0) ** _merlino_rotation_power(label)
+                        for label in labels
+                    ),
+                ),
+            )
+        )
+    max_order = (n - 1) // 2 if n % 2 else (n // 2 - 1)
+    for order in range(1, max_order + 1):
+        values = []
+        for label in labels:
+            if _merlino_is_c2_perpendicular(label):
+                values.append(0.0)
+            else:
+                values.append(
+                    2.0
+                    * np.cos(
+                        2.0
+                        * np.pi
+                        * order
+                        * _merlino_rotation_power(label)
+                        / float(n)
+                    )
+                )
+        rows.append((f"E{order}", tuple(float(2.0 * value) for value in values)))
+    return tuple(rows)
+
+
+def _merlino_gerade_ungerade(
+    base: tuple[tuple[str, tuple[float, ...]], ...],
+    labels: tuple[str, ...],
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    parity = tuple(
+        -1.0 if label == "i" or label.startswith("sigma") else 1.0
+        for label in labels
+    )
+    rows: list[tuple[str, tuple[float, ...]]] = []
+    for name, chars in base:
+        rows.append((f"{name}g", chars))
+        rows.append((f"{name}u", tuple(char * sign for char, sign in zip(chars, parity))))
+    return tuple(rows)
+
+
+def _merlino_prime_doubleprime(
+    base: tuple[tuple[str, tuple[float, ...]], ...],
+    labels: tuple[str, ...],
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    reflection = tuple(
+        -1.0 if label.startswith("sigma") or label.startswith("S") else 1.0
+        for label in labels
+    )
+    rows: list[tuple[str, tuple[float, ...]]] = []
+    for name, chars in base:
+        rows.append((f"{name}'", chars))
+        rows.append((f"{name}''", tuple(char * sign for char, sign in zip(chars, reflection))))
+    return tuple(rows)
+
+
+def _merlino_rotation_power(label: str) -> int:
+    if label == "E":
+        return 0
+    match = re.match(r"C(\d+)[xyz]\^(\d+)", label)
+    if match:
+        return int(match.group(2))
+    if label.startswith("C2"):
+        return 1
+    return 0
+
+
+def _merlino_is_c2_perpendicular(label: str) -> bool:
+    return label == "C2_perp" or label.startswith("C2x") or label.startswith("C2y")
+
+
+def _merlino_canonical_operation_label(label: str) -> str:
+    text = str(label)
+    if text == "E" or text == "i" or text.startswith("sigma"):
+        return text
+    match = re.match(r"C(\d+)([xyz])\^(\d+)", text)
+    if match:
+        order, axis, power = match.groups()
+        if int(order) == 2:
+            return f"C2{axis}"
+        return f"C{order}{axis}^{power}"
+    if text.startswith("C2_xy"):
+        return "C2_perp"
+    if text.startswith("S"):
+        return text
+    return text
+
+
 def _dn_label_from_matrix(matrix: np.ndarray, n: int) -> str | None:
     if not np.allclose(matrix.T @ matrix, np.eye(3), atol=1.0e-7):
         return None
@@ -762,6 +887,10 @@ def _polyhedral_family_characters(
     | list[tuple[tuple[float, ...], ...]]
     | None,
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    if operation_matrices is None:
+        merlino = _merlino_polyhedral_label_characters(labels, group_key)
+        if merlino:
+            return merlino
     if group_key in {"T", "TD", "O"}:
         return _td_like_characters(labels, operation_matrices=operation_matrices)
     if group_key == "OH":
@@ -872,6 +1001,102 @@ def _icosahedral_characters(
                 values.append(value * (parity if reflected else 1.0))
             rows.append((base_name + suffix, tuple(values)))
     return tuple(rows)
+
+
+def _merlino_polyhedral_label_characters(
+    labels: tuple[str, ...],
+    group_key: str,
+) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    if group_key in {"TD", "O"}:
+        table = {
+            "A1": (1.0, 1.0, 1.0, 1.0, 1.0),
+            "A2": (1.0, 1.0, 1.0, -1.0, -1.0),
+            "E": (2.0, -1.0, 2.0, 0.0, 0.0),
+            "T1": (3.0, 0.0, -1.0, 1.0, -1.0),
+            "T2": (3.0, 0.0, -1.0, -1.0, 1.0),
+        }
+        return tuple(
+            (
+                name,
+                tuple(_merlino_poly_char(label, values) for label in labels),
+            )
+            for name, values in table.items()
+        )
+    root = group_key.rstrip("HD")
+    if root == "T":
+        table = {
+            "A": (1.0, 1.0, 1.0),
+            "E": (2.0, -1.0, 2.0),
+            "T": (3.0, 0.0, -1.0),
+        }
+        return tuple(
+            (
+                name,
+                tuple(_merlino_poly_char(label, values) for label in labels),
+            )
+            for name, values in table.items()
+        )
+    if group_key == "OH":
+        base = _merlino_polyhedral_label_characters(labels, "O")
+        parity = tuple(
+            -1.0
+            if label == "i" or label.startswith("sigma") or label.startswith("S")
+            else 1.0
+            for label in labels
+        )
+        rows: list[tuple[str, tuple[float, ...]]] = []
+        for name, chars in base:
+            rows.append((f"{name}g", chars))
+            rows.append((f"{name}u", tuple(char * sign for char, sign in zip(chars, parity))))
+        return tuple(rows)
+    if group_key == "IH":
+        base = _merlino_polyhedral_label_characters(labels, "I")
+        parity = tuple(
+            -1.0
+            if label == "i" or label.startswith("sigma") or label.startswith("S")
+            else 1.0
+            for label in labels
+        )
+        return tuple((f"{name}g", chars) for name, chars in base) + tuple(
+            (f"{name}u", tuple(char * sign for char, sign in zip(chars, parity)))
+            for name, chars in base
+        )
+    if root == "I":
+        phi = (1.0 + np.sqrt(5.0)) / 2.0
+        phi_bar = (1.0 - np.sqrt(5.0)) / 2.0
+        table = {
+            "A": (1.0, 1.0, 1.0, 1.0, 1.0),
+            "T1": (3.0, 0.0, -1.0, phi, phi_bar),
+            "T2": (3.0, 0.0, -1.0, phi_bar, phi),
+            "G": (4.0, 1.0, 0.0, -1.0, -1.0),
+            "H": (5.0, -1.0, 1.0, 0.0, 0.0),
+        }
+        return tuple(
+            (
+                name,
+                tuple(_merlino_poly_char(label, values) for label in labels),
+            )
+            for name, values in table.items()
+        )
+    return ()
+
+
+def _merlino_poly_char(label: str, values: tuple[float, ...]) -> float:
+    if label == "E":
+        return float(values[0])
+    if "C3" in label:
+        return float(values[1])
+    if "C2" in label:
+        return float(values[2])
+    if "C4" in label or "S4" in label:
+        return float(values[3] if len(values) > 3 else 0.0)
+    if "C5" in label:
+        if "2" in label or "3" in label:
+            return float(values[4] if len(values) > 4 else 0.0)
+        return float(values[3] if len(values) > 3 else 0.0)
+    if label.startswith("sigma"):
+        return float(values[4] if len(values) > 4 else values[0])
+    return float(values[0])
 
 
 def _icosahedral_operation_classes(

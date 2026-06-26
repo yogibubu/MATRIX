@@ -229,6 +229,18 @@ def _assert_character_rows_orthonormal(
             assert overlap == pytest.approx(1.0 if left == right else 0.0, abs=1.0e-8)
 
 
+def _assert_merlino_character_rows(
+    point_group: str,
+    labels: tuple[str, ...],
+    expected: tuple[tuple[str, tuple[float, ...]], ...],
+) -> None:
+    rows = irrep_characters_for_operations(labels, point_group)
+    assert tuple(name for name, _chars in rows) == tuple(name for name, _chars in expected)
+    for (name, chars), (expected_name, expected_chars) in zip(rows, expected):
+        assert name == expected_name
+        assert chars == pytest.approx(expected_chars, abs=1.0e-8)
+
+
 def test_gicforge_plan_requires_validation_pass(tmp_path):
     path = tmp_path / "molecule.xyz"
     path.write_text(
@@ -969,6 +981,85 @@ def test_gicforge_irrep_characters_cover_merlino_family_groups():
     )
     assert tuple(d3d) == ("A1g", "A2g", "Eg", "A1u", "A2u", "Eu")
     _assert_character_rows_orthonormal(d3d, group_order=12)
+
+
+def test_gicforge_label_only_characters_match_merlino3():
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+    phi_bar = (1.0 - np.sqrt(5.0)) / 2.0
+    cases = (
+        (
+            "Td",
+            ("E", "C3_t", "C3_t2", "C2_t", "sigma_yz"),
+            (
+                ("A1", (1.0, 1.0, 1.0, 1.0, 1.0)),
+                ("A2", (1.0, 1.0, 1.0, 1.0, -1.0)),
+                ("E", (2.0, -1.0, -1.0, 2.0, 0.0)),
+                ("T1", (3.0, 0.0, 0.0, -1.0, -1.0)),
+                ("T2", (3.0, 0.0, 0.0, -1.0, 1.0)),
+            ),
+        ),
+        (
+            "Oh",
+            ("E", "C3_o", "C2_o", "C4_o", "C4_o2", "i", "sigma_yz", "S4"),
+            (
+                ("A1g", (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)),
+                ("A1u", (1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0)),
+                ("A2g", (1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0)),
+                ("A2u", (1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0)),
+                ("Eg", (2.0, -1.0, 2.0, 0.0, 0.0, 2.0, 0.0, 0.0)),
+                ("Eu", (2.0, -1.0, 2.0, 0.0, 0.0, -2.0, 0.0, 0.0)),
+                ("T1g", (3.0, 0.0, -1.0, 1.0, 1.0, 3.0, -1.0, 1.0)),
+                ("T1u", (3.0, 0.0, -1.0, 1.0, 1.0, -3.0, 1.0, -1.0)),
+                ("T2g", (3.0, 0.0, -1.0, -1.0, -1.0, 3.0, 1.0, -1.0)),
+                ("T2u", (3.0, 0.0, -1.0, -1.0, -1.0, -3.0, -1.0, 1.0)),
+            ),
+        ),
+        (
+            "Ih",
+            ("E", "C5_i", "C5_i2", "C5_i3", "C5_i4", "C3_i", "C2_i", "i"),
+            (
+                ("Ag", (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)),
+                ("T1g", (3.0, phi, phi_bar, phi_bar, phi, 0.0, -1.0, 3.0)),
+                ("T2g", (3.0, phi_bar, phi, phi, phi_bar, 0.0, -1.0, 3.0)),
+                ("Gg", (4.0, -1.0, -1.0, -1.0, -1.0, 1.0, 0.0, 4.0)),
+                ("Hg", (5.0, 0.0, 0.0, 0.0, 0.0, -1.0, 1.0, 5.0)),
+                ("Au", (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0)),
+                ("T1u", (3.0, phi, phi_bar, phi_bar, phi, 0.0, -1.0, -3.0)),
+                ("T2u", (3.0, phi_bar, phi, phi, phi_bar, 0.0, -1.0, -3.0)),
+                ("Gu", (4.0, -1.0, -1.0, -1.0, -1.0, 1.0, 0.0, -4.0)),
+                ("Hu", (5.0, 0.0, 0.0, 0.0, 0.0, -1.0, 1.0, -5.0)),
+            ),
+        ),
+        (
+            "D2d",
+            ("E", "C2z", "C2_xy_2_0", "C2_xy_2_1", "S4"),
+            (
+                ("A1'", (1.0, 1.0, 1.0, 1.0, 1.0)),
+                ("A1''", (1.0, 1.0, 1.0, 1.0, -1.0)),
+                ("A2'", (1.0, 1.0, -1.0, -1.0, 1.0)),
+                ("A2''", (1.0, 1.0, -1.0, -1.0, -1.0)),
+                ("B1'", (1.0, -1.0, -1.0, -1.0, 1.0)),
+                ("B1''", (1.0, -1.0, -1.0, -1.0, -1.0)),
+                ("B2'", (1.0, -1.0, 1.0, 1.0, 1.0)),
+                ("B2''", (1.0, -1.0, 1.0, 1.0, -1.0)),
+            ),
+        ),
+        (
+            "D3d",
+            ("E", "C3z^1", "C3z^2", "C2_xy_3_0", "i"),
+            (
+                ("A1g", (1.0, 1.0, 1.0, 1.0, 1.0)),
+                ("A1u", (1.0, 1.0, 1.0, 1.0, -1.0)),
+                ("A2g", (1.0, 1.0, 1.0, -1.0, 1.0)),
+                ("A2u", (1.0, 1.0, 1.0, -1.0, -1.0)),
+                ("E1g", (4.0, -2.0, -2.0, 0.0, 4.0)),
+                ("E1u", (4.0, -2.0, -2.0, 0.0, -4.0)),
+            ),
+        ),
+    )
+
+    for point_group, labels, expected in cases:
+        _assert_merlino_character_rows(point_group, labels, expected)
 
 
 def test_oracle_symmetry_detects_tetrahedral_operations():

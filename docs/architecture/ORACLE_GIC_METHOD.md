@@ -125,15 +125,14 @@ final linear combinations to `[FROZEN_GICS]`. The method is recorded as
 `POINT_GROUP_PROJECTOR` with policy
 `HOMOGENEOUS_TYPE_BLOCK_POINT_GROUP_PROJECTOR`.
 
-The Python projector character layer is aligned with the Merlino family
-notation for `Cn`, `Cnv`, `Cnh`, `Dn`, `Dnh` and `Dnd`, with explicit tested
-handling for `C2h`, `D2`, `D2h` and the low-symmetry cases `C1`, `Cs`, `Ci`,
-`C2` and `C2v`. It also supports matrix-classified `Td`, `Oh`, `I` and `Ih`
-character rows. This is intentional: high-symmetry polyhedral groups should be
-classified from the actual 3x3 operation matrix, not from fragile
-operation-label spelling. The vendored Fortran `symm.f` remains the reference
-source for Merlino-style operation builders and now includes `I/Ih` operation
-generation alongside `Dnd`, `Td` and `Oh`.
+The Python projector character layer preserves Merlino3.0 label-only behavior
+for `Cn`, `Cnv`, `Cnh`, `Dn`, `Dnh`, `Dnd`, `Td`, `Oh`, `I` and `Ih`, including
+legacy row order and labels. When the `[SYMMETRY]` block also carries operation
+matrices, ORACLE may use matrix-classified rows for `Dnd`, `Td`, `Oh`, `I` and
+`Ih`; that path is an extension, not a replacement for the Merlino-compatible
+label path. The vendored Fortran `symm.f` remains the reference source for
+Merlino-style operation builders and now includes `I/Ih` operation generation
+alongside `Dnd`, `Td` and `Oh`.
 
 Scalar primitives transform by atom permutation and, where appropriate, a sign:
 stretches, bends and center distances are invariant scalars; torsions change
