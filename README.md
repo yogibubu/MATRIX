@@ -33,6 +33,11 @@ ORACLE modules must not reinvent shared operations. Common tasks such as
 sectioned XYZ I/O, atom and isotope data, topology, symmetry, GIC construction,
 Gaussian parsing, backend execution and manifests belong to shared libraries.
 
+Python and strict Fortran77 implementations may intentionally coexist for the
+same scientific kernel. In that case they are backends behind one ORACLE service
+contract, with shared schemas, shared enriched XYZ sections and shared
+regression or identity tests.
+
 The enriched XYZ file is the canonical communication object between modules:
 tools append or replace their own uppercase sections and preserve all unrelated
 sections. See

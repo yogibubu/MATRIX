@@ -122,6 +122,13 @@ All ORACLE modules must reuse the same libraries for the same tasks. The suite
 must not grow duplicate XYZ parsers, topology builders, isotope tables, GIC
 builders, Gaussian parsers, manifest writers or backend launchers.
 
+This does not forbid intentional dual scientific kernels. Some modules may have
+both Python and strict Fortran77 implementations. In ORACLE these are treated as
+backends behind one service contract, not as separate tools with separate data
+models. They must consume the same enriched XYZ sections, use the same shared
+libraries around the kernel, record backend metadata in the manifest and share
+identity/regression tests.
+
 The canonical communication file is an enriched XYZ container. It starts with a
 plain XYZ block and is progressively enriched by named uppercase sections. Each
 tool owns only its own section, replaces only that section and preserves all
@@ -153,7 +160,8 @@ This constraint is formalized in
 
 - GIC construction, ring numbering, symmetry labels, SYCART, frozen schemas,
   B-matrix evaluation and Python/Fortran comparison.
-- Owns the GICForge public service and normalized schema.
+- Owns the GICForge public service, normalized schema and Python/Fortran77
+  backend contract.
 
 `oracle-morpheus`
 
@@ -180,6 +188,7 @@ This constraint is formalized in
   engines.
 - GUI and scientific packages should call this layer instead of executing
   binaries directly.
+- Backend metadata and executable/source checksums are recorded in manifests.
 
 `oracle-dvr`
 

@@ -5,9 +5,15 @@ Date: 2026-06-26
 ## Decision
 
 All ORACLE tools must use shared libraries for shared tasks. A module must not
-reimplement parsing, topology perception, isotope handling, GIC construction,
-Gaussian parsing, manifest writing, section management or backend execution when
-an ORACLE library already owns that function.
+reimplement parsing, topology perception, isotope handling, Gaussian parsing,
+manifest writing, section management or backend execution when an ORACLE
+library already owns that function.
+
+Some scientific kernels intentionally exist in both Python and strict Fortran77.
+This is not considered unwanted duplication. These are multiple backends for
+the same public service contract. They must share the same input/output schemas,
+the same enriched XYZ section contracts, the same manifests and the same
+regression or identity tests wherever numerical identity is expected.
 
 The main communication object between tools is an enriched XYZ container:
 
@@ -37,9 +43,33 @@ operations must have one implementation:
 - backend discovery and execution;
 - run manifests and checksums.
 
+For numerical kernels, "one implementation" means one public ORACLE service and
+one data contract, not necessarily one programming language. Python and Fortran77
+implementations may coexist when this is useful for performance, validation,
+legacy compatibility or independent scientific cross-checking.
+
 When every module reads and writes the same enriched XYZ container through the
 same library APIs, GICForge, MORPHEUS, GF/PED, DVR, VPT2/VCI and GUI workflows
 can be developed independently without duplicating data models.
+
+## Backend Policy
+
+Python and Fortran77 backends are allowed and sometimes required. The rules are:
+
+- The user-facing service API is defined once in an ORACLE package.
+- The enriched XYZ sections and auxiliary files consumed or produced by the
+  service are schema-controlled.
+- Backend selection is explicit in parameters and recorded in the manifest.
+- Backend-specific temporary files stay inside the run directory.
+- Python and Fortran77 implementations share fixtures and regression tests.
+- If exact identity is expected, an identity test is required. If small
+  numerical differences are expected, the tolerance and reason must be
+  documented.
+- GUI code never calls either backend directly; it calls the shared service.
+
+Examples of legitimate dual implementations include GIC construction and
+B-matrix evaluation, DVR kernels, GF/VPT2/VCI kernels and legacy-compatible
+semiexperimental solvers.
 
 ## Container Shape
 
@@ -116,9 +146,9 @@ oracle-chem
 oracle-gaussian
   Gaussian adapters only
 oracle-gicforge
-  GIC/SYCART schemas and B matrices
+  GIC/SYCART schemas, B matrices and Python/Fortran77 backend adapters
 oracle-morpheus, oracle-gf, oracle-dvr, oracle-vpt2-vci
-  consume shared models and append their own sections
+  consume shared models, select backends and append their own sections
 oracle-gui
   calls services; does not own scientific logic
 ```
@@ -134,4 +164,3 @@ may use `oracle-chem`, but `oracle-chem` must not import `oracle-gicforge`.
 - Tests must check section preservation whenever a tool updates the container.
 - Compatibility readers can accept old `merlino.xyzin.*` schemas, but new
   output should use `oracle.xyz.*` schemas.
-
