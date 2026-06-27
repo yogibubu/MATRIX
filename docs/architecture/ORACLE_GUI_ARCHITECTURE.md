@@ -28,6 +28,7 @@ The project/workflow windows are:
 | Window | Responsibility | Main sections |
 | --- | --- | --- |
 | ORACLE Project Dashboard | Project state, validation, section/workflow status | all sections |
+| Tool Contracts | Standalone tool readiness from the current `xyzin` sections | all tool-owned sections |
 | ORACLE-Babel / Preprocessing | Import XYZ, QM formats, Z-matrix, SMILES/RDKit and LCB25 | `#SOURCE`, `#BASIC`, `#SYMMETRY`, `#TOPOLOGY`, `#SYNTHONS` |
 | Molecule Editor / Avogadro Bridge | Open/edit the first XYZ block and reimport edited coordinates | XYZ block |
 | Molecular Structure / Synthons | Inspect bonds, rings, charges, synthons and fragments | `#TOPOLOGY`, `#SYNTHONS`, `#FRAGMENTS` |
@@ -119,6 +120,17 @@ rovibrational summary, Thermo, VPT2/VCI collection and DVR collection. Actions
 that need additional file choices, such as ORACLE-Babel import or FCHK
 promotion, remain command specifications until their dedicated windows provide
 the required file selectors.
+
+## Tool Contracts Tab
+
+The Tool Contracts tab uses `oracle_gui.contracts` and the central
+`oracle_core.tool_contracts` registry. It lists each standalone tool, its
+current name, future MATRIX-era name where defined, required `xyzin` sections,
+missing sections and canonical CLI entry point.
+
+The tab is read-only. It must not maintain a private readiness model or infer
+scientific prerequisites from GUI state. The same readiness logic is exposed by
+`python -m oracle contracts --check-xyzin molecule.xyzin`.
 
 ## Structure And ORACLE-Babel Tab
 

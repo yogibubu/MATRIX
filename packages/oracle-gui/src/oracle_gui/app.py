@@ -4,6 +4,11 @@ import argparse
 from pathlib import Path
 
 from .commands import OracleGuiCommand
+from .contracts import (
+    ToolContractTable,
+    load_tool_contract_gui_state,
+    tool_contract_gui_state_lines,
+)
 from .dashboard import DashboardAction, OracleDashboardController
 from .gicforge import (
     GICForgeTable,
@@ -140,6 +145,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.action_table.itemDoubleClicked.connect(self.run_selected_action)
             actions_layout.addWidget(self.action_table)
             tabs.addTab(actions_tab, "Actions")
+            contracts_tab = self._build_contracts_tab()
+            tabs.addTab(contracts_tab, "Tool Contracts")
             structure_tab = self._build_structure_tab()
             tabs.addTab(structure_tab, "Structure")
             gicforge_tab = self._build_gicforge_tab()
@@ -184,6 +191,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.workflow_list.clear()
             self.section_table.setRowCount(0)
             self.action_table.setRowCount(0)
+            self._clear_contracts_table()
             self._clear_structure_tables()
             self._clear_gicforge_tables()
             self._clear_gf_tables()
@@ -195,6 +203,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.gf_summary.setPlainText("No ORACLE project loaded")
                 self.sefit_summary.setPlainText("No ORACLE project loaded")
                 self.trinity_summary.setPlainText("No ORACLE project loaded")
+                self.contracts_summary.setPlainText("No ORACLE project loaded")
                 self.details.setPlainText(
                     "\n".join(
                         f"{spec.title}: {spec.description}" for spec in ORACLE_GUI_WINDOWS
@@ -228,6 +237,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.section_table.setItem(row, 2, QTableWidgetItem(section.schema or ""))
             self.section_table.resizeColumnsToContents()
             self._populate_actions(state)
+            self._populate_contracts_table(state.xyzin)
 
             self.details.setPlainText(
                 "\n".join(
@@ -309,6 +319,32 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                         item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
                     self.action_table.setItem(row, column, item)
             self.action_table.resizeColumnsToContents()
+
+        def _build_contracts_tab(self) -> QWidget:
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+            self.contracts_summary = QTextEdit()
+            self.contracts_summary.setReadOnly(True)
+            self.contracts_summary.setMaximumHeight(90)
+            layout.addWidget(self.contracts_summary)
+            self.contracts_table = QTableWidget(0, 8)
+            layout.addWidget(self.contracts_table, stretch=1)
+            return tab
+
+        def _populate_contracts_table(self, xyzin: Path) -> None:
+            state = load_tool_contract_gui_state(xyzin)
+            self.contracts_summary.setPlainText(
+                "\n".join(tool_contract_gui_state_lines(state))
+            )
+            self._fill_table(self.contracts_table, state.table)
+
+        def _clear_contracts_table(self) -> None:
+            summary = getattr(self, "contracts_summary", None)
+            if summary is not None:
+                summary.clear()
+            table = getattr(self, "contracts_table", None)
+            if table is not None:
+                table.setRowCount(0)
 
         def run_selected_action(self, _item=None) -> None:
             row = self.action_table.currentRow()
@@ -1290,7 +1326,14 @@ def _run_qt(initial_xyzin: Path | None) -> int:
         def _fill_table(
             self,
             widget: QTableWidget,
-            table: StructureTable | GICForgeTable | GFTable | SEFitTable | TrinityTable,
+            table: (
+                StructureTable
+                | GICForgeTable
+                | GFTable
+                | SEFitTable
+                | TrinityTable
+                | ToolContractTable
+            ),
         ) -> None:
             widget.setColumnCount(len(table.columns))
             widget.setHorizontalHeaderLabels(table.columns)

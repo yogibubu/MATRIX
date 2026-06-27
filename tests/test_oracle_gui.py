@@ -44,6 +44,7 @@ from oracle_gui import (
     load_gicforge_gui_state,
     load_oracle_project_state,
     load_structure_gui_state,
+    load_tool_contract_gui_state,
     load_vpt2_vci_gui_state,
     molden_command,
     preprocess_command,
@@ -59,6 +60,7 @@ from oracle_gui import (
     trinity_prepare_command,
     trinity_gui_state_lines,
     load_trinity_gui_state,
+    tool_contract_gui_state_lines,
 )
 from oracle_vpt2_vci import vpt2_vci_section_from_run, write_vpt2_vci_section
 
@@ -209,6 +211,39 @@ def test_gui_project_state_missing_file_is_reported_without_crashing(tmp_path):
     assert not state.exists
     assert state.validation_status == "MISSING"
     assert state.workflow("dashboard").status == WorkflowStatus.MISSING
+
+
+def test_gui_tool_contract_state_reports_standalone_readiness(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text(
+        "\n".join(
+            [
+                "1",
+                "h",
+                "H 0.0 0.0 0.0",
+                "",
+                "#BASIC",
+                "SCHEMA oracle.xyz.basic.v1",
+                "",
+                "#ROTATIONAL",
+                "SCHEMA oracle.xyz.rotational.v1",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = load_tool_contract_gui_state(xyzin)
+    lines = tool_contract_gui_state_lines(state)
+    rows = {row[0]: row for row in state.table.rows}
+
+    assert state.exists
+    assert "ready tools:" in "\n".join(lines)
+    assert rows["thermo"][3] == "yes"
+    assert rows["thermo"][5] == "none"
+    assert rows["gf"][3] == "no"
+    assert rows["gf"][5] == "GIC, CARTESIAN_HESSIAN"
+    assert rows["gicforge"][2] == "NEO"
 
 
 def test_dashboard_controller_builds_ready_actions_from_xyzin_sections(tmp_path):
