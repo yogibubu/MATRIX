@@ -39,7 +39,7 @@ The following items start the next release and are not blockers for this one:
 - VSCF for harmonically coupled anharmonic oscillators in local modes;
 - vibronic spectroscopy;
 - ionization-potential and electron-affinity workflows;
-- online help/manual generation for the most important CLI and GUI tools;
+- expanded online help/manual coverage for future tools;
 - repository-wide `ruff` cleanup and promotion of full-repo linting to a CI
   release gate;
 - rotational database comparison adapters for CDMS/JPL/Splatalogue;

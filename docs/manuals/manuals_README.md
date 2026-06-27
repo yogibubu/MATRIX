@@ -24,14 +24,18 @@ Recommended reading order for a new workflow:
    refinements with shared class corrections.
 
 All PDF files are generated from the adjacent LaTeX sources with `latexmk`.
+For in-program help, use `matrix help`, `matrix help TOOL`,
+`matrix manuals TOOL --format markdown` or the ORACLE GUI `Help` tab. These
+views are generated from the same tool-contract metadata used to validate xyzin
+sections, so missing-section guidance stays aligned with the CLI and GUI.
 
 ## Manual Completion Plan
 
 The current first-release manual pass is closed by `matrix_first_release_manual`
-plus the specialist manuals listed above. Fragment search, nano-LEGO assembly,
-production TRINITY optimization, PySCF adapters, VSCF, vibronic spectroscopy,
-IP/EA workflows and generated online help belong to the next release and do not
-block this release.
+plus the specialist manuals listed above and the generated online help exposed
+through the CLI and GUI. Fragment search, nano-LEGO assembly, production
+TRINITY optimization, PySCF adapters, VSCF, vibronic spectroscopy and IP/EA
+workflows belong to the next release and do not block this release.
 
 | Manual | Status | Scope |
 | --- | --- | --- |

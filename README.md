@@ -64,6 +64,15 @@ Full MATRIX installation notes, including visualization programs
 Avogadro, Molden, MOrbVis browser fallback and XQuartz setup, are in
 [`docs/INSTALL_MATRIX.md`](docs/INSTALL_MATRIX.md).
 
+Tool contracts, manual links and missing-section guidance are available from
+the same metadata used by the GUI:
+
+```bash
+python -m matrix help
+python -m matrix help gf --xyzin molecule.xyzin
+python -m matrix manuals NEO --format markdown
+```
+
 The demanding `test_molecules` corpus is versioned under
 `tests/fixtures/test_molecules` for GICForge/parser regressions.
 

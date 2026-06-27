@@ -178,6 +178,54 @@ def test_contracts_cli_checks_xyzin_readiness(tmp_path, capsys):
     assert "gf: ready=0 missing=GIC, CARTESIAN_HESSIAN" in out
 
 
+def test_help_cli_lists_manuals_and_xyzin_completion_guidance(tmp_path, capsys):
+    xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text(
+        "\n".join(
+            [
+                "1",
+                "h",
+                "H 0.0 0.0 0.0",
+                "",
+                "#BASIC",
+                "SCHEMA oracle.xyz.basic.v1",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rc = matrix_run.main(["help", "gf", "--xyzin", str(xyzin)])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "gf: GF / PED" in out
+    assert "docs/manuals/gf_manual.pdf" in out
+    assert "missing=GIC, CARTESIAN_HESSIAN" in out
+    assert "#GIC: use NEO / GICForge -> Build GICs" in out
+    assert "#CARTESIAN_HESSIAN: use QM Jobs -> Promote Gaussian FCHK" in out
+
+
+def test_help_cli_maps_qm_adapter_aliases(capsys):
+    rc = matrix_run.main(["help", "gaussian"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "qm_adapters: QM adapters" in out
+    assert "matrix gaussian promote-fchk" in out
+    assert "docs/architecture/ADR-0003-UNIFIED-GEOMETRY-AND-QM-PARSERS.md" in out
+
+
+def test_manuals_cli_alias_emits_json_help(capsys):
+    rc = matrix_run.main(["manuals", "NEO", "--format", "json"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert '"key": "gicforge"' in out
+    assert '"manual_paths"' in out
+    assert '"docs/manuals/gicforge_manual.pdf"' in out
+
+
 def test_link_preprocess_cli_calls_shared_pipeline(tmp_path, monkeypatch, capsys):
     calls = {}
     source = tmp_path / "source.inp"

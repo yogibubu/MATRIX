@@ -78,16 +78,19 @@ release is complete when the following conditions hold:
   \item the same libraries are used for geometry, topology, symmetry,
         normal-mode data, diagonalization and publication exports;
   \item manuals identify consumed sections, produced sections, standalone
-        commands, GUI placement and regression tests.
+        commands, GUI placement and regression tests;
+  \item CLI help, manual links and GUI help panels are generated from the same
+        tool-contract metadata used by the \xyzin{} readiness checks.
 \end{itemize}
 
 The next release owns robust fragment search, nano-LEGO fragmentation and
 assembly, LCB25 fragment indexing, the production TRINITY external
 energy/gradient optimization loop, PySCF launch/analysis adapters, VSCF for
 local anharmonic oscillators, vibronic spectroscopy, ionization potentials,
-electron affinities and online help/manual generation.  The current release
-keeps the fragment and TRINITY schemas, command skeletons and GUI entry points
-so downstream design does not need another reorganization.
+electron affinities and expanded help content for new tools.  The current
+release keeps the fragment and TRINITY schemas, command skeletons, GUI entry
+points and online help for implemented tools so downstream design does not need
+another reorganization.
 
 \section{Shared Container Contract}
 
@@ -405,6 +408,6 @@ release can be declared closed when the repository is clean, the full tests
 pass, and the manuals are generated from source.  The next release then starts
 from a clear scope: robust fragments, nano-LEGO, LCB25 fragment indexing,
 production TRINITY optimization, PySCF adapters, VSCF, vibronic spectroscopy,
-IP/EA workflows and online help/manual generation.
+IP/EA workflows and expanded help/manual coverage for those new tools.
 
 \end{document}

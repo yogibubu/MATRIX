@@ -71,6 +71,46 @@ TOOL_CONTRACTS: tuple[ToolContract, ...] = (
         ),
     ),
     ToolContract(
+        key="qm_adapters",
+        display_name="QM adapters",
+        current_package="matrix-gaussian / matrix-molpro / matrix-mrcc",
+        standalone_command=(
+            "matrix gaussian promote-fchk|promote-rovib|promote-electronic; "
+            "matrix molpro promote; matrix mrcc promote"
+        ),
+        produced_sections=(
+            "SOURCE",
+            "BASIC",
+            "SYMMETRY",
+            "TOPOLOGY",
+            "SYNTHONS",
+            "CARTESIAN_HESSIAN",
+            "NORMAL_MODES",
+            "QFF",
+            "ROTATIONAL",
+            "VIBRATIONAL",
+            "DELTABVIB",
+            "ELECTRONIC",
+            "TRANSITIONS",
+            "ORBITALS",
+        ),
+        owned_sections=(
+            "CARTESIAN_HESSIAN",
+            "NORMAL_MODES",
+            "QFF",
+            "ROTATIONAL",
+            "VIBRATIONAL",
+            "DELTABVIB",
+            "ELECTRONIC",
+            "TRANSITIONS",
+            "ORBITALS",
+        ),
+        notes=(
+            "One adapter owns each external QM format. Scientific tools consume only "
+            "the normalized xyzin sections and never reparse Gaussian/Molpro/MRCC output."
+        ),
+    ),
+    ToolContract(
         key="fragments",
         display_name="Fragments / nano-lego",
         current_package="matrix-fragments",
@@ -200,6 +240,8 @@ def tool_contract(key: str) -> ToolContract:
     normalized = key.strip().lower().replace("-", "_")
     if normalized in {"babel", "matrix_link", "oracle_babel"}:
         normalized = "link"
+    if normalized in {"gaussian", "molpro", "mrcc", "qm", "qm_jobs", "qm_adapters"}:
+        normalized = "qm_adapters"
     for contract in TOOL_CONTRACTS:
         if contract.key == normalized:
             return contract

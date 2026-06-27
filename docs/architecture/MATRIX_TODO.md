@@ -42,15 +42,20 @@
   implementation should reuse existing GF/GIC force constants, QFF/DVR
   contracts and the shared diagonalizer instead of introducing private
   vibrational data structures.
+- Add an optional GF scaling-rule frontend inspired by the reviewed local
+  `vibint` utility: family rules, typed chemical rules, wildcards, rule
+  priorities and dry-run assignment previews. It must translate to the existing
+  MATRIX GF `--scale`/`--scale-file` factors using frozen `#GIC`, `#SYNTHONS`
+  and shared topology metadata; do not port `vibint` Gaussian-log parsing or
+  private GF reconstruction.
 - Add vibronic spectroscopy workflows, including electronic-transition,
   normal-mode and Franck-Condon/Herzberg-Teller data contracts, with plotting
   and publication exports in the electronic/vibrational workbenches.
 - Add ionization-potential and electron-affinity workflows. Supported modes
   should include vertical and adiabatic IP/EA, spin/state bookkeeping,
   provenance of charge states and connection to electronic spectra.
-- Add online help and in-program manuals for the most important tools. At
-  minimum, `oracle <tool> --help`, GUI help panels and manual links should be
-  generated from the same tool contract metadata used by the CLI and docs.
+- Verify where Watson A/S rotational-constant conversions are implemented,
+  including quartic and sextic terms, and document the public entry points.
 - Add run manifests for every multi-step workflow so each publication figure or
   table can be traced back to input sections, command-line options, external
   executables and MATRIX version.

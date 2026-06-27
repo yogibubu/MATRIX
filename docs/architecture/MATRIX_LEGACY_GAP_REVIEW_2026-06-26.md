@@ -175,3 +175,51 @@ Validation for this cleanup pass:
 - `PYTHONPATH=. pytest -q tests/test_matrix_morpheus.py tests/test_matrix_neo.py tests/test_gic_regression_corpus.py`
   returned `46 passed`.
 - `PYTHONPATH=. pytest -q` returned `125 passed`.
+
+## VibInt and VarAnh Local Review 2026-06-27
+
+Reviewed local sources:
+
+- `/Users/vincenzobarone/vibint`
+- `/Users/vincenzobarone/varanh`
+
+`vibint` is a compact GF scaling utility centered on
+`/Users/vincenzobarone/vibint/scale-gf.py`. It reconstructs a Gaussian/GDV
+frequency-log GF problem from printed GIC, Wilson B, B-derivative, Hessian and
+gradient blocks, then applies force-constant scaling and recomputes harmonic
+frequencies. Its scientific core should not be ported into MATRIX because the
+MATRIX GF path is already the stronger architecture:
+
+- external Gaussian parsing is owned by the shared QM adapters, not by GF;
+- NEO owns the frozen GIC definition and analytic B-matrix evaluation;
+- GF consumes normalized `#GIC` and `#CARTESIAN_HESSIAN` sections;
+- Pulay-style scaling already acts on GIC force constants and applies
+  off-diagonal geometric-mean factors;
+- `--local`, force thresholds and electrostatic/UFF-vdW subtraction are already
+  implemented in MATRIX GF.
+
+The useful `vibint` idea is user-facing rather than algorithmic: its rule
+grammar for scaling by coordinate family, chemical subtype, wildcard and
+priority is convenient. This should be considered as a MATRIX GF frontend that
+translates typed rules into the existing `--scale`/`--scale-file` factors using
+frozen `#GIC` labels, GIC names and `#SYNTHONS`. The Gaussian-log parser,
+Tkinter GUI and private GF reconstruction in `vibint` should not be recycled.
+
+`varanh` contains historical Fortran77 one-dimensional DVR and variational
+anharmonic prototypes (`dvrHam.f`, `VCI.f`). The active MATRIX implementation
+already covers the reusable parts in a cleaner way:
+
+- `engines/fortran/dvr/path_dvr.f` provides the active downstream Fortran77 DVR
+  kernel for nonperiodic sinc, periodic Fourier, distributed-Gaussian and 2D
+  product-grid Hamiltonians;
+- `packages/matrix-dvr` owns normalized `#DVR` state, manifests, direct runs
+  and output collection;
+- `engines/puckering_dvr/scripts/mw_path_dvr.py` handles Gaussian-derived
+  mass-weighted paths, periodic/nonperiodic choices, 1D/2D grids and plotting;
+- `packages/matrix-vpt2-vci` and `engines/fortran/vpt2_vci` already provide
+  normalized VPT2/VCI basis generation, pruning, symmetry blocks and Davidson
+  support.
+
+No `varanh` code should be ported at this stage. It can remain a historical
+source for formula checks or future golden regression cases, but it does not
+identify a missing MATRIX DVR/VCI capability.

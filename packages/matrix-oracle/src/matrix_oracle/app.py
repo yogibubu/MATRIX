@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from matrix_core.online_help import online_help_text
+
 from .commands import OracleGuiCommand
 from .contracts import (
     ToolContractTable,
@@ -193,6 +195,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             tabs.addTab(actions_tab, "Actions")
             contracts_tab = self._build_contracts_tab()
             tabs.addTab(contracts_tab, "Tool Contracts")
+            help_tab = self._build_help_tab()
+            tabs.addTab(help_tab, "Help")
             structure_tab = self._build_structure_tab()
             tabs.addTab(structure_tab, "Structure")
             gicforge_tab = self._build_gicforge_tab()
@@ -258,6 +262,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._clear_thermo_kinetics_tables()
             self._clear_trinity_tables()
             self._clear_workbench_tables()
+            self._clear_help_tab()
             if self.controller.xyzin is None:
                 self.path_label.setText("No MATRIX project loaded")
                 self.gicforge_summary.setPlainText("No MATRIX project loaded")
@@ -268,6 +273,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.thermo_kinetics_summary.setPlainText("No MATRIX project loaded")
                 self.trinity_summary.setPlainText("No MATRIX project loaded")
                 self.contracts_summary.setPlainText("No MATRIX project loaded")
+                self.help_summary.setPlainText(online_help_text())
                 for summary in self.workbench_summaries.values():
                     summary.setPlainText("No MATRIX project loaded")
                 self.details.setPlainText(
@@ -310,6 +316,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.section_table.resizeColumnsToContents()
             self._populate_actions(state)
             self._populate_contracts_table(state.xyzin)
+            self._populate_help_tab(state.xyzin)
 
             self.details.setPlainText(
                 "\n".join(
@@ -421,6 +428,22 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             table = getattr(self, "contracts_table", None)
             if table is not None:
                 table.setRowCount(0)
+
+        def _build_help_tab(self) -> QWidget:
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+            self.help_summary = QTextEdit()
+            self.help_summary.setReadOnly(True)
+            layout.addWidget(self.help_summary, stretch=1)
+            return tab
+
+        def _populate_help_tab(self, xyzin: Path) -> None:
+            self.help_summary.setPlainText(online_help_text(xyzin=xyzin))
+
+        def _clear_help_tab(self) -> None:
+            summary = getattr(self, "help_summary", None)
+            if summary is not None:
+                summary.clear()
 
         def _build_workbench_tab(self, key: str) -> QWidget:
             tab = QWidget()

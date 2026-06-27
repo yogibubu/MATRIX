@@ -67,6 +67,21 @@ def build_parser(
     )
     contracts.add_argument("--no-gui", action="store_true", help="Omit the GUI orchestrator")
 
+    help_cmd = sub.add_parser(
+        "help",
+        aliases=("manuals",),
+        help="Show online help and manual links for MATRIX tools",
+    )
+    help_cmd.add_argument("tool", nargs="?", help="Tool key, planned name or compatibility alias")
+    help_cmd.add_argument("--xyzin", type=Path, help="Show readiness against a MATRIX xyzin file")
+    help_cmd.add_argument(
+        "--format",
+        choices=("text", "json", "markdown"),
+        default="text",
+        help="Output format",
+    )
+    help_cmd.add_argument("--no-gui", action="store_true", help="Omit the GUI orchestrator")
+
     link = sub.add_parser("link", help="Run LINK preprocessing/import")
     link_sub = link.add_subparsers(dest="link_command")
     link_preprocess = link_sub.add_parser("preprocess", help="Import a source into xyzin")
@@ -780,6 +795,36 @@ def main(
             print(tool_contract_markdown_table(rows))
         else:
             print("\n".join(tool_contract_lines(rows)))
+        return 0
+    if args.command in {"help", "manuals"}:
+        from matrix_core import online_help_json, online_help_lines, online_help_markdown
+
+        if args.format == "json":
+            print(
+                online_help_json(
+                    args.tool,
+                    xyzin=args.xyzin,
+                    include_gui=not args.no_gui,
+                )
+            )
+        elif args.format == "markdown":
+            print(
+                online_help_markdown(
+                    args.tool,
+                    xyzin=args.xyzin,
+                    include_gui=not args.no_gui,
+                )
+            )
+        else:
+            print(
+                "\n".join(
+                    online_help_lines(
+                        args.tool,
+                        xyzin=args.xyzin,
+                        include_gui=not args.no_gui,
+                    )
+                )
+            )
         return 0
     if _is_link_command(args):
         from matrix_chem import SymmetryThresholds, preprocess_to_enriched_xyz
