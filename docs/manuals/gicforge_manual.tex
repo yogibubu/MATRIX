@@ -238,13 +238,12 @@ For ring systems, endocyclic torsions are not meant to appear as an arbitrary
 list of raw dihedrals in the final model.  They are the primitive source from
 which \program{} builds protected ring-puckering components.  ORACLE stores the
 linear \texttt{RPck} components in the frozen GIC definition because their B
-rows are analytic linear combinations of dihedral B rows.  For isolated rings,
-the Gaussian block can write those \texttt{RPck} components as inactive
-auxiliaries and derive active \texttt{QPck} and \texttt{PhiP} functionals from
-consecutive \texttt{RPck} pairs.  For fused rings, the selected
-\texttt{RPck} components remain the active exported coordinates and are
-symmetrized directly; the code does not collapse the fused-ring puckering
-space into polar coordinates for individual rings.
+rows are analytic linear combinations of dihedral B rows.  The Gaussian block
+exports the selected \texttt{RPck} components directly.  The polar
+\(q,\phi\)-like descriptors are derived in post-processing from those
+components, because \(\Phi\) is a phase in the puckering subspace rather than a
+linear symmetry coordinate and is singular at \(Q=0\).  This rule is used for
+isolated and fused rings alike.
 
 \subsection{Rank reduction and final basis}
 
@@ -313,12 +312,12 @@ Prefix & Family \\
 \texttt{Tors} & exocyclic torsion; \\
 \texttt{BtFl} & butterfly torsion around a bond shared by two rings; \\
 \texttt{CyGNA} & endocyclic valence-angle combination; \\
-\texttt{QPck} & active ring puckering amplitude-like coordinate built from
-endocyclic torsions; \\
-\texttt{PhiP} & active ring puckering phase-like coordinate built from
-endocyclic torsions; \\
-\texttt{RPck} & inactive Gaussian auxiliary and frozen ORACLE linear
-ring-puckering component with analytic B row; \\
+\texttt{QPck} & post-processing ring-puckering amplitude-like descriptor built
+from \texttt{RPck} components; \\
+\texttt{PhiP} & post-processing ring-puckering phase-like descriptor built from
+\texttt{RPck} components; \\
+\texttt{RPck} & frozen ORACLE linear ring-puckering component with analytic B
+row and Gaussian ReadGIC export; \\
 \texttt{OuPl} & out-of-plane coordinate; \\
 \texttt{ImpD} & improper-dihedral compatibility coordinate. \\
 \bottomrule
@@ -338,10 +337,9 @@ of primitive dihedrals
   D(a_{i-1},a_i,a_{i+1},a_{i+2}).
 \]
 The primitive torsions are first transformed to \texttt{RPck} components.  The
-frozen ORACLE B matrix uses these linear components directly.  For isolated
-rings in Gaussian ReadGIC export, consecutive selected \texttt{RPck} pairs are
-written as inactive auxiliaries and converted to active puckering coordinates
-\texttt{QPck} and \texttt{PhiP}:
+frozen ORACLE B matrix and Gaussian ReadGIC export use these linear components
+directly.  Consecutive selected \texttt{RPck} pairs can be converted after the
+run to puckering descriptors:
 \[
   Q = \sqrt{RPck_i^2 + RPck_j^2}, \qquad
   \Phi = \operatorname{atan2}(RPck_j,RPck_i).
@@ -355,24 +353,33 @@ Endocyclic Dihedral Angles
   5-Membered Ring (  13  12  16   1   2):  2 Dihedral angles
 
 Final ring torsion coordinates
-  RPck0001(Inactive) = ...
-  RPck0002(Inactive) = ...
+  RPck0001 = ...
+  RPck0002 = ...
+
+Post-processing descriptors
   QPck0001 = ...
   PhiP0001 = ...
 \end{lstlisting}
 
 \noindent
 For six-membered and larger isolated rings, the same rule is used: the
-primitive basis is endocyclic torsional, but the Gaussian-active coordinates are
-the independent \(q\)- and \(\phi\)-like ring deformation coordinates derived
-from selected \texttt{RPck} pairs.  If an odd component remains after pairing,
-it stays as an inactive \texttt{RPck} auxiliary.  Fused rings are treated
-differently: each elementary fused-ring cycle contributes its own protected
-ring-puckering source space, the fused set is reduced only within the protected
-ring family, and the surviving \texttt{RPck} components are exported directly.
+primitive basis is endocyclic torsional, the optimized Gaussian coordinates are
+the selected \texttt{RPck} components, and the \(q,\phi\)-like descriptors are
+computed later.  Fused rings are treated consistently: each elementary
+fused-ring cycle contributes its own protected ring-puckering source space, the
+fused set is reduced only within the protected ring family, and the surviving
+\texttt{RPck} components are exported directly.
 Fused rings also add \texttt{BtFl} butterfly coordinates around shared bonds.
 Butterfly coordinates remain in the torsional family for pruning because their
 B rows describe ring-puckering motion.
+
+For direct Gaussian \texttt{ReadAllGIC} optimizations, the exported block must
+remain a complete non-redundant internal-coordinate basis.  Although
+\program{} records the total-symmetric irrep and the list of total-symmetric
+GICs in the frozen \xyzin{} contract, Gaussian's Berny optimizer still requires
+the full active internal basis to build its metric.  MATRIX-controlled
+optimizers and least-squares workflows use the saved total-symmetric list to
+select symmetry blocks internally.
 
 \section{Coordinate Families}
 
@@ -408,9 +415,9 @@ Ring bend & Endocyclic valence-angle combinations are generated ring by ring,
 with canonical ring numbering. \\
 Ring torsion & Endocyclic torsions are converted to \texttt{RPck} components
 before pruning.  The frozen ORACLE basis keeps selected \texttt{RPck} rows for
-linear analytic B-matrix evaluation; isolated rings may additionally export
-active \texttt{QPck}/\texttt{PhiP} functionals for complete pairs, while fused
-rings keep the selected \texttt{RPck} rows active. \\
+linear analytic B-matrix evaluation and Gaussian export.  \texttt{QPck} and
+\texttt{PhiP} are derived post-processing descriptors, not active Gaussian
+optimization coordinates. \\
 Butterfly & Fused-ring butterfly coordinates are generated around shared bonds
 and kept as torsional ring-family coordinates. \\
 Out-of-plane & Default non-planarity primitives are \texttt{U(...)} out-of-plane

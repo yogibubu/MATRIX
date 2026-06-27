@@ -105,7 +105,7 @@ class OracleGICForgeController:
         self,
         output: Path | str,
         *,
-        route: str = "#p hf/sto-3g",
+        route: str = "#p hf/sto-3g opt=readallgic",
         title: str | None = None,
         charge: int | None = None,
         multiplicity: int | None = None,

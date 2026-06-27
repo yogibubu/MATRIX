@@ -90,7 +90,7 @@ def write_gicforge_gaussian_input(
     path: Path,
     output: Path,
     *,
-    route: str = "#p hf/sto-3g",
+    route: str = "#p hf/sto-3g opt=readallgic",
     title: str | None = None,
     charge: int | None = None,
     multiplicity: int | None = None,

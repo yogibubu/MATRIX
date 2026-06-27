@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from itertools import combinations
 from pathlib import Path
+import re
 
 import numpy as np
 
@@ -47,6 +48,9 @@ from .symmetry_labels import (
     non_total_irrep_sequence,
     total_symmetric_irrep,
 )
+
+
+_GAUSSIAN_DEPENDENCY_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*\b")
 
 
 @dataclass(frozen=True)
@@ -912,10 +916,72 @@ def write_gic_b_matrix(path: Path, output: Path) -> GICBMatrix:
     return matrix
 
 
-def gaussian_gic_lines_from_xyzin(path: Path) -> list[str]:
+def gaussian_gic_lines_from_xyzin(
+    path: Path,
+    *,
+    total_symmetric_only: bool = False,
+) -> list[str]:
     gic = section_content(read_sectioned_lines(Path(path)), "GIC")
     block = _subsection(gic, "GAUSSIAN_GIC")
-    return [line for line in block if line.strip() and line.strip().upper() != "NONE"]
+    lines = [line for line in block if line.strip() and line.strip().upper() != "NONE"]
+    if not total_symmetric_only:
+        return lines
+    total_names = set(_parse_text_list(_section_value(gic, "TOTAL_SYMMETRIC_GICS")))
+    if not total_names:
+        return lines
+    return _gaussian_dependency_closed_lines(lines, total_names)
+
+
+def _gaussian_dependency_closed_lines(lines: list[str], wanted_names: set[str]) -> list[str]:
+    definitions: dict[str, str] = {}
+    dependencies: dict[str, tuple[str, ...]] = {}
+    for line in lines:
+        label = _gaussian_definition_label(line)
+        if label is None:
+            continue
+        definitions[label] = line
+        dependencies[label] = tuple(_gaussian_definition_dependencies(line))
+
+    selected: set[str] = set()
+    stack = [name for name in wanted_names if name in definitions]
+    while stack:
+        name = stack.pop()
+        if name in selected:
+            continue
+        selected.add(name)
+        stack.extend(
+            dependency for dependency in dependencies.get(name, ()) if dependency in definitions
+        )
+
+    return [
+        line
+        for line in lines
+        if (label := _gaussian_definition_label(line)) is not None and label in selected
+    ]
+
+
+def _gaussian_definition_label(line: str) -> str | None:
+    if "=" not in line:
+        return None
+    label = line.split("=", 1)[0].strip()
+    if not label:
+        return None
+    return label.split("(", 1)[0].strip()
+
+
+def _gaussian_definition_dependencies(line: str) -> tuple[str, ...]:
+    if "=" not in line:
+        return ()
+    label = _gaussian_definition_label(line)
+    expression = line.split("=", 1)[1]
+    dependencies: list[str] = []
+    seen: set[str] = set()
+    for token in _GAUSSIAN_DEPENDENCY_RE.findall(expression):
+        if token == label or token in seen:
+            continue
+        seen.add(token)
+        dependencies.append(token)
+    return tuple(dependencies)
 
 
 def _topology_bonds(lines: list[str], *, natoms: int) -> tuple[tuple[int, int], ...]:
@@ -4786,25 +4852,11 @@ def _gaussian_gic_block_lines(definition: GICDefinition) -> list[str]:
         for frag_id, ref_id in sorted(frot_pairs):
             lines.extend(_gaussian_quaternion_lines(frag_id, ref_id))
 
-    primitive_by_id = {primitive.identifier: primitive for primitive in definition.primitives}
-    condensed_ring_keys = _condensed_ring_pucker_keys(definition, primitive_by_id)
-
     for gic in definition.gics:
         expression = _gaussian_expression_for_gic(definition, gic)
         if expression:
             label = _gaussian_label_for_gic(definition, gic)
-            if (
-                gic.family == "RING_PUCKER_COMPONENT"
-                and gic.gaussian_expression != "MERLINO_ACTIVE"
-                and not _ring_pucker_gic_is_condensed(
-                    gic,
-                    primitive_by_id,
-                    condensed_ring_keys,
-                )
-            ):
-                label = f"{label}(Inactive)"
             lines.append(f"{label} = {expression}")
-    lines.extend(_gaussian_ring_puckering_function_lines(definition))
     return lines
 
 
@@ -4812,46 +4864,6 @@ def _gaussian_label_for_gic(definition: GICDefinition, gic: FrozenGIC) -> str:
     if gic.family == "RING_PUCKER_COMPONENT":
         return gic.name
     return gic.name if definition.symmetrize else gic.identifier
-
-
-def _gaussian_ring_puckering_function_lines(definition: GICDefinition) -> list[str]:
-    if definition.symmetrize:
-        return _gaussian_symmetrized_ring_puckering_function_lines(definition)
-    primitive_by_id = {primitive.identifier: primitive for primitive in definition.primitives}
-    condensed_ring_keys = _condensed_ring_pucker_keys(definition, primitive_by_id)
-    groups: dict[tuple[int, ...], list[tuple[str, GICPrimitive | None]]] = {}
-    for gic in definition.gics:
-        if gic.family != "RING_PUCKER_COMPONENT":
-            continue
-        if _ring_pucker_gic_is_condensed(gic, primitive_by_id, condensed_ring_keys):
-            continue
-        ring_keys = _ring_pucker_source_ring_keys_for_gic(gic, primitive_by_id)
-        if not ring_keys:
-            continue
-        group_key = ring_keys[0]
-        primitive = _single_source_primitive(gic, primitive_by_id)
-        groups.setdefault(group_key, []).append(
-            (_gaussian_label_for_gic(definition, gic), primitive)
-        )
-
-    lines: list[str] = []
-    pair_index = 0
-    for components in groups.values():
-        if len(components) == 1:
-            label = components[0][0]
-            pair_index += 1
-            lines.append(f"QPck{pair_index:04d} = SQRT({label}*{label})")
-            lines.append(f"PhiP{pair_index:04d} = {label}")
-            continue
-        component_index = 0
-        while component_index + 1 < len(components):
-            left = components[component_index][0]
-            right = components[component_index + 1][0]
-            pair_index += 1
-            lines.append(f"QPck{pair_index:04d} = SQRT({left}*{left}+{right}*{right})")
-            lines.append(f"PhiP{pair_index:04d} = ATAN2({right},{left})")
-            component_index += 2
-    return lines
 
 
 def _ring_pucker_group_key_for_gic(
@@ -4995,37 +5007,6 @@ def _ring_pucker_gic_is_condensed(
 ) -> bool:
     source_rings = _ring_pucker_source_ring_keys_for_gic(gic, primitive_by_id)
     return any(ring in condensed_ring_keys for ring in source_rings)
-
-
-def _gaussian_symmetrized_ring_puckering_function_lines(
-    definition: GICDefinition,
-) -> list[str]:
-    primitive_by_id = {primitive.identifier: primitive for primitive in definition.primitives}
-    condensed_ring_keys = _condensed_ring_pucker_keys(definition, primitive_by_id)
-    groups: dict[tuple[tuple[int, ...], str], list[str]] = {}
-    for gic in definition.gics:
-        if gic.family != "RING_PUCKER_COMPONENT":
-            continue
-        if _ring_pucker_gic_is_condensed(gic, primitive_by_id, condensed_ring_keys):
-            continue
-        ring_keys = _ring_pucker_source_ring_keys_for_gic(gic, primitive_by_id)
-        if not ring_keys:
-            continue
-        groups.setdefault((ring_keys[0], gic.irrep), []).append(
-            _gaussian_label_for_gic(definition, gic)
-        )
-    lines: list[str] = []
-    pair_index = 0
-    for labels in groups.values():
-        component_index = 0
-        while component_index + 1 < len(labels):
-            left = labels[component_index]
-            right = labels[component_index + 1]
-            pair_index += 1
-            lines.append(f"QPck{pair_index:04d} = SQRT({left}*{left}+{right}*{right})")
-            lines.append(f"PhiP{pair_index:04d} = ATAN2({right},{left})")
-            component_index += 2
-    return lines
 
 
 def _gaussian_expression_for_gic(

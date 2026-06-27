@@ -754,7 +754,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.gicforge_gaussian_output = QLineEdit()
             gaussian_browse = QPushButton("Save As")
             gaussian_browse.clicked.connect(self.browse_gicforge_gaussian_output)
-            self.gicforge_gaussian_route = QLineEdit("#p hf/sto-3g")
+            self.gicforge_gaussian_route = QLineEdit("#p hf/sto-3g opt=readallgic")
             gaussian_button = QPushButton("Write Input")
             gaussian_button.clicked.connect(self.run_gicforge_gaussian_input)
             gaussian_row.addWidget(self.gicforge_gaussian_output, stretch=1)
@@ -861,7 +861,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.gicforge_gaussian_output,
                 default_gicforge_gaussian_output,
             )
-            route = self.gicforge_gaussian_route.text().strip() or "#p hf/sto-3g"
+            route = self.gicforge_gaussian_route.text().strip() or "#p hf/sto-3g opt=readallgic"
             command = self.gicforge_controller.gaussian_input_command(output, route=route)
             self._start_command(command, command.label)
 
@@ -1213,7 +1213,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.qm_gaussian_input_output = QLineEdit()
             gaussian_input_browse = QPushButton("Save As")
             gaussian_input_browse.clicked.connect(self.browse_qm_gaussian_input_output)
-            self.qm_gaussian_route = QLineEdit("#p hf/sto-3g opt=GIC")
+            self.qm_gaussian_route = QLineEdit("#p hf/sto-3g opt=readallgic")
             gaussian_input_button = QPushButton("Write Input")
             gaussian_input_button.clicked.connect(self.run_qm_gaussian_input)
             gaussian_input_row.addWidget(self.qm_gaussian_input_output, stretch=1)
@@ -1519,7 +1519,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             )
             if output is None:
                 return
-            route = self.qm_gaussian_route.text().strip() or "#p hf/sto-3g opt=GIC"
+            route = self.qm_gaussian_route.text().strip() or "#p hf/sto-3g opt=readallgic"
             command = self.qm_jobs_controller.gaussian_input_command(output, route=route)
             self._start_command(command, command.label)
 

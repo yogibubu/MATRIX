@@ -732,7 +732,7 @@ def build_parser(
     )
     gaussian_input.add_argument("xyzin", type=Path)
     gaussian_input.add_argument("output", type=Path)
-    gaussian_input.add_argument("--route", default="#p hf/sto-3g")
+    gaussian_input.add_argument("--route", default="#p hf/sto-3g opt=readallgic")
     gaussian_input.add_argument("--title")
     gaussian_input.add_argument("--charge", type=int)
     gaussian_input.add_argument("--multiplicity", type=int)
