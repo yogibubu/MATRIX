@@ -3,12 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from matrix_chem import preprocess_to_enriched_xyz, write_validation_section
 from matrix_gaussian import hessian_input_from_gaussian_fchk, lower_to_symmetric, read_gaussian_fchk
 from matrix_gf import (
     gf_from_cartesian_hessian_and_gic_b_matrix,
     nonbonded_cartesian_hessian_correction,
+    pulay_scaling_factors,
     read_gf_ped_section,
     run_xyzin_gf_report_from_fchk,
     solve_wilson_gf,
@@ -84,6 +86,41 @@ def test_gf_can_solve_separated_symmetry_blocks():
     assert result.block_labels == ("A1", "B2")
     assert result.force_constants[0, 1] == 0.0
     assert result.frequencies_cm[0] < result.frequencies_cm[1]
+
+
+def test_pulay_scaling_classes_match_multiple_gics_and_reject_mixed_types(tmp_path):
+    labels = (
+        "GIC001 R(1,2)",
+        "GIC002 R(1,3)",
+        "GIC003 A(2,1,3)",
+        "GIC004 D(2,1,3,4)",
+    )
+    names = ("A1Str0001", "A1Str0002", "A1Bend0001", "B2Tors0001")
+    scale_file = tmp_path / "scale.txt"
+    scale_file.write_text(
+        "default 1.0\n"
+        "class CH_stretches 0.95 R(1,2)|R(1,3)\n"
+        "class torsions:0.80:D(\n",
+        encoding="utf-8",
+    )
+
+    factors = pulay_scaling_factors(
+        4,
+        labels=labels,
+        names=names,
+        scale_path=scale_file,
+        scale_class_records=("bends:0.90:Bend",),
+    )
+
+    assert factors is not None
+    assert factors.tolist() == pytest.approx([0.95, 0.95, 0.90, 0.80])
+    with pytest.raises(ValueError, match="mixes coordinate types"):
+        pulay_scaling_factors(
+            4,
+            labels=labels,
+            names=names,
+            scale_class_records=("bad:0.9:R(|A(",),
+        )
 
 
 def test_nonbonded_correction_excludes_12_13_and_scales_14_terms():

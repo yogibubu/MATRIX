@@ -672,6 +672,7 @@ def test_gf_controller_builds_run_command_with_options(tmp_path):
         csv_dir=default_gf_csv_dir(xyzin),
         scale_file=scale,
         scale_records=("GIC003=0.9",),
+        scale_class_records=("CH_stretches:0.95:R(1,2)|R(1,3)",),
         local=True,
         symmetry_blocks=False,
         force_threshold=1.0e-8,
@@ -687,6 +688,7 @@ def test_gf_controller_builds_run_command_with_options(tmp_path):
     assert "--local" in command.argv
     assert "--symmetry-blocks" not in command.argv
     assert command.argv[command.argv.index("--scale") + 1] == "GIC003=0.9"
+    assert command.argv[command.argv.index("--scale-class") + 1] == "CH_stretches:0.95:R(1,2)|R(1,3)"
     assert command.argv[command.argv.index("--force-threshold") + 1] == "1e-08"
     assert "--subtract-electrostatic" in command.argv
     assert "--subtract-uff-vdw" in command.argv

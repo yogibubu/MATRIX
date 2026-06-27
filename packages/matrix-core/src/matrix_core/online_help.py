@@ -304,6 +304,7 @@ QUICKSTART: dict[str, tuple[str, ...]] = {
     "gf": (
         "matrix gaussian promote-fchk calc.fchk molecule.xyzin",
         "matrix gf --xyzin molecule.xyzin",
+        'matrix gf --xyzin molecule.xyzin --scale-class "CH:0.970:R(1,6)|R(2,7)"',
     ),
     "morpheus": ("matrix semiexp --xyzin molecule.xyzin --job job.toml --outdir run",),
     "trinity": (

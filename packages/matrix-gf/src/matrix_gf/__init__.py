@@ -42,6 +42,7 @@ from .sections import (
 )
 
 _SERVICE_EXPORTS = {
+    "GFScalingClass",
     "GFReport",
     "GFLocalOptions",
     "format_gf_report",
@@ -63,10 +64,12 @@ def __getattr__(name: str):
 __all__ = [
     "BOHR_TO_ANGSTROM",
     "GFGICRow",
+    "GFLocalOptions",
     "GFModeRow",
     "GFPEDSection",
     "GFReport",
     "GFResult",
+    "GFScalingClass",
     "HessianInput",
     "InternalGFResult",
     "ORACLE_XYZ_GF_PED_SCHEMA",

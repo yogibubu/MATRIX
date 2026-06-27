@@ -963,6 +963,13 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             scale_row.addWidget(self.gf_scale_records, stretch=1)
             layout.addLayout(scale_row)
 
+            scale_class_row = QHBoxLayout()
+            scale_class_row.addWidget(QLabel("Scale classes"))
+            self.gf_scale_class_records = QLineEdit()
+            self.gf_scale_class_records.setPlaceholderText("CH:0.970:R(1,6)|R(2,7); class ...")
+            scale_class_row.addWidget(self.gf_scale_class_records, stretch=1)
+            layout.addLayout(scale_class_row)
+
             options_row = QHBoxLayout()
             self.gf_symmetry_blocks = QCheckBox("Symmetry blocks")
             self.gf_symmetry_blocks.setChecked(True)
@@ -1071,6 +1078,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 csv_dir=self._gf_output_path(self.gf_csv_dir, default_gf_csv_dir),
                 scale_file=self._optional_path_text(self.gf_scale_file),
                 scale_records=self._scale_records(),
+                scale_class_records=self._scale_class_records(),
                 local=self.gf_local.isChecked(),
                 symmetry_blocks=self.gf_symmetry_blocks.isChecked(),
                 force_threshold=force_threshold,
@@ -1132,6 +1140,12 @@ def _run_qt(initial_xyzin: Path | None) -> int:
 
         def _scale_records(self) -> tuple[str, ...]:
             text = self.gf_scale_records.text().strip()
+            if not text:
+                return ()
+            return tuple(item.strip() for item in text.split(";") if item.strip())
+
+        def _scale_class_records(self) -> tuple[str, ...]:
+            text = self.gf_scale_class_records.text().strip()
             if not text:
                 return ()
             return tuple(item.strip() for item in text.split(";") if item.strip())

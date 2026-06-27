@@ -200,10 +200,12 @@ MATRIX GF path is already the stronger architecture:
 
 The useful `vibint` idea is user-facing rather than algorithmic: its rule
 grammar for scaling by coordinate family, chemical subtype, wildcard and
-priority is convenient. This should be considered as a MATRIX GF frontend that
-translates typed rules into the existing `--scale`/`--scale-file` factors using
-frozen `#GIC` labels, GIC names and `#SYNTHONS`. The Gaussian-log parser,
-Tkinter GUI and private GF reconstruction in `vibint` should not be recycled.
+priority is convenient. MATRIX GF now implements the first robust version as
+named scaling classes in `--scale-file` and `--scale-class`: a class applies one
+Pulay factor to all matched frozen GICs and is rejected when it mixes coordinate
+families. Future extensions can add automatic suggestions from `#SYNTHONS` and
+dry-run previews. The Gaussian-log parser, Tkinter GUI and private GF
+reconstruction in `vibint` should not be recycled.
 
 `varanh` contains historical Fortran77 one-dimensional DVR and variational
 anharmonic prototypes (`dvrHam.f`, `VCI.f`). The active MATRIX implementation

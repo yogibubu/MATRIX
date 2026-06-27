@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import csv
 from io import StringIO
 from pathlib import Path
+import re
 
 import numpy as np
 
@@ -31,6 +32,31 @@ class GFReport:
     hessian_source: str = ""
 
 
+@dataclass(frozen=True)
+class GFScalingClass:
+    """Named class of GICs receiving the same diagonal Pulay factor."""
+
+    name: str
+    factor: float
+    patterns: tuple[str, ...]
+
+    def validate(self) -> None:
+        if not self.name.strip():
+            raise ValueError("Pulay scaling class name cannot be empty")
+        if not self.patterns or any(not pattern.strip() for pattern in self.patterns):
+            raise ValueError(f"Pulay scaling class {self.name!r} needs at least one pattern")
+        if self.factor < 0.0:
+            raise ValueError("Pulay scaling factors must be non-negative")
+
+
+@dataclass(frozen=True)
+class _ScalingEvent:
+    kind: str
+    selector: str = ""
+    factor: float = 1.0
+    scaling_class: GFScalingClass | None = None
+
+
 def run_gf_report_from_fchk(fchk_path: Path) -> GFReport:
     """Read an FCHK adapter and return a formatted quick GF/PED report."""
     path = Path(fchk_path)
@@ -45,6 +71,7 @@ def run_xyzin_gf_report_from_fchk(
     *,
     scale_path: Path | None = None,
     scale_records: tuple[str, ...] = (),
+    scale_class_records: tuple[str, ...] = (),
     local: bool = False,
     force_threshold: float | None = None,
     block_by_irrep: bool = False,
@@ -62,6 +89,7 @@ def run_xyzin_gf_report_from_fchk(
         hessian_source=f"FCHK {path}",
         scale_path=scale_path,
         scale_records=scale_records,
+        scale_class_records=scale_class_records,
         local=local,
         force_threshold=force_threshold,
         block_by_irrep=block_by_irrep,
@@ -76,6 +104,7 @@ def run_xyzin_gf_report_from_xyzin(
     *,
     scale_path: Path | None = None,
     scale_records: tuple[str, ...] = (),
+    scale_class_records: tuple[str, ...] = (),
     local: bool = False,
     force_threshold: float | None = None,
     block_by_irrep: bool = False,
@@ -93,6 +122,7 @@ def run_xyzin_gf_report_from_xyzin(
         hessian_source=f"#CARTESIAN_HESSIAN in {xyzin}",
         scale_path=scale_path,
         scale_records=scale_records,
+        scale_class_records=scale_class_records,
         local=local,
         force_threshold=force_threshold,
         block_by_irrep=block_by_irrep,
@@ -110,6 +140,7 @@ def _run_xyzin_gf_report_from_hessian_input(
     hessian_source: str,
     scale_path: Path | None = None,
     scale_records: tuple[str, ...] = (),
+    scale_class_records: tuple[str, ...] = (),
     local: bool = False,
     force_threshold: float | None = None,
     block_by_irrep: bool = False,
@@ -148,6 +179,7 @@ def _run_xyzin_gf_report_from_hessian_input(
         names=names,
         scale_path=scale_path,
         scale_records=scale_records,
+        scale_class_records=scale_class_records,
     )
     result = gf_from_hessian_input_and_xyzin(
         hessian_input,
@@ -282,26 +314,45 @@ def pulay_scaling_factors(
     names: tuple[str, ...] = (),
     scale_path: Path | None = None,
     scale_records: tuple[str, ...] = (),
+    scale_class_records: tuple[str, ...] = (),
 ) -> np.ndarray | None:
-    """Build diagonal Pulay scaling factors from file and inline records."""
-    records: list[tuple[str, float]] = []
+    """Build diagonal Pulay scaling factors from selector and class records."""
+    events: list[_ScalingEvent] = []
     if scale_path is not None:
-        records.extend(_read_scaling_records(Path(scale_path)))
+        events.extend(_read_scaling_events(Path(scale_path)))
     for record in scale_records:
-        records.append(_parse_scaling_record(record))
-    if not records:
+        events.append(_selector_event(*_parse_scaling_record(record)))
+    for record in scale_class_records:
+        events.append(_class_event(_parse_scaling_class_record(record)))
+    if not events:
         return None
     factors = np.ones(n_gics, dtype=float)
-    for selector, factor in records:
-        if factor < 0.0:
-            raise ValueError("Pulay scaling factors must be non-negative")
-        for index in _resolve_scaling_selector(selector, labels=labels, names=names):
-            factors[index] = factor
+    for event in events:
+        if event.kind == "selector":
+            if event.factor < 0.0:
+                raise ValueError("Pulay scaling factors must be non-negative")
+            for index in _resolve_scaling_selector(event.selector, labels=labels, names=names):
+                factors[index] = event.factor
+            continue
+        if event.kind == "class" and event.scaling_class is not None:
+            event.scaling_class.validate()
+            for index in _resolve_scaling_class(event.scaling_class, labels=labels, names=names):
+                factors[index] = event.scaling_class.factor
+            continue
+        raise ValueError(f"Unsupported Pulay scaling event: {event!r}")
     return factors
 
 
 def _read_scaling_records(path: Path) -> list[tuple[str, float]]:
     records: list[tuple[str, float]] = []
+    for event in _read_scaling_events(path):
+        if event.kind == "selector":
+            records.append((event.selector, event.factor))
+    return records
+
+
+def _read_scaling_events(path: Path) -> list[_ScalingEvent]:
+    events: list[_ScalingEvent] = []
     for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
         line = raw.split("#", 1)[0].split("!", 1)[0].strip()
         if not line:
@@ -309,8 +360,23 @@ def _read_scaling_records(path: Path) -> list[tuple[str, float]]:
         lower = line.lower().replace(",", " ").split()
         if lower[:2] in (["selector", "factor"], ["gic", "factor"], ["name", "factor"]):
             continue
-        records.append(_parse_scaling_record(line))
-    return records
+        events.append(_parse_scaling_event(line))
+    return events
+
+
+def _parse_scaling_event(record: str) -> _ScalingEvent:
+    text = record.strip()
+    if text.lower().startswith("class "):
+        return _class_event(_parse_scaling_class_record(text))
+    return _selector_event(*_parse_scaling_record(text))
+
+
+def _selector_event(selector: str, factor: float) -> _ScalingEvent:
+    return _ScalingEvent("selector", selector=selector, factor=factor)
+
+
+def _class_event(scaling_class: GFScalingClass) -> _ScalingEvent:
+    return _ScalingEvent("class", scaling_class=scaling_class)
 
 
 def _parse_scaling_record(record: str) -> tuple[str, float]:
@@ -325,6 +391,29 @@ def _parse_scaling_record(record: str) -> tuple[str, float]:
             raise ValueError(f"Invalid Pulay scaling record: {record!r}")
         selector, value = parts
     return selector.strip(), float(value.strip())
+
+
+def _parse_scaling_class_record(record: str) -> GFScalingClass:
+    text = record.strip()
+    if text.lower().startswith("class "):
+        text = text.split(None, 1)[1].strip()
+    if ":" in text:
+        parts = text.split(":", 2)
+        if len(parts) != 3:
+            raise ValueError(f"Invalid Pulay scaling class record: {record!r}")
+        name, factor_text, patterns_text = parts
+    else:
+        parts = text.split(None, 2)
+        if len(parts) != 3:
+            raise ValueError(f"Invalid Pulay scaling class record: {record!r}")
+        name, factor_text, patterns_text = parts
+    factor_text = factor_text.strip()
+    if "=" in factor_text:
+        _key, factor_text = factor_text.split("=", 1)
+    patterns = tuple(pattern.strip() for pattern in patterns_text.split("|") if pattern.strip())
+    scaling_class = GFScalingClass(name=name.strip(), factor=float(factor_text.strip()), patterns=patterns)
+    scaling_class.validate()
+    return scaling_class
 
 
 def _resolve_scaling_selector(
@@ -360,6 +449,85 @@ def _resolve_scaling_selector(
     if matches:
         raise ValueError(f"Pulay scaling selector {token!r} is ambiguous")
     raise ValueError(f"Pulay scaling selector {token!r} did not match any GIC")
+
+
+def _resolve_scaling_class(
+    scaling_class: GFScalingClass,
+    *,
+    labels: tuple[str, ...],
+    names: tuple[str, ...],
+) -> tuple[int, ...]:
+    matches: list[int] = []
+    for pattern in scaling_class.patterns:
+        matches.extend(_resolve_scaling_class_pattern(pattern, labels=labels, names=names))
+    unique = tuple(dict.fromkeys(matches))
+    if not unique:
+        raise ValueError(f"Pulay scaling class {scaling_class.name!r} did not match any GIC")
+    padded_names = _padded_names(names, len(labels))
+    families = {
+        _gic_coordinate_family(padded_names[index], labels[index])
+        for index in unique
+    }
+    known_families = {family for family in families if family}
+    if len(known_families) > 1:
+        raise ValueError(
+            f"Pulay scaling class {scaling_class.name!r} mixes coordinate types: "
+            f"{', '.join(sorted(known_families))}"
+        )
+    return unique
+
+
+def _resolve_scaling_class_pattern(
+    pattern: str,
+    *,
+    labels: tuple[str, ...],
+    names: tuple[str, ...],
+) -> tuple[int, ...]:
+    token = pattern.strip()
+    lower = token.lower()
+    n_gics = len(labels)
+    if lower in {"*", "all", "default"}:
+        return tuple(range(n_gics))
+    if lower.startswith("gic") and lower[3:].isdigit():
+        index = int(lower[3:]) - 1
+        if 0 <= index < n_gics:
+            return (index,)
+    if token.isdigit():
+        index = int(token) - 1
+        if 0 <= index < n_gics:
+            return (index,)
+    padded_names = _padded_names(names, n_gics)
+    exact = [idx for idx, name in enumerate(padded_names) if name.lower() == lower]
+    exact.extend(idx for idx, label in enumerate(labels) if label.lower() == lower)
+    if exact:
+        return tuple(dict.fromkeys(exact))
+    matches = [
+        idx
+        for idx, (name, label) in enumerate(zip(padded_names, labels))
+        if lower in name.lower() or lower in label.lower()
+    ]
+    if matches:
+        return tuple(dict.fromkeys(matches))
+    raise ValueError(f"Pulay scaling class pattern {token!r} did not match any GIC")
+
+
+def _gic_coordinate_family(name: str, label: str) -> str:
+    text = f"{name} {label}".lower()
+    if any(token in text for token in ("rpck", "qpck", "phip", "pck", "butterfly")):
+        return "ring"
+    if any(token in text for token in ("fragment", "frag", "centroid", "center", "centre")):
+        return "special"
+    if re.search(r"\br\s*\(", text) or "str" in text or "stretch" in text or "bond(" in text:
+        return "stretch"
+    if re.search(r"\ba\s*\(", text) or "bend" in text or "angle(" in text:
+        return "bend"
+    if re.search(r"\bd\s*\(", text) or "tors" in text or "dih" in text or "dihedral(" in text:
+        return "torsion"
+    if re.search(r"\bu\s*\(", text) or "oop" in text or "improper" in text or "out_of_plane(" in text:
+        return "oop"
+    if re.search(r"\bl\s*\(", text) or "linear_bend" in text or "lin" in text:
+        return "linear"
+    return ""
 
 
 def _padded_names(names: tuple[str, ...], n_gics: int) -> tuple[str, ...]:

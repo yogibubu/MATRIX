@@ -367,6 +367,12 @@ def build_parser(
     gf.add_argument("--csv-dir", type=Path, help="Write GF/PED CSV tables")
     gf.add_argument("--scale-file", type=Path)
     gf.add_argument("--scale", action="append", default=[])
+    gf.add_argument(
+        "--scale-class",
+        action="append",
+        default=[],
+        help="Apply one Pulay factor to a named GIC class, name:factor:pattern|pattern",
+    )
     gf.add_argument("--local", action="store_true", help="Apply local force-field filtering")
     gf.add_argument("--symmetry-blocks", action="store_true", help="Solve separated irrep blocks")
     gf.add_argument(
@@ -1323,6 +1329,7 @@ def main(
                 args.xyzin,
                 scale_path=args.scale_file,
                 scale_records=tuple(args.scale),
+                scale_class_records=tuple(args.scale_class),
                 local=args.local,
                 force_threshold=args.force_threshold,
                 block_by_irrep=args.symmetry_blocks,
@@ -1339,6 +1346,7 @@ def main(
                 args.xyzin,
                 scale_path=args.scale_file,
                 scale_records=tuple(args.scale),
+                scale_class_records=tuple(args.scale_class),
                 local=args.local,
                 force_threshold=args.force_threshold,
                 block_by_irrep=args.symmetry_blocks,

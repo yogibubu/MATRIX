@@ -42,12 +42,11 @@
   implementation should reuse existing GF/GIC force constants, QFF/DVR
   contracts and the shared diagonalizer instead of introducing private
   vibrational data structures.
-- Add an optional GF scaling-rule frontend inspired by the reviewed local
-  `vibint` utility: family rules, typed chemical rules, wildcards, rule
-  priorities and dry-run assignment previews. It must translate to the existing
-  MATRIX GF `--scale`/`--scale-file` factors using frozen `#GIC`, `#SYNTHONS`
-  and shared topology metadata; do not port `vibint` Gaussian-log parsing or
-  private GF reconstruction.
+- Extend the implemented GF scaling-class frontend with optional dry-run
+  assignment previews and automatic class suggestions from `#SYNTHONS`.
+  MATRIX already supports class records in `--scale-file` and `--scale-class`;
+  future work should add richer chemical subtyping without porting `vibint`
+  Gaussian-log parsing or private GF reconstruction.
 - Add vibronic spectroscopy workflows, including electronic-transition,
   normal-mode and Franck-Condon/Herzberg-Teller data contracts, with plotting
   and publication exports in the electronic/vibrational workbenches.

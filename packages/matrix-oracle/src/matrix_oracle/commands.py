@@ -564,6 +564,7 @@ def gf_command(
     csv_dir: Path | str | None = None,
     scale_file: Path | str | None = None,
     scale_records: Sequence[str] = (),
+    scale_class_records: Sequence[str] = (),
     local: bool = False,
     symmetry_blocks: bool = True,
     force_threshold: float | None = None,
@@ -584,6 +585,9 @@ def gf_command(
     for record in scale_records:
         if str(record).strip():
             argv.extend(["--scale", str(record).strip()])
+    for record in scale_class_records:
+        if str(record).strip():
+            argv.extend(["--scale-class", str(record).strip()])
     _append_flag(argv, "--local", local)
     _append_flag(argv, "--symmetry-blocks", symmetry_blocks)
     if force_threshold is not None:

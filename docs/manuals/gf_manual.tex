@@ -243,6 +243,7 @@ default 1.000
 GIC003 0.980
 A1Str0001,0.995
 5=1.020
+class CH_stretches 0.970 R(1,6)|R(2,7)|R(3,8)
 \end{lstlisting}
 
 \noindent
@@ -261,18 +262,27 @@ Selectors may be:
 Inline records are supplied with repeated \texttt{--scale} options:
 
 \begin{lstlisting}[style=oracle]
-python -m matrix gic-gf \
-  --schema working/gic_definition.json \
+python -m matrix gf \
+  --xyzin working/molecule.xyzin \
   --fchk working/gauin.fchk \
   --scale-file working/pulay_scale.txt \
   --scale "GIC003=0.980" \
-  --scale "default=1.000"
+  --scale "default=1.000" \
+  --scale-class "CH_stretches:0.970:R(1,6)|R(2,7)|R(3,8)"
 \end{lstlisting}
 
 \noindent
-Scaling factors must be non-negative.  Ambiguous or unmatched selectors are
-fatal errors because silent scaling of the wrong coordinate would invalidate the
-PED interpretation.
+Class records reuse the semiexperimental-fit idea of named parameter classes,
+but apply it to diagonal Pulay factors in the frozen GIC basis.  A class has a
+name, one factor and one or more case-insensitive label/name patterns separated
+by \texttt{|}.  Patterns in a class may deliberately match several GICs.  MATRIX
+rejects the class if it matches no GIC or if the matched GICs mix coordinate
+families such as stretches, bends, torsions, out-of-plane coordinates, ring
+puckering coordinates or special fragment/center coordinates.  This prevents a
+chemically motivated scale factor from silently spanning unrelated internal
+coordinate types.  Scaling factors must be non-negative.  Ambiguous or
+unmatched ordinary selectors remain fatal errors because silent scaling of the
+wrong coordinate would invalidate the PED interpretation.
 
 \section{Non-Bonded Hessian Subtraction and Local Models}
 
