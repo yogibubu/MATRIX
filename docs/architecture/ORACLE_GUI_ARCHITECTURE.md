@@ -56,9 +56,9 @@ or figures. They still use the same `xyzin` sections and service boundaries.
 
 Publication export is a GUI contract: workbenches must export the final
 accepted spectrum or table as machine-readable data plus vector formats suited
-for papers. The first implementation records these export targets in
-`oracle_gui.workflows`; plotting backends can then implement them without
-changing the scientific services.
+for papers. The first concrete export backend writes `#THERMO` tables to CSV,
+LaTeX, SVG and PDF. Spectral plotting backends can implement the remaining
+declared targets without changing the scientific services.
 
 Orbital visualization is delegated to external viewers. ORACLE should prepare
 or pass through supported files, then launch Avogadro/Avogadro2, Molden or
@@ -220,6 +220,44 @@ The SEFit tab uses `oracle_gui.sefit` and the `#MORPHEUS` section written by
 The tab must not run least-squares logic or parse MORPHEUS CSV reports itself.
 It launches `oracle semiexp`, then reloads `#MORPHEUS` through
 `oracle_morpheus.read_morpheus_section`.
+
+## Electronic Spectroscopy Tab
+
+The Electronic tab uses `oracle_gui.electronic`. It is operational as a
+section/viewer workbench, not yet as an electronic-structure parser. It
+provides:
+
+- read-only tables for normalized `#ELECTRONIC`, `#TRANSITIONS` and
+  `#ORBITALS` sections when a QM adapter has created them;
+- Molden and Avogadro/Avogadro2 launch controls for orbital, density, FCHK,
+  Molden or cube-style files selected by the user;
+- publication export targets for future electronic transition tables and
+  spectra.
+
+The tab must not infer excited states, oscillator strengths, densities or
+orbital data from raw QM output. Those adapters still need to be implemented in
+the owning QM packages, after which the GUI will consume only the normalized
+sections.
+
+## Thermo / Kinetics Tab
+
+The Thermo/Kinetics tab uses `oracle_gui.thermo_kinetics`, `oracle-thermo` and
+`oracle-rovib`. It provides:
+
+- `oracle rovib summarize` for normalized rotational/vibrational state;
+- `oracle thermo` execution with report, `#THERMO` update, low-frequency cutoff
+  and low-positive-frequency controls;
+- direct vibrational DOS generation through `oracle rovib dos`;
+- rovibrational DOS, rotational DOS and Q(T) generation through
+  `oracle rovib dos-rovib`;
+- read-only tables for `#THERMO`, standard DOS output files and the future
+  `#KINETICS` section;
+- publication table export from `#THERMO` to CSV, LaTeX, SVG and PDF.
+
+The publication export currently covers thermochemistry tables because
+`#THERMO` is normalized. Spectrum plotting and kinetic plots remain future
+backends. `#KINETICS` is deliberately visible in the GUI contract but remains
+planned until the kinetics service owns that section.
 
 ## TRINITY Tab
 

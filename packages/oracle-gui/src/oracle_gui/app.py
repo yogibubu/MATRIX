@@ -10,6 +10,12 @@ from .contracts import (
     tool_contract_gui_state_lines,
 )
 from .dashboard import DashboardAction, OracleDashboardController
+from .electronic import (
+    ElectronicTable,
+    OracleElectronicController,
+    electronic_gui_state_lines,
+    load_electronic_gui_state,
+)
 from .gicforge import (
     GICForgeTable,
     OracleGICForgeController,
@@ -47,6 +53,18 @@ from .structure import (
     StructureTable,
     default_preprocess_output,
     load_structure_gui_state,
+)
+from .thermo_kinetics import (
+    OracleThermoKineticsController,
+    ThermoKineticsTable,
+    default_rovib_q_output,
+    default_rovibrational_dos_output,
+    default_rotational_dos_output,
+    default_thermo_export_dir,
+    default_thermo_report_output,
+    default_vibrational_dos_output,
+    load_thermo_kinetics_gui_state,
+    thermo_kinetics_gui_state_lines,
 )
 from .trinity import (
     OracleTrinityController,
@@ -113,7 +131,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.gicforge_controller = OracleGICForgeController(xyzin)
             self.gf_controller = OracleGFController(xyzin)
             self.qm_jobs_controller = OracleQMJobsController(xyzin)
+            self.electronic_controller = OracleElectronicController(xyzin)
             self.sefit_controller = OracleSEFitController(xyzin)
+            self.thermo_kinetics_controller = OracleThermoKineticsController(xyzin)
             self.trinity_controller = OracleTrinityController(xyzin)
             self.process: QProcess | None = None
             self.current_actions: tuple[DashboardAction, ...] = ()
@@ -123,8 +143,6 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 ("diagnostics", "Diagnostics"),
                 ("rotational_spectroscopy", "Rotational"),
                 ("vibrational_spectroscopy", "Vibrational"),
-                ("electronic_spectroscopy", "Electronic"),
-                ("thermochemistry_kinetics", "Thermo/Kinetics"),
             )
             self.workbench_summaries: dict[str, QTextEdit] = {}
             self.workbench_section_tables: dict[str, QTableWidget] = {}
@@ -181,8 +199,12 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             tabs.addTab(gf_tab, "GF/PED")
             qm_jobs_tab = self._build_qm_jobs_tab()
             tabs.addTab(qm_jobs_tab, "QM Jobs")
+            electronic_tab = self._build_electronic_tab()
+            tabs.addTab(electronic_tab, "Electronic")
             sefit_tab = self._build_sefit_tab()
             tabs.addTab(sefit_tab, "SEFit")
+            thermo_kinetics_tab = self._build_thermo_kinetics_tab()
+            tabs.addTab(thermo_kinetics_tab, "Thermo/Kinetics")
             trinity_tab = self._build_trinity_tab()
             tabs.addTab(trinity_tab, "TRINITY")
             for key, label in self.workbench_tabs:
@@ -214,7 +236,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.gicforge_controller.set_xyzin(Path(path))
                 self.gf_controller.set_xyzin(Path(path))
                 self.qm_jobs_controller.set_xyzin(Path(path))
+                self.electronic_controller.set_xyzin(Path(path))
                 self.sefit_controller.set_xyzin(Path(path))
+                self.thermo_kinetics_controller.set_xyzin(Path(path))
                 self.trinity_controller.set_xyzin(Path(path))
                 self.refresh()
 
@@ -227,7 +251,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._clear_gicforge_tables()
             self._clear_gf_tables()
             self._clear_qm_jobs_tables()
+            self._clear_electronic_tables()
             self._clear_sefit_tables()
+            self._clear_thermo_kinetics_tables()
             self._clear_trinity_tables()
             self._clear_workbench_tables()
             if self.controller.xyzin is None:
@@ -235,7 +261,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.gicforge_summary.setPlainText("No ORACLE project loaded")
                 self.gf_summary.setPlainText("No ORACLE project loaded")
                 self.qm_jobs_summary.setPlainText("No ORACLE project loaded")
+                self.electronic_summary.setPlainText("No ORACLE project loaded")
                 self.sefit_summary.setPlainText("No ORACLE project loaded")
+                self.thermo_kinetics_summary.setPlainText("No ORACLE project loaded")
                 self.trinity_summary.setPlainText("No ORACLE project loaded")
                 self.contracts_summary.setPlainText("No ORACLE project loaded")
                 for summary in self.workbench_summaries.values():
@@ -254,13 +282,16 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.gicforge_controller.set_xyzin(state.xyzin)
             self.gf_controller.set_xyzin(state.xyzin)
             self.qm_jobs_controller.set_xyzin(state.xyzin)
+            self.electronic_controller.set_xyzin(state.xyzin)
             self.sefit_controller.set_xyzin(state.xyzin)
+            self.thermo_kinetics_controller.set_xyzin(state.xyzin)
             self.trinity_controller.set_xyzin(state.xyzin)
             self.structure_output_path.setText(str(state.xyzin))
             self._set_default_gicforge_outputs(state.xyzin)
             self._set_default_gf_outputs(state.xyzin)
             self._set_default_qm_jobs_outputs(state.xyzin)
             self._set_default_sefit_outputs(state.xyzin)
+            self._set_default_thermo_kinetics_outputs(state.xyzin)
             self._set_default_trinity_outputs(state.xyzin)
             self.path_label.setText(str(state.xyzin))
             for workflow in state.workflows:
@@ -296,7 +327,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._populate_gicforge_tables(state.xyzin)
             self._populate_gf_tables(state.xyzin)
             self._populate_qm_jobs_tables(state.xyzin)
+            self._populate_electronic_tables(state.xyzin)
             self._populate_sefit_tables(state.xyzin)
+            self._populate_thermo_kinetics_tables(state.xyzin)
             self._populate_trinity_tables(state.xyzin)
             self._populate_workbench_tables(state.xyzin)
 
@@ -505,7 +538,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.gicforge_controller.set_xyzin(self.pending_xyzin_after_run)
                 self.gf_controller.set_xyzin(self.pending_xyzin_after_run)
                 self.qm_jobs_controller.set_xyzin(self.pending_xyzin_after_run)
+                self.electronic_controller.set_xyzin(self.pending_xyzin_after_run)
                 self.sefit_controller.set_xyzin(self.pending_xyzin_after_run)
+                self.thermo_kinetics_controller.set_xyzin(self.pending_xyzin_after_run)
                 self.trinity_controller.set_xyzin(self.pending_xyzin_after_run)
             self.pending_xyzin_after_run = None
             self.refresh()
@@ -1618,6 +1653,103 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 if table is not None:
                     table.setRowCount(0)
 
+        def _build_electronic_tab(self) -> QWidget:
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+
+            viewer_row = QHBoxLayout()
+            viewer_row.addWidget(QLabel("Orbital / density file"))
+            self.electronic_viewer_target = QLineEdit()
+            browse_button = QPushButton("Browse")
+            browse_button.clicked.connect(self.browse_electronic_viewer_target)
+            self.electronic_molden_executable = QLineEdit("molden")
+            self.electronic_avogadro_executable = QLineEdit("avogadro2")
+            molden_button = QPushButton("Molden")
+            molden_button.clicked.connect(self.run_electronic_molden)
+            avogadro_button = QPushButton("Avogadro")
+            avogadro_button.clicked.connect(self.run_electronic_avogadro)
+            viewer_row.addWidget(self.electronic_viewer_target, stretch=1)
+            viewer_row.addWidget(browse_button)
+            viewer_row.addWidget(QLabel("Molden exe"))
+            viewer_row.addWidget(self.electronic_molden_executable)
+            viewer_row.addWidget(QLabel("Avogadro exe"))
+            viewer_row.addWidget(self.electronic_avogadro_executable)
+            viewer_row.addWidget(molden_button)
+            viewer_row.addWidget(avogadro_button)
+            layout.addLayout(viewer_row)
+
+            self.electronic_summary = QTextEdit()
+            self.electronic_summary.setReadOnly(True)
+            self.electronic_summary.setMaximumHeight(120)
+            layout.addWidget(self.electronic_summary)
+
+            self.electronic_table_tabs = QTabWidget()
+            self.electronic_section_table = QTableWidget(0, 3)
+            self.electronic_transition_table = QTableWidget(0, 2)
+            self.electronic_orbital_table = QTableWidget(0, 2)
+            self.electronic_table_tabs.addTab(self.electronic_section_table, "Sections")
+            self.electronic_table_tabs.addTab(self.electronic_transition_table, "Transitions")
+            self.electronic_table_tabs.addTab(self.electronic_orbital_table, "Orbitals")
+            layout.addWidget(self.electronic_table_tabs, stretch=1)
+            return tab
+
+        def browse_electronic_viewer_target(self) -> None:
+            path, _selected = QFileDialog.getOpenFileName(
+                self,
+                "Select orbital or density file",
+                self.electronic_viewer_target.text().strip() or str(Path.cwd()),
+                "Orbital/density files (*.molden *.molden.input *.fchk *.fch *.cube *.cub *.wfx *.wfn);;All files (*)",
+            )
+            if path:
+                self.electronic_viewer_target.setText(path)
+
+        def run_electronic_molden(self) -> None:
+            if not self._ensure_electronic_idle("Molden"):
+                return
+            target = self._qm_required_path(self.electronic_viewer_target, "Molden", "viewer file")
+            if target is None:
+                return
+            executable = self.electronic_molden_executable.text().strip() or "molden"
+            command = self.electronic_controller.molden_command(target, executable=executable)
+            self._start_command(command, command.label)
+
+        def run_electronic_avogadro(self) -> None:
+            if not self._ensure_electronic_idle("Avogadro"):
+                return
+            target = self._qm_required_path(self.electronic_viewer_target, "Avogadro", "viewer file")
+            if target is None:
+                return
+            executable = self.electronic_avogadro_executable.text().strip() or "avogadro2"
+            command = self.electronic_controller.avogadro_command(target, executable=executable)
+            self._start_command(command, command.label)
+
+        def _ensure_electronic_idle(self, title: str) -> bool:
+            if self.process is not None:
+                QMessageBox.information(self, "ORACLE", "A command is already running.")
+                return False
+            if self.controller.xyzin is not None:
+                self.electronic_controller.set_xyzin(self.controller.xyzin)
+            return True
+
+        def _populate_electronic_tables(self, xyzin: Path) -> None:
+            state = load_electronic_gui_state(xyzin)
+            self.electronic_summary.setPlainText("\n".join(electronic_gui_state_lines(state)))
+            self._fill_table(self.electronic_section_table, state.sections)
+            self._fill_table(self.electronic_transition_table, state.transitions)
+            self._fill_table(self.electronic_orbital_table, state.orbitals)
+
+        def _clear_electronic_tables(self) -> None:
+            summary = getattr(self, "electronic_summary", None)
+            if summary is not None:
+                summary.clear()
+            for table in (
+                getattr(self, "electronic_section_table", None),
+                getattr(self, "electronic_transition_table", None),
+                getattr(self, "electronic_orbital_table", None),
+            ):
+                if table is not None:
+                    table.setRowCount(0)
+
         def _build_sefit_tab(self) -> QWidget:
             tab = QWidget()
             layout = QVBoxLayout(tab)
@@ -1749,6 +1881,407 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 getattr(self, "sefit_isotopologue_table", None),
                 getattr(self, "sefit_output_table", None),
                 getattr(self, "sefit_diagnostics_table", None),
+            ):
+                if table is not None:
+                    table.setRowCount(0)
+
+        def _build_thermo_kinetics_tab(self) -> QWidget:
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+
+            thermo_row = QHBoxLayout()
+            thermo_row.addWidget(QLabel("Thermo report"))
+            self.thermo_report_output = QLineEdit()
+            report_browse = QPushButton("Save As")
+            report_browse.clicked.connect(self.browse_thermo_report_output)
+            self.thermo_cutoff_cm1 = QLineEdit("10.0")
+            self.thermo_write_report = QCheckBox("Report")
+            self.thermo_write_report.setChecked(True)
+            self.thermo_write_section = QCheckBox("Update #THERMO")
+            self.thermo_write_section.setChecked(True)
+            self.thermo_keep_low_positive = QCheckBox("Keep low positive")
+            summary_button = QPushButton("Rovib Summary")
+            summary_button.clicked.connect(self.run_thermo_rovib_summary)
+            run_button = QPushButton("Run Thermo")
+            run_button.clicked.connect(self.run_thermo)
+            thermo_row.addWidget(self.thermo_report_output, stretch=1)
+            thermo_row.addWidget(report_browse)
+            thermo_row.addWidget(QLabel("Cutoff"))
+            thermo_row.addWidget(self.thermo_cutoff_cm1)
+            thermo_row.addWidget(self.thermo_write_report)
+            thermo_row.addWidget(self.thermo_write_section)
+            thermo_row.addWidget(self.thermo_keep_low_positive)
+            thermo_row.addWidget(summary_button)
+            thermo_row.addWidget(run_button)
+            layout.addLayout(thermo_row)
+
+            dos_files_row = QHBoxLayout()
+            dos_files_row.addWidget(QLabel("Vib DOS"))
+            self.thermo_vib_dos_output = QLineEdit()
+            vib_dos_browse = QPushButton("Save As")
+            vib_dos_browse.clicked.connect(self.browse_thermo_vib_dos_output)
+            dos_files_row.addWidget(self.thermo_vib_dos_output, stretch=1)
+            dos_files_row.addWidget(vib_dos_browse)
+            dos_files_row.addWidget(QLabel("Rovib DOS"))
+            self.thermo_rovib_dos_output = QLineEdit()
+            rovib_dos_browse = QPushButton("Save As")
+            rovib_dos_browse.clicked.connect(self.browse_thermo_rovib_dos_output)
+            dos_files_row.addWidget(self.thermo_rovib_dos_output, stretch=1)
+            dos_files_row.addWidget(rovib_dos_browse)
+            layout.addLayout(dos_files_row)
+
+            dos_extra_row = QHBoxLayout()
+            dos_extra_row.addWidget(QLabel("Rot DOS"))
+            self.thermo_rot_dos_output = QLineEdit()
+            rot_dos_browse = QPushButton("Save As")
+            rot_dos_browse.clicked.connect(self.browse_thermo_rot_dos_output)
+            dos_extra_row.addWidget(self.thermo_rot_dos_output, stretch=1)
+            dos_extra_row.addWidget(rot_dos_browse)
+            dos_extra_row.addWidget(QLabel("Q(T)"))
+            self.thermo_rovib_q_output = QLineEdit()
+            q_browse = QPushButton("Save As")
+            q_browse.clicked.connect(self.browse_thermo_rovib_q_output)
+            dos_extra_row.addWidget(self.thermo_rovib_q_output, stretch=1)
+            dos_extra_row.addWidget(q_browse)
+            layout.addLayout(dos_extra_row)
+
+            dos_options_row = QHBoxLayout()
+            self.thermo_vmax = QLineEdit("6")
+            self.thermo_emax_cm1 = QLineEdit("8000.0")
+            self.thermo_bin_cm1 = QLineEdit("50.0")
+            self.thermo_ncap = QLineEdit("10.0")
+            self.thermo_emax_rot = QLineEdit()
+            self.thermo_emax_rot.setPlaceholderText("rot Emax")
+            self.thermo_jmax = QLineEdit()
+            self.thermo_jmax.setPlaceholderText("Jmax")
+            vib_dos_button = QPushButton("Build Vib DOS")
+            vib_dos_button.clicked.connect(self.run_thermo_vibrational_dos)
+            rovib_dos_button = QPushButton("Build Rovib DOS")
+            rovib_dos_button.clicked.connect(self.run_thermo_rovib_dos)
+            dos_options_row.addWidget(QLabel("vmax"))
+            dos_options_row.addWidget(self.thermo_vmax)
+            dos_options_row.addWidget(QLabel("Emax"))
+            dos_options_row.addWidget(self.thermo_emax_cm1)
+            dos_options_row.addWidget(QLabel("bin"))
+            dos_options_row.addWidget(self.thermo_bin_cm1)
+            dos_options_row.addWidget(QLabel("ncap"))
+            dos_options_row.addWidget(self.thermo_ncap)
+            dos_options_row.addWidget(self.thermo_emax_rot)
+            dos_options_row.addWidget(self.thermo_jmax)
+            dos_options_row.addWidget(vib_dos_button)
+            dos_options_row.addWidget(rovib_dos_button)
+            layout.addLayout(dos_options_row)
+
+            export_row = QHBoxLayout()
+            export_row.addWidget(QLabel("Publication"))
+            self.thermo_export_dir = QLineEdit()
+            export_browse = QPushButton("Browse")
+            export_browse.clicked.connect(self.browse_thermo_export_dir)
+            self.thermo_export_csv = QCheckBox("CSV")
+            self.thermo_export_csv.setChecked(True)
+            self.thermo_export_tex = QCheckBox("LaTeX")
+            self.thermo_export_tex.setChecked(True)
+            self.thermo_export_svg = QCheckBox("SVG")
+            self.thermo_export_svg.setChecked(True)
+            self.thermo_export_pdf = QCheckBox("PDF")
+            self.thermo_export_pdf.setChecked(True)
+            export_button = QPushButton("Export Thermo")
+            export_button.clicked.connect(self.run_thermo_publication_export)
+            export_row.addWidget(self.thermo_export_dir, stretch=1)
+            export_row.addWidget(export_browse)
+            export_row.addWidget(self.thermo_export_csv)
+            export_row.addWidget(self.thermo_export_tex)
+            export_row.addWidget(self.thermo_export_svg)
+            export_row.addWidget(self.thermo_export_pdf)
+            export_row.addWidget(export_button)
+            layout.addLayout(export_row)
+
+            self.thermo_kinetics_summary = QTextEdit()
+            self.thermo_kinetics_summary.setReadOnly(True)
+            self.thermo_kinetics_summary.setMaximumHeight(120)
+            layout.addWidget(self.thermo_kinetics_summary)
+
+            self.thermo_kinetics_table_tabs = QTabWidget()
+            self.thermo_table = QTableWidget(0, 7)
+            self.thermo_dos_table = QTableWidget(0, 6)
+            self.kinetics_table = QTableWidget(0, 3)
+            self.thermo_kinetics_table_tabs.addTab(self.thermo_table, "Thermo")
+            self.thermo_kinetics_table_tabs.addTab(self.thermo_dos_table, "DOS")
+            self.thermo_kinetics_table_tabs.addTab(self.kinetics_table, "Kinetics")
+            layout.addWidget(self.thermo_kinetics_table_tabs, stretch=1)
+            return tab
+
+        def browse_thermo_report_output(self) -> None:
+            self._browse_thermo_save_path(
+                self.thermo_report_output,
+                "Write Thermo report",
+                "Text reports (*.txt *.report);;All files (*)",
+            )
+
+        def browse_thermo_vib_dos_output(self) -> None:
+            self._browse_thermo_save_path(
+                self.thermo_vib_dos_output,
+                "Write vibrational DOS",
+                "DOS files (*.dat *.txt);;All files (*)",
+            )
+
+        def browse_thermo_rovib_dos_output(self) -> None:
+            self._browse_thermo_save_path(
+                self.thermo_rovib_dos_output,
+                "Write rovibrational DOS",
+                "DOS files (*.dat *.txt);;All files (*)",
+            )
+
+        def browse_thermo_rot_dos_output(self) -> None:
+            self._browse_thermo_save_path(
+                self.thermo_rot_dos_output,
+                "Write rotational DOS",
+                "DOS files (*.dat *.txt);;All files (*)",
+            )
+
+        def browse_thermo_rovib_q_output(self) -> None:
+            self._browse_thermo_save_path(
+                self.thermo_rovib_q_output,
+                "Write rovib Q(T)",
+                "Data files (*.dat *.txt);;All files (*)",
+            )
+
+        def browse_thermo_export_dir(self) -> None:
+            path = QFileDialog.getExistingDirectory(
+                self,
+                "Select publication export directory",
+                self.thermo_export_dir.text().strip() or str(Path.cwd()),
+            )
+            if path:
+                self.thermo_export_dir.setText(path)
+
+        def _browse_thermo_save_path(
+            self,
+            field: QLineEdit,
+            title: str,
+            file_filter: str,
+        ) -> None:
+            path, _selected = QFileDialog.getSaveFileName(
+                self,
+                title,
+                field.text().strip() or str(Path.cwd()),
+                file_filter,
+            )
+            if path:
+                field.setText(path)
+
+        def run_thermo_rovib_summary(self) -> None:
+            if not self._ensure_thermo_kinetics_ready_for_command("Rovib summary"):
+                return
+            command = self.thermo_kinetics_controller.rovib_summary_command()
+            self._start_command(command, command.label)
+
+        def run_thermo(self) -> None:
+            if not self._ensure_thermo_kinetics_ready_for_command("Thermo"):
+                return
+            cutoff = self._optional_float_field(
+                self.thermo_cutoff_cm1,
+                "Thermo",
+                "cutoff",
+                default=10.0,
+            )
+            if cutoff is False:
+                return
+            report_output = (
+                self._optional_path_text(self.thermo_report_output)
+                if self.thermo_write_report.isChecked()
+                else None
+            )
+            command = self.thermo_kinetics_controller.thermo_command(
+                out=report_output,
+                report=self.thermo_write_report.isChecked(),
+                write_section=self.thermo_write_section.isChecked(),
+                cutoff_cm1=cutoff,
+                keep_low_positive=self.thermo_keep_low_positive.isChecked(),
+            )
+            if self.thermo_write_section.isChecked():
+                self.pending_xyzin_after_run = self.controller.xyzin
+            self._start_command(command, command.label)
+
+        def run_thermo_vibrational_dos(self) -> None:
+            if not self._ensure_thermo_kinetics_ready_for_command("Vibrational DOS"):
+                return
+            vmax = self._required_positive_int_field(self.thermo_vmax, "Vibrational DOS", "vmax")
+            if vmax is None:
+                return
+            emax = self._optional_float_field(
+                self.thermo_emax_cm1,
+                "Vibrational DOS",
+                "Emax",
+                default=8000.0,
+            )
+            if emax is False:
+                return
+            bin_cm1 = self._optional_float_field(
+                self.thermo_bin_cm1,
+                "Vibrational DOS",
+                "bin",
+                default=50.0,
+            )
+            if bin_cm1 is False:
+                return
+            ncap = self._optional_float_field(
+                self.thermo_ncap,
+                "Vibrational DOS",
+                "ncap",
+                default=10.0,
+            )
+            if ncap is False:
+                return
+            command = self.thermo_kinetics_controller.vibrational_dos_command(
+                out=self._thermo_output_path(
+                    self.thermo_vib_dos_output,
+                    default_vibrational_dos_output,
+                ),
+                vmax=vmax,
+                emax_cm1=emax,
+                bin_cm1=bin_cm1,
+                ncap=ncap,
+            )
+            self._start_command(command, command.label)
+
+        def run_thermo_rovib_dos(self) -> None:
+            if not self._ensure_thermo_kinetics_ready_for_command("Rovibrational DOS"):
+                return
+            emax_rot = self._optional_float_field(
+                self.thermo_emax_rot,
+                "Rovibrational DOS",
+                "rotational Emax",
+            )
+            if emax_rot is False:
+                return
+            jmax = self._optional_positive_int_field(
+                self.thermo_jmax,
+                "Rovibrational DOS",
+                "Jmax",
+            )
+            if jmax is False:
+                return
+            command = self.thermo_kinetics_controller.rovibrational_dos_command(
+                vib_dos=self._thermo_output_path(
+                    self.thermo_vib_dos_output,
+                    default_vibrational_dos_output,
+                ),
+                out=self._thermo_output_path(
+                    self.thermo_rovib_dos_output,
+                    default_rovibrational_dos_output,
+                ),
+                rot_out=self._thermo_output_path(
+                    self.thermo_rot_dos_output,
+                    default_rotational_dos_output,
+                ),
+                q_out=self._thermo_output_path(self.thermo_rovib_q_output, default_rovib_q_output),
+                emax_rot=emax_rot,
+                jmax=jmax,
+            )
+            self._start_command(command, command.label)
+
+        def run_thermo_publication_export(self) -> None:
+            if not self._ensure_thermo_kinetics_ready_for_command("Thermo publication export"):
+                return
+            formats = self._thermo_publication_formats()
+            if not formats:
+                QMessageBox.warning(
+                    self,
+                    "Thermo publication export",
+                    "Select at least one export format.",
+                )
+                return
+            outdir = self._thermo_output_path(self.thermo_export_dir, default_thermo_export_dir)
+            try:
+                result = self.thermo_kinetics_controller.export_thermo_publication(
+                    outdir,
+                    formats=formats,
+                )
+            except (OSError, ValueError) as exc:
+                QMessageBox.warning(self, "Thermo publication export", str(exc))
+                return
+            self.controller.log(
+                "Wrote Thermo publication export:\n"
+                + "\n".join(str(path) for path in result.paths)
+            )
+            self.log_output.setPlainText("\n".join(self.controller.log_lines))
+            self.refresh()
+
+        def _ensure_thermo_kinetics_ready_for_command(self, title: str) -> bool:
+            if self.controller.xyzin is None:
+                QMessageBox.warning(self, title, "Open or preprocess an ORACLE xyzin first.")
+                return False
+            if self.process is not None:
+                QMessageBox.information(self, "ORACLE", "A command is already running.")
+                return False
+            self.thermo_kinetics_controller.set_xyzin(self.controller.xyzin)
+            return True
+
+        def _optional_positive_int_field(
+            self,
+            field: QLineEdit,
+            title: str,
+            label: str,
+        ):
+            text = field.text().strip()
+            if not text:
+                return None
+            try:
+                value = int(text)
+            except ValueError:
+                QMessageBox.warning(self, title, f"Invalid {label}: {text}")
+                return False
+            if value <= 0:
+                QMessageBox.warning(self, title, f"{label} must be positive.")
+                return False
+            return value
+
+        def _thermo_output_path(self, field: QLineEdit, default_factory) -> Path:
+            if self.controller.xyzin is None:
+                raise ValueError("no ORACLE xyzin project is loaded")
+            text = field.text().strip()
+            output = Path(text) if text else default_factory(self.controller.xyzin)
+            field.setText(str(output))
+            return output
+
+        def _thermo_publication_formats(self) -> tuple[str, ...]:
+            formats = []
+            if self.thermo_export_csv.isChecked():
+                formats.append("csv")
+            if self.thermo_export_tex.isChecked():
+                formats.append("tex")
+            if self.thermo_export_svg.isChecked():
+                formats.append("svg")
+            if self.thermo_export_pdf.isChecked():
+                formats.append("pdf")
+            return tuple(formats)
+
+        def _set_default_thermo_kinetics_outputs(self, xyzin: Path) -> None:
+            self.thermo_report_output.setText(str(default_thermo_report_output(xyzin)))
+            self.thermo_vib_dos_output.setText(str(default_vibrational_dos_output(xyzin)))
+            self.thermo_rot_dos_output.setText(str(default_rotational_dos_output(xyzin)))
+            self.thermo_rovib_dos_output.setText(str(default_rovibrational_dos_output(xyzin)))
+            self.thermo_rovib_q_output.setText(str(default_rovib_q_output(xyzin)))
+            self.thermo_export_dir.setText(str(default_thermo_export_dir(xyzin)))
+
+        def _populate_thermo_kinetics_tables(self, xyzin: Path) -> None:
+            state = load_thermo_kinetics_gui_state(xyzin)
+            self.thermo_kinetics_summary.setPlainText(
+                "\n".join(thermo_kinetics_gui_state_lines(state))
+            )
+            self._fill_table(self.thermo_table, state.thermo)
+            self._fill_table(self.thermo_dos_table, state.dos)
+            self._fill_table(self.kinetics_table, state.kinetics)
+
+        def _clear_thermo_kinetics_tables(self) -> None:
+            summary = getattr(self, "thermo_kinetics_summary", None)
+            if summary is not None:
+                summary.clear()
+            for table in (
+                getattr(self, "thermo_table", None),
+                getattr(self, "thermo_dos_table", None),
+                getattr(self, "kinetics_table", None),
             ):
                 if table is not None:
                     table.setRowCount(0)
@@ -1944,9 +2477,11 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             widget: QTableWidget,
             table: (
                 StructureTable
+                | ElectronicTable
                 | GICForgeTable
                 | GFTable
                 | SEFitTable
+                | ThermoKineticsTable
                 | TrinityTable
                 | ToolContractTable
                 | WorkbenchTable

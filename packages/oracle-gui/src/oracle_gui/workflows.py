@@ -430,6 +430,7 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
         title="Electronic Spectroscopy",
         description="Collect electronic-state data, visualize orbitals and prepare spectra.",
         category="spectroscopy",
+        produced_sections=("ELECTRONIC", "TRANSITIONS", "ORBITALS"),
         capabilities=(
             "collect electronic-state and transition data from QM adapters",
             "visualize orbitals and densities with external viewers",
@@ -444,6 +445,16 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
                 label="Promote FCHK data",
                 command="gaussian promote-fchk",
                 produced_sections=("CARTESIAN_HESSIAN", "NORMAL_MODES", "QFF"),
+            ),
+            WorkflowActionSpec(
+                key="view_molden",
+                label="View orbitals in Molden",
+                command="molden",
+            ),
+            WorkflowActionSpec(
+                key="view_avogadro",
+                label="View orbitals in Avogadro",
+                command="avogadro2",
             ),
         ),
     ),

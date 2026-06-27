@@ -376,10 +376,23 @@ def gf_command(
     )
 
 
-def thermo_command(xyzin: Path | str, *, out: Path | str | None = None) -> OracleGuiCommand:
+def thermo_command(
+    xyzin: Path | str,
+    *,
+    out: Path | str | None = None,
+    report: bool = True,
+    write_section: bool = True,
+    cutoff_cm1: float = 10.0,
+    keep_low_positive: bool = False,
+) -> OracleGuiCommand:
     argv = [*_oracle(), "thermo", str(Path(xyzin))]
-    if out is not None:
+    if out is not None and report:
         argv.extend(["--out", str(Path(out))])
+    _append_flag(argv, "--no-report", not report)
+    _append_flag(argv, "--no-write-section", not write_section)
+    if cutoff_cm1 != 10.0:
+        argv.extend(["--cutoff-cm1", str(cutoff_cm1)])
+    _append_flag(argv, "--keep-low-positive", keep_low_positive)
     return OracleGuiCommand(
         "Run Thermo",
         tuple(argv),

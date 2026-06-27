@@ -11,17 +11,20 @@ from oracle_dvr import DVRRequest, dvr_section_from_request, write_dvr_section
 from oracle_gf import GFGICRow, GFModeRow, GFPEDSection, write_gf_ped_section
 from oracle_gicforge import write_gicforge_build_sections
 from oracle_morpheus import MorpheusSection, write_morpheus_section
+from oracle_thermo import ThermoContribution, ThermoSection, write_thermo_section
 from oracle_trinity import TrinitySection, write_trinity_section
 from oracle_gui import (
     DashboardActionTemplate,
     ORACLE_GUI_WINDOWS,
     OracleDashboardController,
+    OracleElectronicController,
     OracleGICForgeController,
     OracleGFController,
     OracleGuiCommand,
     OracleQMJobsController,
     OracleSEFitController,
     OracleStructureController,
+    OracleThermoKineticsController,
     OracleTrinityController,
     WorkflowStatus,
     all_known_sections,
@@ -34,9 +37,16 @@ from oracle_gui import (
     default_qm_formchk_output,
     default_qm_gaussian_input_output,
     default_qm_gaussian_workdir,
+    default_rovib_q_output,
+    default_rovibrational_dos_output,
+    default_rotational_dos_output,
     dvr_gui_state_lines,
     default_sefit_outdir,
+    default_thermo_export_dir,
+    default_thermo_report_output,
     default_trinity_run_dir,
+    default_vibrational_dos_output,
+    electronic_gui_state_lines,
     gaussian_promote_fchk_command,
     gaussian_promote_rovib_command,
     gaussian_fchk_summary_command,
@@ -49,10 +59,12 @@ from oracle_gui import (
     gicforge_gui_state_lines,
     gicforge_build_command,
     load_dvr_gui_state,
+    load_electronic_gui_state,
     load_gf_gui_state,
     load_gicforge_gui_state,
     load_oracle_project_state,
     load_structure_gui_state,
+    load_thermo_kinetics_gui_state,
     load_tool_contract_gui_state,
     load_vpt2_vci_gui_state,
     load_workbench_gui_state,
@@ -70,6 +82,8 @@ from oracle_gui import (
     semiexp_command,
     sefit_gui_state_lines,
     load_sefit_gui_state,
+    thermo_command,
+    thermo_kinetics_gui_state_lines,
     vpt2_vci_gui_state_lines,
     workbench_gui_state_lines,
     window_spec,
@@ -684,6 +698,133 @@ def test_qm_jobs_controller_builds_adapter_commands(tmp_path):
     assert mrcc_summary.argv[3:5] == ("mrcc", "summary")
 
 
+def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    molden_file = tmp_path / "orbitals.molden"
+    xyzin.write_text(
+        "\n".join(
+            [
+                "1",
+                "electronic",
+                "H 0.0 0.0 0.0",
+                "",
+                "#ELECTRONIC",
+                "SCHEMA oracle.xyz.electronic.v1",
+                "STATE S0 ENERGY_EV=0.0",
+                "",
+                "#TRANSITIONS",
+                "SCHEMA oracle.xyz.transitions.v1",
+                "COLUMNS FROM TO ENERGY_EV OSC",
+                "S0 S1 4.20 0.10",
+                "",
+                "#ORBITALS",
+                "SCHEMA oracle.xyz.orbitals.v1",
+                f"MOLDEN {molden_file}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    controller = OracleElectronicController(xyzin)
+
+    state = load_electronic_gui_state(xyzin)
+    lines = electronic_gui_state_lines(state)
+    molden = controller.molden_command(molden_file, executable="molden-test")
+    avogadro = controller.avogadro_command(molden_file, executable="avogadro-test")
+
+    assert state.ready
+    assert ("ELECTRONIC", "yes", "3") in state.sections.rows
+    assert state.transitions.columns == ("FROM", "TO", "ENERGY_EV", "OSC")
+    assert state.transitions.rows == (("S0", "S1", "4.20", "0.10"),)
+    assert state.orbitals.rows == (("1", f"MOLDEN {molden_file}"),)
+    assert "ready: 1" in lines
+    assert molden.argv == ("molden-test", str(molden_file))
+    assert avogadro.argv == ("avogadro-test", str(molden_file))
+
+
+def test_thermo_kinetics_gui_state_and_publication_export(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text("1\nthermo\nH 0.0 0.0 0.0\n", encoding="utf-8")
+    write_thermo_section(
+        xyzin,
+        ThermoSection(
+            translational=ThermoContribution(Q_dimless=2.0, S_JmolK=10.0),
+            rotational=ThermoContribution(Q_dimless=3.0, S_JmolK=20.0),
+            vibrational=ThermoContribution(Q_dimless=4.0, S_JmolK=30.0),
+            total=ThermoContribution(Q_dimless=24.0, S_JmolK=60.0),
+        ),
+    )
+    default_vibrational_dos_output(xyzin).write_text(
+        "# format: E_cm1 log_g\n25.0 0.0\n75.0 0.69314718056\n",
+        encoding="utf-8",
+    )
+    default_rovib_q_output(xyzin).write_text("# T_K Q_rovib\n298.150000 1.0\n", encoding="utf-8")
+    controller = OracleThermoKineticsController(xyzin)
+
+    state = load_thermo_kinetics_gui_state(xyzin)
+    lines = thermo_kinetics_gui_state_lines(state)
+    export = controller.export_thermo_publication(
+        default_thermo_export_dir(xyzin),
+        formats=("csv", "tex", "svg", "pdf"),
+    )
+
+    assert state.ready
+    assert state.thermo.rows[-1][0] == "tot"
+    assert state.thermo.rows[-1][1] == "24"
+    assert any(row[0] == "vibrational" and row[2] == "yes" and row[3] == "2" for row in state.dos.rows)
+    assert "thermo ready: 1" in lines
+    assert len(export.paths) == 4
+    assert (default_thermo_export_dir(xyzin) / "molecule.thermo.csv").exists()
+    assert (default_thermo_export_dir(xyzin) / "molecule.thermo.tex").exists()
+    assert (default_thermo_export_dir(xyzin) / "molecule.thermo.svg").read_text(
+        encoding="utf-8"
+    ).startswith("<svg")
+    assert (default_thermo_export_dir(xyzin) / "molecule.thermo.pdf").read_bytes().startswith(
+        b"%PDF"
+    )
+
+
+def test_thermo_kinetics_controller_builds_shared_commands(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    controller = OracleThermoKineticsController(xyzin)
+
+    thermo = controller.thermo_command(
+        out=default_thermo_report_output(xyzin),
+        report=False,
+        write_section=False,
+        cutoff_cm1=20.0,
+        keep_low_positive=True,
+    )
+    vib_dos = controller.vibrational_dos_command(
+        out=default_vibrational_dos_output(xyzin),
+        vmax=4,
+        emax_cm1=5000.0,
+        bin_cm1=25.0,
+        ncap=8.0,
+    )
+    rovib_dos = controller.rovibrational_dos_command(
+        vib_dos=default_vibrational_dos_output(xyzin),
+        out=default_rovibrational_dos_output(xyzin),
+        rot_out=default_rotational_dos_output(xyzin),
+        q_out=default_rovib_q_output(xyzin),
+        emax_rot=100.0,
+        jmax=20,
+    )
+
+    assert thermo.argv[:4] == (sys.executable, "-m", "oracle", "thermo")
+    assert "--no-report" in thermo.argv
+    assert "--no-write-section" in thermo.argv
+    assert thermo.argv[thermo.argv.index("--cutoff-cm1") + 1] == "20.0"
+    assert "--keep-low-positive" in thermo.argv
+    assert vib_dos.argv[3:5] == ("rovib", "dos")
+    assert vib_dos.argv[vib_dos.argv.index("--vmax") + 1] == "4"
+    assert vib_dos.argv[vib_dos.argv.index("--out") + 1] == str(default_vibrational_dos_output(xyzin))
+    assert rovib_dos.argv[3:5] == ("rovib", "dos-rovib")
+    assert rovib_dos.argv[rovib_dos.argv.index("--rot-out") + 1] == str(default_rotational_dos_output(xyzin))
+    assert rovib_dos.argv[rovib_dos.argv.index("--q-out") + 1] == str(default_rovib_q_output(xyzin))
+    assert rovib_dos.argv[-2:] == ("--jmax", "20")
+
+
 def test_sefit_gui_state_reports_missing_morpheus_without_crashing(tmp_path):
     xyzin = tmp_path / "molecule.xyzin"
     xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
@@ -882,10 +1023,18 @@ def test_gui_window_specs_cover_primary_oracle_workflows():
     assert window_spec("rotational_spectroscopy").category == "spectroscopy"
     assert "mode heat-map" in window_spec("vibrational_spectroscopy").publication_exports
     assert "Molden" in window_spec("electronic_spectroscopy").external_viewers
+    assert window_spec("electronic_spectroscopy").produced_sections == (
+        "ELECTRONIC",
+        "TRANSITIONS",
+        "ORBITALS",
+    )
     assert "KINETICS" in window_spec("thermochemistry_kinetics").produced_sections
     assert any(action.key == "rovib_summary" for action in window_spec("thermochemistry_kinetics").actions)
     assert window_spec("trinity").produced_sections == ("TRINITY",)
     assert "GIC" in all_known_sections()
+    assert "ELECTRONIC" in all_known_sections()
+    assert "TRANSITIONS" in all_known_sections()
+    assert "ORBITALS" in all_known_sections()
     assert "KINETICS" in all_known_sections()
     assert "TRINITY" in all_known_sections()
 
@@ -909,6 +1058,14 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
         vib_dos=tmp_path / "dos_vib.dat",
         out=tmp_path / "dos_rovib.dat",
         jmax=20,
+    )
+    thermo = thermo_command(
+        xyzin,
+        out=tmp_path / "thermo.report",
+        report=False,
+        write_section=False,
+        cutoff_cm1=20.0,
+        keep_low_positive=True,
     )
     gic = gicforge_build_command(xyzin)
     gf = gf_command(
@@ -941,6 +1098,11 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
     assert rovib_summary.argv[-3:] == ("rovib", "summarize", str(xyzin))
     assert "dos" in vib_dos.argv
     assert rovib_dos.argv[-2:] == ("--jmax", "20")
+    assert thermo.argv[3:5] == ("thermo", str(xyzin))
+    assert "--no-report" in thermo.argv
+    assert "--no-write-section" in thermo.argv
+    assert thermo.argv[thermo.argv.index("--cutoff-cm1") + 1] == "20.0"
+    assert "--keep-low-positive" in thermo.argv
     assert " ".join(gic.argv).endswith(
         "gicforge build "
         f"{xyzin} --symmetrize --sycart --improper-dihedrals"
