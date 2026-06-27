@@ -24,3 +24,8 @@ The example demonstrates that:
 The example is covered by
 `tests/test_matrix_gaussian_readallgic_examples.py`, so CI can check the
 Gaussian-side ReadAllGIC contract without launching Gaussian.
+
+The same test also promotes the printed Cartesian Hessian from `pyrrole.log`
+into `#CARTESIAN_HESSIAN`, rebuilds the symmetrized `#GIC` section and runs
+GF/PED. The GF frequencies reproduce the Gaussian frequencies within the
+rounding of the printed log matrix.

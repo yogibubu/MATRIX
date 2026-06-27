@@ -266,9 +266,9 @@ def gf_from_hessian_input_and_gic_definition(
     if len(definition.reference_coordinates_angstrom) != len(input_data.atomic_numbers):
         raise ValueError("GIC definition atom count does not match Hessian input")
     coords_for_b = (
-        np.asarray(input_data.cartesian_coordinates_bohr, dtype=float)
+        np.asarray(input_data.cartesian_coordinates_bohr, dtype=float) * BOHR_TO_ANGSTROM
         if coordinates_angstrom is None
-        else np.asarray(coordinates_angstrom, dtype=float) / BOHR_TO_ANGSTROM
+        else np.asarray(coordinates_angstrom, dtype=float)
     )
     b_matrix = build_gic_b_matrix(definition, coordinates_angstrom=coords_for_b)
     local_mask = None
@@ -310,7 +310,8 @@ def gf_from_hessian_input_and_xyzin(
     definition = read_gic_definition_from_xyzin(Path(xyzin_path))
     b_matrix = build_gic_b_matrix(
         definition,
-        coordinates_angstrom=np.asarray(input_data.cartesian_coordinates_bohr, dtype=float),
+        coordinates_angstrom=np.asarray(input_data.cartesian_coordinates_bohr, dtype=float)
+        * BOHR_TO_ANGSTROM,
     )
     local_mask = None
     if local_options is not None and local_options.enabled:

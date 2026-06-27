@@ -1,6 +1,18 @@
 from pathlib import Path
 
-from matrix_gaussian import check_gaussian_readallgic_log
+import numpy as np
+
+from matrix_chem import preprocess_to_enriched_xyz, write_validation_section
+from matrix_gaussian import (
+    check_gaussian_readallgic_log,
+    hessian_input_from_gaussian_log,
+    promote_gaussian_log_hessian_to_xyzin,
+    read_gaussian_log_cartesian_hessian,
+    summarize_gaussian_log,
+)
+from matrix_gf import run_xyzin_gf_report_from_xyzin
+from matrix_gf.harmonic import HESSIAN_EIGENVALUE_TO_CM
+from matrix_neo import write_gicforge_build_sections
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,3 +59,41 @@ def test_pyrrole_readallgic_input_freezes_non_total_coordinates() -> None:
     assert "b1rpck001(frozen)" in text
     assert "a2oupl001(frozen)" in text
     assert "b1oupl003(frozen)" in text
+
+
+def test_pyrrole_log_hessian_reconstructs_gaussian_frequencies() -> None:
+    raw_hessian = read_gaussian_log_cartesian_hessian(PYRROLE / "pyrrole.log")
+    hessian_input = hessian_input_from_gaussian_log(PYRROLE / "pyrrole.log")
+    weights = 1.0 / np.sqrt(np.repeat(hessian_input.masses_amu, 3))
+    mass_weighted = hessian_input.cartesian_hessian * weights[:, None] * weights[None, :]
+    eigenvalues = np.linalg.eigvalsh(0.5 * (mass_weighted + mass_weighted.T))
+    frequencies = np.sign(eigenvalues) * np.sqrt(np.abs(eigenvalues)) * HESSIAN_EIGENVALUE_TO_CM
+    gaussian_frequencies = np.asarray(
+        summarize_gaussian_log(PYRROLE / "pyrrole.log").frequencies_cm
+    )
+
+    assert hessian_input.source == "gaussian-log"
+    assert raw_hessian.shape == hessian_input.cartesian_hessian.shape
+    assert np.allclose(raw_hessian, hessian_input.cartesian_hessian)
+    assert hessian_input.cartesian_hessian.shape == (30, 30)
+    assert np.allclose(frequencies[6:], gaussian_frequencies, atol=0.4)
+
+
+def test_pyrrole_gf_uses_log_hessian_and_symmetrized_gics(tmp_path: Path) -> None:
+    xyzin = tmp_path / "pyrrole.xyzin"
+    preprocess_to_enriched_xyz(PYRROLE / "pyrrole.gjf", xyzin, source_kind="gaussian")
+    write_validation_section(xyzin)
+    write_gicforge_build_sections(xyzin, symmetrize=True)
+    promote_gaussian_log_hessian_to_xyzin(PYRROLE / "pyrrole.log", xyzin)
+
+    report = run_xyzin_gf_report_from_xyzin(xyzin)
+    gaussian_frequencies = np.asarray(
+        summarize_gaussian_log(PYRROLE / "pyrrole.log").frequencies_cm
+    )
+
+    assert report.result.point_group == "C2v"
+    assert report.result.symmetrized_gics is True
+    assert report.result.gic_names[:3] == ("A1Str001", "A1Str002", "A1Str003")
+    assert "A2RPck001" in report.result.gic_names
+    assert "B1OuPl003" in report.result.gic_names
+    assert np.allclose(report.result.frequencies_cm, gaussian_frequencies, atol=0.02)

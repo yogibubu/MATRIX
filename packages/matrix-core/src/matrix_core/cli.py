@@ -122,6 +122,12 @@ def build_parser(
     gaussian_promote_fchk.add_argument("--no-qff", action="store_true")
     gaussian_promote_fchk.add_argument("--no-electronic", action="store_true")
     gaussian_promote_fchk.add_argument("--no-orbitals", action="store_true")
+    gaussian_promote_log_hessian = gaussian_sub.add_parser(
+        "promote-log-hessian",
+        help="Promote a printed Gaussian log Cartesian Hessian into a MATRIX xyzin",
+    )
+    gaussian_promote_log_hessian.add_argument("log", type=Path)
+    gaussian_promote_log_hessian.add_argument("xyzin", type=Path)
     gaussian_promote_electronic = gaussian_sub.add_parser(
         "promote-electronic",
         help="Promote Gaussian electronic states/transitions into a MATRIX xyzin",
@@ -958,6 +964,13 @@ def main(
         print(f"wrote_qff: {int(result.wrote_qff)}")
         print(f"wrote_electronic: {int(result.wrote_electronic)}")
         print(f"wrote_orbitals: {int(result.wrote_orbitals)}")
+        return 0
+    if args.command == "gaussian" and args.gaussian_command == "promote-log-hessian":
+        from matrix_gaussian import promote_gaussian_log_hessian_to_xyzin
+
+        result = promote_gaussian_log_hessian_to_xyzin(args.log, args.xyzin)
+        print(f"Promoted Gaussian log Hessian: {result.log_path} -> {result.xyzin}")
+        print(f"wrote_cartesian_hessian: {int(result.wrote_cartesian_hessian)}")
         return 0
     if args.command == "gaussian" and args.gaussian_command == "promote-electronic":
         from matrix_gaussian import promote_gaussian_electronic_log_to_xyzin

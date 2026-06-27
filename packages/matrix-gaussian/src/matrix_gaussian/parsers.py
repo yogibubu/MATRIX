@@ -6,11 +6,13 @@ import re
 
 import numpy as np
 
-from matrix_chem import MolecularGeometry
+from matrix_chem import MolecularGeometry, atomic_mass
 from matrix_chem.geometry_io import GeometryParseError, normalize_atom_symbol
+from matrix_chem.topology.elements import atomic_number
 from matrix_chem.zmatrix import parse_zmatrix_text, zmatrix_to_geometry
 
 
+ANGSTROM_TO_BOHR = 1.0 / 0.52917721092
 SCF_RE = re.compile(r"SCF Done:\s+E\([^)]+\)\s+=\s+([-+]?\d+\.\d+)")
 NORMAL_TERMINATION = "Normal termination of Gaussian"
 STANDARD_ORIENTATION = "Standard orientation:"
@@ -20,6 +22,10 @@ RANK_RE = re.compile(r"NTRed=\s*(\d+).*?NRank=\s*(\d+)", flags=re.IGNORECASE)
 NIMAG_RE = re.compile(r"N\s*Imag\s*=\s*(\d+)", flags=re.IGNORECASE)
 READALLGIC_RE = re.compile(r"\breadallgic\b", flags=re.IGNORECASE)
 PARAMETER_LINE_RE = re.compile(r"^\s*!\s*(?P<label>\S+)\s+(?P<body>.*?)\s*!\s*$")
+THERMOCHEMISTRY_MASS_RE = re.compile(
+    r"Atom\s+(?P<index>\d+)\s+has atomic number\s+(?P<number>\d+)\s+and mass\s+"
+    r"(?P<mass>[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[DEde][-+]?\d+)?)"
+)
 
 
 @dataclass(frozen=True)
@@ -55,6 +61,13 @@ class GaussianReadAllGICLogCheck:
     @property
     def ok(self) -> bool:
         return not self.errors
+
+
+@dataclass(frozen=True)
+class GaussianLogHessianPromotion:
+    xyzin: Path
+    log_path: Path
+    wrote_cartesian_hessian: bool
 
 
 @dataclass(frozen=True)
@@ -260,6 +273,65 @@ def read_gaussian_log_geometry(path: Path) -> MolecularGeometry:
     return geometry
 
 
+def read_gaussian_log_cartesian_hessian(path: Path) -> np.ndarray:
+    """Read the last printed Gaussian Cartesian force-constant matrix."""
+    target = Path(path)
+    text = target.read_text(encoding="utf-8", errors="replace")
+    summary = summarize_gaussian_log(target)
+    geometry = _parse_last_archive_geometry(text, source_path=target) or summary.last_orientation
+    if geometry is None:
+        raise GeometryParseError("Gaussian log contains no readable orientation block")
+    return _parse_last_cartesian_hessian(text.splitlines(), size=3 * geometry.natoms)
+
+
+def hessian_input_from_gaussian_log(path: Path):
+    """Gaussian log adapter: return the canonical MATRIX Hessian input for GF."""
+    from matrix_gf import HessianInput
+
+    target = Path(path)
+    text = target.read_text(encoding="utf-8", errors="replace")
+    summary = summarize_gaussian_log(target)
+    geometry = _parse_last_archive_geometry(text, source_path=target) or summary.last_orientation
+    if geometry is None:
+        raise GeometryParseError("Gaussian log contains no readable orientation block")
+    numbers = np.asarray(_atomic_numbers_from_geometry(geometry), dtype=int)
+    masses = np.asarray(_masses_from_gaussian_log(text, numbers), dtype=float)
+    hessian = _parse_last_cartesian_hessian(text.splitlines(), size=3 * geometry.natoms)
+    data = HessianInput(
+        atomic_numbers=numbers,
+        cartesian_coordinates_bohr=np.asarray(geometry.coordinates_angstrom, dtype=float)
+        * ANGSTROM_TO_BOHR,
+        masses_amu=masses,
+        cartesian_hessian=hessian,
+        harmonic_frequencies_cm=np.asarray(summary.frequencies_cm, dtype=float),
+        source="gaussian-log",
+    )
+    data.validate()
+    return data
+
+
+def promote_gaussian_log_hessian_to_xyzin(
+    log_path: Path | str,
+    xyzin: Path | str,
+) -> GaussianLogHessianPromotion:
+    """Promote a Gaussian log Cartesian Hessian into shared MATRIX xyzin sections."""
+    from matrix_qm import cartesian_hessian_section_from_hessian_input
+    from matrix_qm import write_cartesian_hessian_section
+
+    source = Path(log_path)
+    target = Path(xyzin)
+    data = hessian_input_from_gaussian_log(source)
+    write_cartesian_hessian_section(
+        target,
+        cartesian_hessian_section_from_hessian_input(data, source=f"gaussian-log {source}"),
+    )
+    return GaussianLogHessianPromotion(
+        xyzin=target,
+        log_path=source,
+        wrote_cartesian_hessian=True,
+    )
+
+
 def _route_end(lines: list[str]) -> int | None:
     idx = 0
     while idx < len(lines):
@@ -456,6 +528,123 @@ def _parse_last_nimag(text: str) -> int | None:
     if not matches:
         return None
     return int(matches[-1].group(1))
+
+
+def _parse_last_cartesian_hessian(lines: list[str], *, size: int) -> np.ndarray:
+    starts = [
+        idx for idx, line in enumerate(lines) if "Force constants in Cartesian coordinates" in line
+    ]
+    if not starts:
+        raise GeometryParseError("Gaussian log contains no Cartesian force-constant matrix")
+    return _parse_cartesian_hessian_block(lines[starts[-1] + 1 :], size=size)
+
+
+def _parse_cartesian_hessian_block(lines: list[str], *, size: int) -> np.ndarray:
+    matrix = np.zeros((size, size), dtype=float)
+    filled = np.zeros((size, size), dtype=bool)
+    columns: list[int] = []
+    for raw in lines:
+        if "Force constants in internal coordinates" in raw or raw.lstrip().startswith("FormGI"):
+            break
+        parts = raw.split()
+        if not parts:
+            continue
+        if all(part.isdigit() for part in parts):
+            columns = [int(part) - 1 for part in parts]
+            continue
+        if not columns:
+            continue
+        try:
+            row = int(parts[0]) - 1
+        except ValueError:
+            continue
+        if row < 0 or row >= size:
+            continue
+        values = [_float_token(token) for token in parts[1:]]
+        for column, value in zip(columns, values):
+            if column < 0 or column >= size:
+                continue
+            matrix[row, column] = value
+            matrix[column, row] = value
+            filled[row, column] = True
+            filled[column, row] = True
+    required = np.tril(np.ones((size, size), dtype=bool))
+    if not np.all(filled[required]):
+        missing = np.argwhere(required & ~filled)
+        row, column = missing[0]
+        raise GeometryParseError(
+            "Gaussian Cartesian force-constant matrix is incomplete at "
+            f"row {row + 1}, column {column + 1}"
+        )
+    return 0.5 * (matrix + matrix.T)
+
+
+def _atomic_numbers_from_geometry(geometry: MolecularGeometry) -> tuple[int, ...]:
+    numbers: list[int] = []
+    for atom in geometry.atoms:
+        number = atomic_number(atom)
+        if number is None:
+            raise GeometryParseError(f"unsupported Gaussian atom label: {atom}")
+        numbers.append(number)
+    return tuple(numbers)
+
+
+def _masses_from_gaussian_log(text: str, atomic_numbers: np.ndarray) -> tuple[float, ...]:
+    masses_by_index: dict[int, float] = {}
+    numbers_by_index: dict[int, int] = {}
+    for match in THERMOCHEMISTRY_MASS_RE.finditer(text):
+        index = int(match.group("index"))
+        masses_by_index[index] = _float_token(match.group("mass"))
+        numbers_by_index[index] = int(match.group("number"))
+    if len(masses_by_index) >= len(atomic_numbers):
+        masses = []
+        for index, number in enumerate(atomic_numbers, start=1):
+            if numbers_by_index.get(index) != int(number):
+                break
+            masses.append(masses_by_index[index])
+        if len(masses) == len(atomic_numbers):
+            return tuple(masses)
+    return tuple(float(atomic_mass(int(number))) for number in atomic_numbers)
+
+
+def _parse_last_archive_geometry(text: str, *, source_path: Path) -> MolecularGeometry | None:
+    starts = [match.start() for match in re.finditer(r"1\\1\\GINC", text)]
+    for start in reversed(starts):
+        end = text.find(r"\@", start)
+        if end < 0:
+            continue
+        compact = re.sub(r"\s+", "", text[start : end + 2])
+        match = re.search(
+            r"\\\\(?P<charge>-?\d+),(?P<multiplicity>\d+)\\(?P<body>.*?)(?=\\\\Version=)",
+            compact,
+        )
+        if not match:
+            continue
+        atoms: list[str] = []
+        coords: list[list[float]] = []
+        for token in match.group("body").split("\\"):
+            parts = token.split(",")
+            if len(parts) < 4:
+                continue
+            try:
+                atom = normalize_atom_symbol(parts[0])
+                xyz = [_float_token(parts[1]), _float_token(parts[2]), _float_token(parts[3])]
+            except (GeometryParseError, ValueError):
+                continue
+            atoms.append(atom)
+            coords.append(xyz)
+        if atoms:
+            return MolecularGeometry(
+                atoms=tuple(atoms),
+                coordinates_angstrom=np.asarray(coords, dtype=float),
+                comment="Gaussian archive geometry",
+                source_format="gaussian_log_archive",
+                source_path=source_path,
+                charge=int(match.group("charge")),
+                multiplicity=int(match.group("multiplicity")),
+                metadata={"orientation": "archive_original_axes"},
+            )
+    return None
 
 
 def _parse_last_orientation(lines: list[str], *, source_path: Path) -> MolecularGeometry | None:
