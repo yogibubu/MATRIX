@@ -57,6 +57,10 @@ oracle-run --help
 oracle-test-all
 ```
 
+Full MATRIX/ORACLE installation notes, including visualization programs
+Avogadro, Molden, MOrbVis browser fallback and XQuartz setup, are in
+[`docs/INSTALL_MATRIX.md`](docs/INSTALL_MATRIX.md).
+
 The demanding `test_molecules` corpus is versioned under
 `tests/fixtures/test_molecules` for GICForge/parser regressions.
 
