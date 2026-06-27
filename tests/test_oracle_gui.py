@@ -6,9 +6,11 @@ import subprocess
 import sys
 
 from oracle_chem import preprocess_to_enriched_xyz, write_validation_section
+from oracle_core import XyzinIsotopologueRecord, write_xyzin_isotopologue_records
 from oracle_dvr import DVRRequest, dvr_section_from_request, write_dvr_section
 from oracle_gf import GFGICRow, GFModeRow, GFPEDSection, write_gf_ped_section
 from oracle_gicforge import write_gicforge_build_sections
+from oracle_morpheus import MorpheusSection, write_morpheus_section
 from oracle_gui import (
     DashboardActionTemplate,
     ORACLE_GUI_WINDOWS,
@@ -16,6 +18,7 @@ from oracle_gui import (
     OracleGICForgeController,
     OracleGFController,
     OracleGuiCommand,
+    OracleSEFitController,
     OracleStructureController,
     WorkflowStatus,
     all_known_sections,
@@ -26,6 +29,7 @@ from oracle_gui import (
     default_gicforge_gaussian_output,
     default_gicforge_report_output,
     dvr_gui_state_lines,
+    default_sefit_outdir,
     gaussian_promote_fchk_command,
     gaussian_promote_rovib_command,
     gf_command,
@@ -44,6 +48,9 @@ from oracle_gui import (
     rovib_density_command,
     rovib_summary_command,
     rovib_vibrational_dos_command,
+    semiexp_command,
+    sefit_gui_state_lines,
+    load_sefit_gui_state,
     vpt2_vci_gui_state_lines,
     window_spec,
 )
@@ -511,6 +518,114 @@ def test_gf_controller_builds_run_command_with_options(tmp_path):
     assert "--no-write-section" in command.argv
 
 
+def test_sefit_gui_state_reports_missing_morpheus_without_crashing(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
+
+    state = load_sefit_gui_state(xyzin)
+    lines = sefit_gui_state_lines(state)
+
+    assert state.exists
+    assert not state.ready
+    assert "missing #MORPHEUS section" in state.messages
+    assert "ready: 0" in lines
+
+
+def test_sefit_gui_state_reads_morpheus_and_isotopologues(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    outdir = tmp_path / "semiexp"
+    xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
+    write_xyzin_isotopologue_records(
+        xyzin,
+        (
+            XyzinIsotopologueRecord(
+                label="parent",
+                rotational_MHz=(1000.0, 900.0, 800.0),
+                sigma_MHz=(0.01, 0.01, 0.01),
+            ),
+            XyzinIsotopologueRecord(
+                label="d1",
+                substitutions={1: 2},
+                rotational_MHz=(950.0, 850.0, 750.0),
+            ),
+        ),
+    )
+    write_morpheus_section(
+        xyzin,
+        MorpheusSection(
+            status="complete",
+            xyzin_path=xyzin,
+            run_dir=outdir,
+            manifest_path=outdir / "semiexp_manifest.json",
+            text_report_path=outdir / "semiexp_report.txt",
+            html_report_path=outdir / "semiexp_report.html",
+            latex_tables_path=outdir / "semiexp_tables.tex",
+            geometry_path=outdir / "semiexp_geometry.xyz",
+            parameters_path=outdir / "semiexp_parameters.csv",
+            residuals_path=outdir / "semiexp_residuals.csv",
+            rotational_constants_path=outdir / "semiexp_rotational_constants.csv",
+            diagnostics_path=outdir / "semiexp_diagnostics.csv",
+            backend="python",
+            coordinate_model="gic",
+            observable="moments",
+            components=("A", "B", "C"),
+            rms_MHz=0.02,
+            rotational_rms_MHz=0.03,
+            iterations=2,
+            stationary_point="minimum",
+            convergence="max_iter",
+            rank=3,
+            condition_number=123.0,
+            isotopologue_count=2,
+            parameter_count=3,
+            active_parameter_count=2,
+            warning_count=1,
+        ),
+    )
+
+    state = load_sefit_gui_state(xyzin)
+    lines = sefit_gui_state_lines(state)
+
+    assert state.ready
+    assert state.summary.run_dir == outdir
+    assert state.summary.coordinate_model == "gic"
+    assert state.summary.components == ("A", "B", "C")
+    assert state.isotopologues.rows[0] == (
+        "parent",
+        "parent",
+        "1000,900,800",
+        "",
+        "",
+        "0.01,0.01,0.01",
+    )
+    assert state.isotopologues.rows[1][1] == "1:2"
+    assert ("Run dir", str(outdir)) in state.outputs.rows
+    assert ("Condition number", "123") in state.diagnostics.rows
+    assert "coordinate model: gic" in lines
+    assert "warnings: 1" in lines
+
+
+def test_sefit_controller_builds_semiexp_command(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    job = tmp_path / "job.toml"
+    controller = OracleSEFitController(xyzin)
+
+    command = controller.run_command(
+        job=job,
+        outdir=default_sefit_outdir(xyzin),
+        backend="python",
+        write_section=False,
+        extra_args=("--max-iter", "2"),
+    )
+
+    assert command.argv[:4] == (sys.executable, "-m", "oracle", "semiexp")
+    assert command.argv[command.argv.index("--job") + 1] == str(job)
+    assert command.argv[command.argv.index("--xyzin") + 1] == str(xyzin)
+    assert command.argv[command.argv.index("--outdir") + 1] == str(default_sefit_outdir(xyzin))
+    assert "--no-write-section" in command.argv
+    assert command.argv[-2:] == ("--max-iter", "2")
+
+
 def test_gui_window_specs_cover_primary_oracle_workflows():
     keys = {spec.key for spec in ORACLE_GUI_WINDOWS}
 
@@ -543,6 +658,7 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
     xyzin = tmp_path / "mol.xyzin"
     fchk = tmp_path / "mol.fchk"
     log = tmp_path / "mol.log"
+    job = tmp_path / "job.toml"
 
     preprocess = preprocess_command(source, xyzin, source_kind="xyz")
     avogadro = avogadro_command(xyzin, executable="avogadro")
@@ -569,6 +685,7 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
         subtract_uff_vdw=True,
         nonbonded_14_scale=0.25,
     )
+    sefit = semiexp_command(job, tmp_path / "semiexp", xyzin=xyzin, extra_args=("--max-iter", "2"))
 
     assert preprocess.argv[1:4] == ("-m", "oracle", "babel")
     assert preprocess.argv[-2:] == ("--source-kind", "xyz")
@@ -592,3 +709,7 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
     assert "--subtract-uff-vdw" in gf.argv
     assert gf.argv[gf.argv.index("--nonbonded-14-scale") + 1] == "0.25"
     assert gf.produced_sections == ("GF_PED",)
+    assert sefit.argv[3:5] == ("semiexp", "--job")
+    assert sefit.argv[sefit.argv.index("--xyzin") + 1] == str(xyzin)
+    assert sefit.argv[-2:] == ("--max-iter", "2")
+    assert sefit.produced_sections == ("MORPHEUS",)

@@ -23,6 +23,13 @@ from .gf import (
     load_gf_gui_state,
 )
 from .project import load_oracle_project_state
+from .sefit import (
+    OracleSEFitController,
+    SEFitTable,
+    default_sefit_outdir,
+    load_sefit_gui_state,
+    sefit_gui_state_lines,
+)
 from .structure import (
     OracleStructureController,
     StructureTable,
@@ -81,6 +88,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.structure_controller = OracleStructureController(xyzin)
             self.gicforge_controller = OracleGICForgeController(xyzin)
             self.gf_controller = OracleGFController(xyzin)
+            self.sefit_controller = OracleSEFitController(xyzin)
             self.process: QProcess | None = None
             self.current_actions: tuple[DashboardAction, ...] = ()
             self.pending_xyzin_after_run: Path | None = None
@@ -130,6 +138,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             tabs.addTab(gicforge_tab, "GICForge")
             gf_tab = self._build_gf_tab()
             tabs.addTab(gf_tab, "GF/PED")
+            sefit_tab = self._build_sefit_tab()
+            tabs.addTab(sefit_tab, "SEFit")
             layout.addWidget(tabs, stretch=2)
 
             self.details = QTextEdit()
@@ -156,6 +166,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.structure_controller.set_xyzin(Path(path))
                 self.gicforge_controller.set_xyzin(Path(path))
                 self.gf_controller.set_xyzin(Path(path))
+                self.sefit_controller.set_xyzin(Path(path))
                 self.refresh()
 
         def refresh(self) -> None:
@@ -165,10 +176,12 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._clear_structure_tables()
             self._clear_gicforge_tables()
             self._clear_gf_tables()
+            self._clear_sefit_tables()
             if self.controller.xyzin is None:
                 self.path_label.setText("No ORACLE project loaded")
                 self.gicforge_summary.setPlainText("No ORACLE project loaded")
                 self.gf_summary.setPlainText("No ORACLE project loaded")
+                self.sefit_summary.setPlainText("No ORACLE project loaded")
                 self.details.setPlainText(
                     "\n".join(
                         f"{spec.title}: {spec.description}" for spec in ORACLE_GUI_WINDOWS
@@ -182,9 +195,11 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.structure_controller.set_xyzin(state.xyzin)
             self.gicforge_controller.set_xyzin(state.xyzin)
             self.gf_controller.set_xyzin(state.xyzin)
+            self.sefit_controller.set_xyzin(state.xyzin)
             self.structure_output_path.setText(str(state.xyzin))
             self._set_default_gicforge_outputs(state.xyzin)
             self._set_default_gf_outputs(state.xyzin)
+            self._set_default_sefit_outputs(state.xyzin)
             self.path_label.setText(str(state.xyzin))
             for workflow in state.workflows:
                 self.workflow_list.addItem(
@@ -217,6 +232,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._populate_structure_tables(state.xyzin)
             self._populate_gicforge_tables(state.xyzin)
             self._populate_gf_tables(state.xyzin)
+            self._populate_sefit_tables(state.xyzin)
 
         def show_workflow_details(self, _item=None) -> None:
             if self.controller.xyzin is None:
@@ -334,6 +350,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.structure_controller.set_xyzin(self.pending_xyzin_after_run)
                 self.gicforge_controller.set_xyzin(self.pending_xyzin_after_run)
                 self.gf_controller.set_xyzin(self.pending_xyzin_after_run)
+                self.sefit_controller.set_xyzin(self.pending_xyzin_after_run)
             self.pending_xyzin_after_run = None
             self.refresh()
 
@@ -932,10 +949,145 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 if table is not None:
                     table.setRowCount(0)
 
+        def _build_sefit_tab(self) -> QWidget:
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+
+            job_row = QHBoxLayout()
+            job_row.addWidget(QLabel("Job"))
+            self.sefit_job_path = QLineEdit()
+            job_browse = QPushButton("Browse")
+            job_browse.clicked.connect(self.browse_sefit_job)
+            job_row.addWidget(self.sefit_job_path, stretch=1)
+            job_row.addWidget(job_browse)
+            layout.addLayout(job_row)
+
+            out_row = QHBoxLayout()
+            out_row.addWidget(QLabel("Outdir"))
+            self.sefit_outdir = QLineEdit()
+            out_browse = QPushButton("Browse")
+            out_browse.clicked.connect(self.browse_sefit_outdir)
+            self.sefit_backend = QComboBox()
+            self.sefit_backend.addItems(("python", "fortran77"))
+            self.sefit_write_section = QCheckBox("Update #MORPHEUS")
+            self.sefit_write_section.setChecked(True)
+            out_row.addWidget(self.sefit_outdir, stretch=1)
+            out_row.addWidget(out_browse)
+            out_row.addWidget(QLabel("Backend"))
+            out_row.addWidget(self.sefit_backend)
+            out_row.addWidget(self.sefit_write_section)
+            layout.addLayout(out_row)
+
+            option_row = QHBoxLayout()
+            self.sefit_extra_args = QLineEdit()
+            self.sefit_extra_args.setPlaceholderText("--max-iter 20 --coordinate-model gic")
+            run_button = QPushButton("Run SEFit")
+            run_button.clicked.connect(self.run_sefit)
+            option_row.addWidget(QLabel("Options"))
+            option_row.addWidget(self.sefit_extra_args, stretch=1)
+            option_row.addWidget(run_button)
+            layout.addLayout(option_row)
+
+            self.sefit_summary = QTextEdit()
+            self.sefit_summary.setReadOnly(True)
+            self.sefit_summary.setMaximumHeight(150)
+            layout.addWidget(self.sefit_summary)
+
+            self.sefit_table_tabs = QTabWidget()
+            self.sefit_isotopologue_table = QTableWidget(0, 6)
+            self.sefit_output_table = QTableWidget(0, 2)
+            self.sefit_diagnostics_table = QTableWidget(0, 2)
+            self.sefit_table_tabs.addTab(self.sefit_isotopologue_table, "Isotopologues")
+            self.sefit_table_tabs.addTab(self.sefit_output_table, "Outputs")
+            self.sefit_table_tabs.addTab(self.sefit_diagnostics_table, "Diagnostics")
+            layout.addWidget(self.sefit_table_tabs, stretch=1)
+            return tab
+
+        def browse_sefit_job(self) -> None:
+            path, _selected = QFileDialog.getOpenFileName(
+                self,
+                "Select SEFit / MORPHEUS job",
+                str(Path.cwd()),
+                "SEFit jobs (*.toml *.mfit *.msr *.inp);;All files (*)",
+            )
+            if path:
+                self.sefit_job_path.setText(path)
+
+        def browse_sefit_outdir(self) -> None:
+            path = QFileDialog.getExistingDirectory(
+                self,
+                "Select SEFit output directory",
+                self.sefit_outdir.text().strip() or str(Path.cwd()),
+            )
+            if path:
+                self.sefit_outdir.setText(path)
+
+        def run_sefit(self) -> None:
+            if not self._ensure_sefit_ready_for_command("SEFit / MORPHEUS"):
+                return
+            job_text = self.sefit_job_path.text().strip()
+            if not job_text:
+                QMessageBox.warning(self, "SEFit / MORPHEUS", "Select a SEFit job first.")
+                return
+            self.sefit_controller.set_xyzin(self.controller.xyzin)
+            command = self.sefit_controller.run_command(
+                job=Path(job_text),
+                outdir=self._sefit_outdir(),
+                backend=self.sefit_backend.currentText(),
+                write_section=self.sefit_write_section.isChecked(),
+                extra_args=self._sefit_extra_args(),
+            )
+            self._start_command(command, command.label)
+
+        def _ensure_sefit_ready_for_command(self, title: str) -> bool:
+            if self.controller.xyzin is None:
+                QMessageBox.warning(self, title, "Open or preprocess an ORACLE xyzin first.")
+                return False
+            if self.process is not None:
+                QMessageBox.information(self, "ORACLE", "A command is already running.")
+                return False
+            self.sefit_controller.set_xyzin(self.controller.xyzin)
+            return True
+
+        def _sefit_outdir(self) -> Path:
+            if self.controller.xyzin is None:
+                raise ValueError("no ORACLE xyzin project is loaded")
+            text = self.sefit_outdir.text().strip()
+            outdir = Path(text) if text else default_sefit_outdir(self.controller.xyzin)
+            self.sefit_outdir.setText(str(outdir))
+            return outdir
+
+        def _sefit_extra_args(self) -> tuple[str, ...]:
+            import shlex
+
+            return tuple(shlex.split(self.sefit_extra_args.text().strip()))
+
+        def _set_default_sefit_outputs(self, xyzin: Path) -> None:
+            self.sefit_outdir.setText(str(default_sefit_outdir(xyzin)))
+
+        def _populate_sefit_tables(self, xyzin: Path) -> None:
+            state = load_sefit_gui_state(xyzin)
+            self.sefit_summary.setPlainText("\n".join(sefit_gui_state_lines(state)))
+            self._fill_table(self.sefit_isotopologue_table, state.isotopologues)
+            self._fill_table(self.sefit_output_table, state.outputs)
+            self._fill_table(self.sefit_diagnostics_table, state.diagnostics)
+
+        def _clear_sefit_tables(self) -> None:
+            summary = getattr(self, "sefit_summary", None)
+            if summary is not None:
+                summary.clear()
+            for table in (
+                getattr(self, "sefit_isotopologue_table", None),
+                getattr(self, "sefit_output_table", None),
+                getattr(self, "sefit_diagnostics_table", None),
+            ):
+                if table is not None:
+                    table.setRowCount(0)
+
         def _fill_table(
             self,
             widget: QTableWidget,
-            table: StructureTable | GICForgeTable | GFTable,
+            table: StructureTable | GICForgeTable | GFTable | SEFitTable,
         ) -> None:
             widget.setColumnCount(len(table.columns))
             widget.setHorizontalHeaderLabels(table.columns)

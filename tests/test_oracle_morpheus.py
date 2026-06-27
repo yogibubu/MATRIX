@@ -66,6 +66,7 @@ def test_prepare_semiexp_xyzin_supports_custom_path(tmp_path):
 
 def test_oracle_semiexp_cli_runs_water_gic(tmp_path):
     from oracle_core.cli import main
+    from oracle_morpheus import read_morpheus_section
 
     root = Path(__file__).resolve().parents[1]
     outdir = tmp_path / "run"
@@ -91,10 +92,19 @@ def test_oracle_semiexp_cli_runs_water_gic(tmp_path):
 
     manifest = json.loads((outdir / "semiexp_manifest.json").read_text(encoding="utf-8"))
     checkpoint = json.loads((outdir / "semiexp_checkpoint.json").read_text(encoding="utf-8"))
+    section = read_morpheus_section(xyzin)
 
     assert status == 0
     assert manifest["schema_version"] == "oracle.run.v1"
     assert checkpoint["schema"] == "oracle.semiexp.checkpoint.v1"
+    assert section.status == "complete"
+    assert section.run_dir == outdir
+    assert section.manifest_path == outdir / "semiexp_manifest.json"
+    assert section.html_report_path == outdir / "semiexp_report.html"
+    assert section.latex_tables_path == outdir / "semiexp_tables.tex"
+    assert section.coordinate_model == "gic"
+    assert section.iterations <= 2
+    assert section.parameter_count > 0
     assert "ORACLE semiexperimental equilibrium-geometry fit" in (
         outdir / "semiexp_report.txt"
     ).read_text(encoding="utf-8")

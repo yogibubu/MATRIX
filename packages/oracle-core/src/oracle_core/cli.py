@@ -313,6 +313,7 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
         type=Path,
         help="Canonical ORACLE xyzin container to create/update before SEfit",
     )
+    semiexp.add_argument("--no-write-section", action="store_true", help="Do not update #MORPHEUS")
     semiexp.add_argument("--outdir", type=Path, required=True)
     semiexp.add_argument("--backend", choices=("python", "fortran77"), default="python")
     semiexp.add_argument(
@@ -1143,6 +1144,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
             read_observations,
             read_semiexperimental_job,
             semiexperimental_latex_tables,
+            write_morpheus_section_from_result,
             write_semiexperimental_html_report,
         )
 
@@ -1262,6 +1264,17 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
         )
         _append_manifest_output(args.outdir / "semiexp_manifest.json", "html_report", report_path)
         _append_manifest_output(args.outdir / "semiexp_manifest.json", "latex_tables", tables_path)
+        if args.xyzin is not None and not args.no_write_section:
+            write_morpheus_section_from_result(
+                preprocess.xyzin,
+                result,
+                outdir=args.outdir,
+                backend=backend,
+                source_path=args.job or args.xyz or observations_path,
+                html_report_path=report_path,
+                latex_tables_path=tables_path,
+            )
+            print(f"updated_morpheus_section: {preprocess.xyzin}")
         print(f"manifest: {result.manifest}")
         print(f"report: {report_path}")
         rms_label = "rms_MHz" if result.diagnostics.observable == "rotational_constants" else "rms_observable"

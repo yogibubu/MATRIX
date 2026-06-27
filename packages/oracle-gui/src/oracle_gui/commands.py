@@ -391,10 +391,15 @@ def semiexp_command(
     job: Path | str,
     outdir: Path | str,
     *,
+    xyzin: Path | str | None = None,
     backend: str = "python",
+    write_section: bool = True,
     extra_args: Sequence[str] = (),
 ) -> OracleGuiCommand:
     argv = [*_oracle(), "semiexp", "--job", str(Path(job)), "--outdir", str(Path(outdir)), "--backend", backend]
+    if xyzin is not None:
+        argv.extend(["--xyzin", str(Path(xyzin))])
+    _append_flag(argv, "--no-write-section", not write_section)
     argv.extend(str(item) for item in extra_args)
     return OracleGuiCommand(
         "Run SEFit / MORPHEUS",

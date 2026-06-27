@@ -169,3 +169,19 @@ The GF/PED tab uses `oracle_gui.gf` and the `#GF_PED` section written by
 The tab must not parse Gaussian/FCHK data, reconstruct Hessians or solve GF
 itself. It launches `oracle gf`, then reloads `#GF_PED` through
 `oracle_gf.read_gf_ped_section`.
+
+## SEFit / MORPHEUS Tab
+
+The SEFit tab uses `oracle_gui.sefit` and the `#MORPHEUS` section written by
+`oracle semiexp`. It provides:
+
+- SEFit/MORPHEUS job selection, output directory selection and backend choice;
+- explicit control over whether the active `xyzin` is updated with
+  `#MORPHEUS`;
+- optional CLI arguments for advanced MORPHEUS controls such as iteration
+  limits, coordinate model, robust loss and constraints;
+- read-only tables for `#ISOTOPOLOGUES`, output artifacts and fit diagnostics.
+
+The tab must not run least-squares logic or parse MORPHEUS CSV reports itself.
+It launches `oracle semiexp`, then reloads `#MORPHEUS` through
+`oracle_morpheus.read_morpheus_section`.

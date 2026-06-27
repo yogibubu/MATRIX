@@ -83,6 +83,19 @@ rotational corrections into shared ORACLE sections:
 GF, Thermo, SEfit/MORPHEUS and anharmonic workflows consume these sections
 rather than reparsing Gaussian output.
 
+## SEFit / MORPHEUS State
+
+`oracle semiexp --xyzin molecule.xyzin` updates `#MORPHEUS` by default after a
+successful semiexperimental fit. The section uses schema
+`oracle.xyz.morpheus.v1` and records the run directory, manifest, report paths,
+fitted geometry, parameter/residual/rotational-constant CSV files and summary
+diagnostics such as backend, coordinate model, observable, components, RMS,
+rank, condition number, iteration count and warning count.
+
+Use `--no-write-section` for standalone benchmark or scratch runs that should
+leave the active container unchanged. GUI controllers consume this section
+rather than scanning the MORPHEUS output directory.
+
 ## QM Tensor Sections
 
 `oracle-qm` owns the shared tensor sections used after external QM adapters have
