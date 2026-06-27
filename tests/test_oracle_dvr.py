@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 from oracle_dvr import (
@@ -191,7 +193,10 @@ def test_dvr_output_reader_normalizes_post_run_files(tmp_path):
         prefix="demo",
     )
     _write_dvr_outputs(request.outdir, "demo")
-    section = dvr_section_from_request(request, manifest_path=tmp_path / "out" / "demo_manifest.json")
+    section = dvr_section_from_request(
+        request,
+        manifest_path=tmp_path / "out" / "demo_manifest.json",
+    )
 
     snapshot = collect_dvr_outputs(section)
 
@@ -241,6 +246,35 @@ def test_puckering_dvr_backend_is_vendored_under_oracle_engines():
     assert layout.engine_dir == ROOT / "engines" / "puckering_dvr"
     assert layout.path_analysis_script.is_file()
     assert layout.fortran_bridge_script.is_file()
+
+
+def test_puckering_dvr_engine_routes_dense_eigh_through_oracle_diagonalizer(monkeypatch):
+    import numpy as np
+
+    script = ROOT / "engines" / "puckering_dvr" / "scripts" / "mw_path_dvr.py"
+    spec = importlib.util.spec_from_file_location("oracle_puckering_dvr_test", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    calls = []
+
+    def fake_diagonalize(matrix, subset_by_index=None):
+        calls.append((matrix.shape, subset_by_index))
+        values, vectors = np.linalg.eigh(matrix)
+        if subset_by_index is not None:
+            start, stop = subset_by_index
+            values = values[start : stop + 1]
+            vectors = vectors[:, start : stop + 1]
+        return SimpleNamespace(eigenvalues=values, eigenvectors=vectors)
+
+    monkeypatch.setattr(module, "_oracle_diagonalize_hermitian", fake_diagonalize)
+
+    values, vectors = module.eigh(np.diag([3.0, 1.0]), subset_by_index=[0, 0])
+
+    assert calls == [((2, 2), (0, 0))]
+    assert np.allclose(values, [1.0])
+    assert vectors.shape == (2, 1)
 
 
 def _write_dvr_outputs(outdir: Path, prefix: str) -> None:

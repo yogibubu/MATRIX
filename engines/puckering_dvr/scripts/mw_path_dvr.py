@@ -23,8 +23,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import PchipInterpolator, UnivariateSpline
 from numpy.polynomial.hermite import hermgauss
-from scipy.linalg import eigh
+from scipy.linalg import eigh as _scipy_eigh
 from scipy.optimize import least_squares, minimize, minimize_scalar
+
+try:
+    from oracle_core import diagonalize_hermitian as _oracle_diagonalize_hermitian
+except Exception:
+    _oracle_diagonalize_hermitian = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,6 +48,24 @@ TORSION_PHASE_OFFSET_DEG = 234.0
 
 PLANCK = 6.62607015e-34
 AMU_ANGSTROM2_TO_KG_M2 = 1.66053906660e-47
+
+
+def eigh(
+    matrix: np.ndarray,
+    *,
+    subset_by_index: list[int] | tuple[int, int] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    if _oracle_diagonalize_hermitian is None:
+        return _scipy_eigh(matrix, subset_by_index=subset_by_index)
+    subset = (
+        None
+        if subset_by_index is None
+        else (int(subset_by_index[0]), int(subset_by_index[1]))
+    )
+    result = _oracle_diagonalize_hermitian(matrix, subset_by_index=subset)
+    if result.eigenvectors is None:
+        raise RuntimeError("DVR diagonalization did not return eigenvectors")
+    return result.eigenvalues, result.eigenvectors
 
 ELEMENTS: dict[str, tuple[int, float]] = {
     "H": (1, 1.00782503223),

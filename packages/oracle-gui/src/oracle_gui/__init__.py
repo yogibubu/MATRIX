@@ -31,6 +31,7 @@ from .commands import (
     molpro_summary_command,
     mrcc_promote_command,
     mrcc_summary_command,
+    nist_ir_command,
     rovib_density_command,
     rovib_summary_command,
     rovib_vibrational_dos_command,
@@ -40,6 +41,8 @@ from .commands import (
     trinity_prepare_command,
     trinity_status_command,
     validate_command,
+    vibrational_spectrum_command,
+    vibrational_spectrum_comparison_command,
     vpt2_vci_collect_command,
     vpt2_vci_command,
     wmsrot_command,
@@ -102,7 +105,12 @@ from .project import (
     load_oracle_project_state,
     project_state_lines,
 )
-from .publication import PublicationExportResult, SpectrumPeak, export_electronic_spectrum, export_thermo_table
+from .publication import (
+    PublicationExportResult,
+    SpectrumPeak,
+    export_electronic_spectrum,
+    export_thermo_table,
+)
 from .qm_jobs import (
     OracleQMJobsController,
     default_qm_formchk_output,
@@ -286,6 +294,7 @@ __all__ = [
     "molpro_summary_command",
     "mrcc_promote_command",
     "mrcc_summary_command",
+    "nist_ir_command",
     "preprocess_command",
     "project_state_lines",
     "rovib_density_command",
@@ -303,6 +312,8 @@ __all__ = [
     "trinity_status_command",
     "validate_command",
     "viewer_command_for_orbital_record",
+    "vibrational_spectrum_command",
+    "vibrational_spectrum_comparison_command",
     "vpt2_vci_collect_command",
     "vpt2_vci_command",
     "vpt2_vci_gui_state_lines",

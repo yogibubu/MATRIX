@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import numpy as np
+
 from oracle_core import section_content
 from oracle_rovib import (
     ORACLE_XYZ_ROTATIONAL_SCHEMA,
@@ -8,6 +10,12 @@ from oracle_rovib import (
     WMSRotInputOptions,
     WMSRotSimulationOptions,
     VibrationalSection,
+    VibrationalSpectrumOptions,
+    build_vibrational_spectrum,
+    compare_vibrational_spectra,
+    fetch_nist_ir_gas_phase_csv,
+    nist_ir_points_to_spectrum,
+    parse_nist_jcamp_ir_points,
     parse_rotational_section,
     parse_vibrational_section,
     read_rotational_section,
@@ -16,7 +24,9 @@ from oracle_rovib import (
     simulate_wmsrot_spectrum,
     summarize_xyzin,
     wmsrot_input_text_from_xyzin,
+    write_vibrational_spectrum_comparison_outputs,
     write_rotational_section,
+    write_vibrational_spectrum_outputs,
     write_vibrational_section,
 )
 from oracle_thermo import (
@@ -205,7 +215,11 @@ def test_vibrational_section_reads_frequencies_and_chi_block():
             "n_imag_like = 1",
             "symmetry_group = Cs",
             "freq_cm1 = 100.0 200.0 300.0",
+            "anharmonic_freq_cm1 = 98.0 197.0 296.0",
             "ir_inten_km_mol = 1.0 2.0 3.0",
+            "raman_act_a4_amu = 4.0 5.0 6.0",
+            "vcd_rot_strength = -0.1 0.0 0.2",
+            "roa_inten = 0.01 -0.02 0.03",
             "chi_cm1 = [",
             "1 1 -0.5",
             "2 1 0.1",
@@ -216,7 +230,11 @@ def test_vibrational_section_reads_frequencies_and_chi_block():
     assert section.linear is False
     assert section.nvib == 3
     assert section.frequencies_cm1 == (100.0, 200.0, 300.0)
+    assert section.anharmonic_frequencies_cm1 == (98.0, 197.0, 296.0)
     assert section.ir_intensities_km_mol == (1.0, 2.0, 3.0)
+    assert section.raman_activities_A4_amu == (4.0, 5.0, 6.0)
+    assert section.vcd_rot_strengths == (-0.1, 0.0, 0.2)
+    assert section.roa_intensities == (0.01, -0.02, 0.03)
     assert section.chi_cm1 == ((1, 1, -0.5), (2, 1, 0.1))
 
 
@@ -230,6 +248,9 @@ def test_vibrational_section_writer_round_trips(tmp_path):
             linear=False,
             nvib=2,
             frequencies_cm1=(100.0, 200.0),
+            anharmonic_frequencies_cm1=(98.0, 197.0),
+            ir_intensities_km_mol=(1.0, 2.0),
+            raman_activities_A4_amu=(3.0, 4.0),
             chi_cm1=((1, 1, -0.5),),
         ),
     )
@@ -237,7 +258,154 @@ def test_vibrational_section_writer_round_trips(tmp_path):
 
     assert parsed.nvib == 2
     assert parsed.frequencies_cm1 == (100.0, 200.0)
+    assert parsed.anharmonic_frequencies_cm1 == (98.0, 197.0)
+    assert parsed.raman_activities_A4_amu == (3.0, 4.0)
     assert parsed.chi_cm1 == ((1, 1, -0.5),)
+
+
+def test_vibrational_spectrum_service_draws_and_exports_ir_raman_vcd_roa(tmp_path):
+    section = VibrationalSection(
+        frequencies_cm1=(100.0, 200.0),
+        anharmonic_frequencies_cm1=(98.0, 197.0),
+        ir_intensities_km_mol=(1.0, 2.0),
+        raman_activities_A4_amu=(3.0, 4.0),
+        vcd_rot_strengths=(-1.0, 2.0),
+        roa_intensities=(0.5, -0.25),
+    )
+
+    ir = build_vibrational_spectrum(
+        section,
+        observable="IR",
+        options=VibrationalSpectrumOptions(fwhm_cm1=8.0, step_cm1=2.0),
+    )
+    vcd = build_vibrational_spectrum(
+        section,
+        observable="VCD",
+        options=VibrationalSpectrumOptions(fwhm_cm1=8.0, step_cm1=2.0),
+    )
+    assert ir.observable == "IR"
+    assert len(ir.peaks) == 2
+    assert max(ir.y) == 1.0
+    assert min(vcd.y) < 0.0
+
+    xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text("1\nh\nH 0 0 0\n", encoding="utf-8")
+    write_vibrational_section(xyzin, section)
+    spectrum = write_vibrational_spectrum_outputs(
+        xyzin,
+        csv_path=tmp_path / "ir.csv",
+        plot_path=tmp_path / "ir.svg",
+        peaks_path=tmp_path / "ir_peaks.csv",
+        observable="RAMAN",
+        source="harmonic",
+        options=VibrationalSpectrumOptions(fwhm_cm1=8.0, step_cm1=2.0),
+    )
+
+    assert spectrum.observable == "RAMAN"
+    assert (tmp_path / "ir.csv").is_file()
+    assert (tmp_path / "ir.svg").is_file()
+    assert (tmp_path / "ir_peaks.csv").is_file()
+
+
+def test_vibrational_spectrum_comparison_mirrors_ir_but_not_vcd(tmp_path):
+    section = VibrationalSection(
+        frequencies_cm1=(100.0, 200.0),
+        anharmonic_frequencies_cm1=(101.0, 198.0),
+        ir_intensities_km_mol=(1.0, 2.0),
+        anharmonic_ir_intensities_km_mol=(0.5, 1.5),
+        vcd_rot_strengths=(-1.0, 2.0),
+        anharmonic_vcd_rot_strengths=(-0.8, 1.8),
+    )
+    options = VibrationalSpectrumOptions(fwhm_cm1=8.0, step_cm1=2.0)
+    harmonic_ir = build_vibrational_spectrum(section, observable="IR", options=options)
+    anharmonic_ir = build_vibrational_spectrum(
+        section,
+        observable="IR",
+        source="anharmonic",
+        options=options,
+    )
+    harmonic_vcd = build_vibrational_spectrum(section, observable="VCD", options=options)
+    anharmonic_vcd = build_vibrational_spectrum(
+        section,
+        observable="VCD",
+        source="anharmonic",
+        options=options,
+    )
+
+    ir_comparison = compare_vibrational_spectra(harmonic_ir, anharmonic_ir)
+    vcd_comparison = compare_vibrational_spectra(harmonic_vcd, anharmonic_vcd)
+
+    assert ir_comparison.mirror_second
+    assert np.allclose(ir_comparison.plotted_second_y, -ir_comparison.second_y)
+    assert not vcd_comparison.mirror_second
+    assert np.allclose(vcd_comparison.plotted_second_y, vcd_comparison.second_y)
+
+    xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text("1\nh\nH 0 0 0\n", encoding="utf-8")
+    write_vibrational_section(xyzin, section)
+    written = write_vibrational_spectrum_comparison_outputs(
+        xyzin,
+        csv_path=tmp_path / "compare.csv",
+        plot_path=tmp_path / "compare.svg",
+        observable="IR",
+        options=options,
+    )
+
+    assert written.mirror_second
+    assert (tmp_path / "compare.csv").is_file()
+    assert (tmp_path / "compare.svg").is_file()
+
+
+def test_nist_jcamp_parser_and_gas_phase_download_policy(tmp_path, monkeypatch):
+    from oracle_rovib import vibspec
+
+    jcamp_gas = "\n".join(
+        [
+            "##TITLE=METHANE",
+            "##STATE=GAS (150 mmHg)",
+            "##XFACTOR=1",
+            "##YFACTOR=1",
+            "##DELTAX=1",
+            "##XYDATA=(X++(Y..Y))",
+            "100.0 0.9 0.8",
+            "102.0 0.7",
+            "##END=",
+        ]
+    )
+    jcamp_liquid = jcamp_gas.replace("##STATE=GAS (150 mmHg)", "##STATE=LIQUID")
+    page = '<a href="/cgi/cbook.cgi?JCAMP=C74828&Index=1&Type=IR">JCAMP</a>'
+
+    points = parse_nist_jcamp_ir_points(jcamp_gas)
+    assert [point.wavenumber_cm1 for point in points] == [100.0, 101.0, 102.0]
+    assert [point.value for point in points] == [0.9, 0.8, 0.7]
+    experimental = nist_ir_points_to_spectrum(points)
+    assert experimental.observable == "IR"
+    assert experimental.source == "nist-gas-experiment"
+    assert max(experimental.y) == 1.0
+
+    def fake_fetch(url, *, timeout, encoding="utf-8"):
+        if "JCAMP" in url:
+            return jcamp_gas
+        return page
+
+    monkeypatch.setattr(vibspec, "_fetch_text", fake_fetch)
+    result = fetch_nist_ir_gas_phase_csv("74-82-8", tmp_path / "nist.csv")
+
+    assert result.status == "downloaded"
+    assert result.csv_path == tmp_path / "nist.csv"
+    assert "wavenumber_cm-1,transmittance" in (tmp_path / "nist.csv").read_text(encoding="utf-8")
+
+    def fake_fetch_liquid(url, *, timeout, encoding="utf-8"):
+        if "JCAMP" in url:
+            return jcamp_liquid
+        return page
+
+    monkeypatch.setattr(vibspec, "_fetch_text", fake_fetch_liquid)
+    liquid = fetch_nist_ir_gas_phase_csv("74-82-8", tmp_path / "liquid.csv")
+
+    assert liquid.status == "not_gas_phase"
+    assert liquid.needs_user_instruction
+    assert not (tmp_path / "liquid.csv").exists()
 
 
 def test_rovib_summary_reads_standalone_xyzin(tmp_path):

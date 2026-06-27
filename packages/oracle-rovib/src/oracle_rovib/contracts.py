@@ -50,7 +50,15 @@ class VibrationalSection:
     n_imag_like: int | None = None
     symmetry_group: str = ""
     frequencies_cm1: tuple[float, ...] = ()
+    anharmonic_frequencies_cm1: tuple[float, ...] = ()
     ir_intensities_km_mol: tuple[float, ...] = ()
+    raman_activities_A4_amu: tuple[float, ...] = ()
+    vcd_rot_strengths: tuple[float, ...] = ()
+    roa_intensities: tuple[float, ...] = ()
+    anharmonic_ir_intensities_km_mol: tuple[float, ...] = ()
+    anharmonic_raman_activities_A4_amu: tuple[float, ...] = ()
+    anharmonic_vcd_rot_strengths: tuple[float, ...] = ()
+    anharmonic_roa_intensities: tuple[float, ...] = ()
     chi_cm1: tuple[tuple[int, int, float], ...] = ()
     schema: str = ORACLE_XYZ_VIBRATIONAL_SCHEMA
 
@@ -171,8 +179,30 @@ def parse_vibrational_section(lines: Iterable[str]) -> VibrationalSection:
         n_imag_like=_optional_int(values.get("N_IMAG_LIKE")),
         symmetry_group=values.get("SYMMETRY_GROUP", ""),
         frequencies_cm1=tuple(_number_list(values.get("FREQ_CM1") or values.get("FREQUENCIES"))),
+        anharmonic_frequencies_cm1=tuple(
+            _number_list(values.get("ANHARMONIC_FREQ_CM1") or values.get("ANH_FREQ_CM1"))
+        ),
         ir_intensities_km_mol=tuple(
             _number_list(values.get("IR_INTEN_KM_MOL") or values.get("IR_INTEN"))
+        ),
+        raman_activities_A4_amu=tuple(
+            _number_list(values.get("RAMAN_ACT_A4_AMU") or values.get("RAMAN_ACT"))
+        ),
+        vcd_rot_strengths=tuple(
+            _number_list(values.get("VCD_ROT_STRENGTH") or values.get("VCD_ROT"))
+        ),
+        roa_intensities=tuple(_number_list(values.get("ROA_INTEN") or values.get("ROA"))),
+        anharmonic_ir_intensities_km_mol=tuple(
+            _number_list(values.get("ANHARMONIC_IR_INTEN_KM_MOL") or values.get("ANH_IR_INTEN"))
+        ),
+        anharmonic_raman_activities_A4_amu=tuple(
+            _number_list(values.get("ANHARMONIC_RAMAN_ACT_A4_AMU") or values.get("ANH_RAMAN_ACT"))
+        ),
+        anharmonic_vcd_rot_strengths=tuple(
+            _number_list(values.get("ANHARMONIC_VCD_ROT_STRENGTH") or values.get("ANH_VCD_ROT"))
+        ),
+        anharmonic_roa_intensities=tuple(
+            _number_list(values.get("ANHARMONIC_ROA_INTEN") or values.get("ANH_ROA"))
         ),
         chi_cm1=tuple(_parse_chi_block(raw_lines)),
         schema=values.get("SCHEMA", ORACLE_XYZ_VIBRATIONAL_SCHEMA),
@@ -186,7 +216,17 @@ def vibrational_section_lines(section: VibrationalSection) -> list[str]:
         "N_IMAG_LIKE": section.n_imag_like,
         "SYMMETRY_GROUP": section.symmetry_group or None,
         "FREQ_CM1": _format_float_list(section.frequencies_cm1),
+        "ANHARMONIC_FREQ_CM1": _format_float_list(section.anharmonic_frequencies_cm1),
         "IR_INTEN_KM_MOL": _format_float_list(section.ir_intensities_km_mol),
+        "RAMAN_ACT_A4_AMU": _format_float_list(section.raman_activities_A4_amu),
+        "VCD_ROT_STRENGTH": _format_float_list(section.vcd_rot_strengths),
+        "ROA_INTEN": _format_float_list(section.roa_intensities),
+        "ANHARMONIC_IR_INTEN_KM_MOL": _format_float_list(section.anharmonic_ir_intensities_km_mol),
+        "ANHARMONIC_RAMAN_ACT_A4_AMU": _format_float_list(
+            section.anharmonic_raman_activities_A4_amu
+        ),
+        "ANHARMONIC_VCD_ROT_STRENGTH": _format_float_list(section.anharmonic_vcd_rot_strengths),
+        "ANHARMONIC_ROA_INTEN": _format_float_list(section.anharmonic_roa_intensities),
     }
     lines = key_value_section_lines(
         ORACLE_XYZ_VIBRATIONAL_SCHEMA,
@@ -197,7 +237,15 @@ def vibrational_section_lines(section: VibrationalSection) -> list[str]:
             "N_IMAG_LIKE",
             "SYMMETRY_GROUP",
             "FREQ_CM1",
+            "ANHARMONIC_FREQ_CM1",
             "IR_INTEN_KM_MOL",
+            "RAMAN_ACT_A4_AMU",
+            "VCD_ROT_STRENGTH",
+            "ROA_INTEN",
+            "ANHARMONIC_IR_INTEN_KM_MOL",
+            "ANHARMONIC_RAMAN_ACT_A4_AMU",
+            "ANHARMONIC_VCD_ROT_STRENGTH",
+            "ANHARMONIC_ROA_INTEN",
         ),
     )
     if section.chi_cm1:
@@ -223,7 +271,9 @@ def parse_deltabvib_section(lines: Iterable[str]) -> DeltaBVibSection:
         delta_A_MHz=_optional_float(values.get("DVIBA_MHZ") or values.get("DELTA_A_MHZ")),
         delta_B_MHz=_optional_float(values.get("DVIBB_MHZ") or values.get("DELTA_B_MHZ")),
         delta_C_MHz=_optional_float(values.get("DVIBC_MHZ") or values.get("DELTA_C_MHZ")),
-        available=_optional_bool(values.get("AVAILABLE")) if values.get("AVAILABLE") is not None else True,
+        available=(
+            _optional_bool(values.get("AVAILABLE")) if values.get("AVAILABLE") is not None else True
+        ),
         source=values.get("SOURCE", ""),
         reason=values.get("REASON", ""),
         alpha_rows_MHz=tuple(_parse_alpha_rows(raw_lines)),

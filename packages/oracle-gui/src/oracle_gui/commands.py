@@ -130,6 +130,96 @@ def wmsrot_run_command(
     )
 
 
+def vibrational_spectrum_command(
+    xyzin: Path | str,
+    *,
+    csv_path: Path | str,
+    plot_path: Path | str | None = None,
+    peaks_path: Path | str | None = None,
+    observable: str = "IR",
+    source: str = "harmonic",
+    fwhm_cm1: float = 10.0,
+) -> OracleGuiCommand:
+    argv = [
+        *_oracle(),
+        "rovib",
+        "vib-spectrum",
+        str(Path(xyzin)),
+        "--observable",
+        observable.upper(),
+        "--source",
+        source.lower(),
+        "--csv",
+        str(Path(csv_path)),
+        "--fwhm-cm1",
+        str(float(fwhm_cm1)),
+    ]
+    if plot_path is not None:
+        argv.extend(["--plot", str(Path(plot_path))])
+    if peaks_path is not None:
+        argv.extend(["--peaks", str(Path(peaks_path))])
+    return OracleGuiCommand(
+        f"Build {source} {observable.upper()} spectrum",
+        tuple(argv),
+        required_sections=("VIBRATIONAL",),
+        produced_sections=("VIBRATIONAL_SPECTRUM",),
+    )
+
+
+def vibrational_spectrum_comparison_command(
+    xyzin: Path | str,
+    *,
+    csv_path: Path | str,
+    plot_path: Path | str | None = None,
+    observable: str = "IR",
+    first_source: str = "harmonic",
+    second_source: str = "anharmonic",
+) -> OracleGuiCommand:
+    argv = [
+        *_oracle(),
+        "rovib",
+        "vib-compare",
+        str(Path(xyzin)),
+        "--observable",
+        observable.upper(),
+        "--first-source",
+        first_source.lower(),
+        "--second-source",
+        second_source.lower(),
+        "--csv",
+        str(Path(csv_path)),
+    ]
+    if plot_path is not None:
+        argv.extend(["--plot", str(Path(plot_path))])
+    return OracleGuiCommand(
+        f"Compare {observable.upper()} spectra",
+        tuple(argv),
+        required_sections=("VIBRATIONAL",),
+        produced_sections=("VIBRATIONAL_SPECTRUM",),
+    )
+
+
+def nist_ir_command(
+    identifier: str,
+    *,
+    out: Path | str,
+    index: int = 1,
+) -> OracleGuiCommand:
+    return OracleGuiCommand(
+        "Download NIST gas-phase IR",
+        (
+            *_oracle(),
+            "rovib",
+            "nist-ir",
+            str(identifier),
+            "--out",
+            str(Path(out)),
+            "--index",
+            str(int(index)),
+        ),
+    )
+
+
 def gaussian_summary_command(log: Path | str) -> OracleGuiCommand:
     return OracleGuiCommand(
         "Summarize Gaussian log",
@@ -239,7 +329,9 @@ def gaussian_promote_fchk_command(
         produced.append("ELECTRONIC")
     if orbitals:
         produced.append("ORBITALS")
-    return OracleGuiCommand("Promote Gaussian FCHK data", tuple(argv), produced_sections=tuple(produced))
+    return OracleGuiCommand(
+        "Promote Gaussian FCHK data", tuple(argv), produced_sections=tuple(produced)
+    )
 
 
 def gaussian_promote_electronic_command(
@@ -262,7 +354,9 @@ def gaussian_promote_electronic_command(
         produced.append("TRANSITIONS")
     if orbital_files:
         produced.append("ORBITALS")
-    return OracleGuiCommand("Promote Gaussian electronic data", tuple(argv), produced_sections=tuple(produced))
+    return OracleGuiCommand(
+        "Promote Gaussian electronic data", tuple(argv), produced_sections=tuple(produced)
+    )
 
 
 def gaussian_promote_rovib_command(
@@ -396,14 +490,18 @@ def gicforge_build_command(
     )
 
 
-def gicforge_report_command(xyzin: Path | str, output: Path | str | None = None) -> OracleGuiCommand:
+def gicforge_report_command(
+    xyzin: Path | str, output: Path | str | None = None
+) -> OracleGuiCommand:
     argv = [*_oracle(), "gicforge", "report", str(Path(xyzin))]
     if output is not None:
         argv.append(str(Path(output)))
     return OracleGuiCommand("Write GICForge report", tuple(argv), required_sections=("GIC",))
 
 
-def gicforge_bmatrix_command(xyzin: Path | str, output: Path | str | None = None) -> OracleGuiCommand:
+def gicforge_bmatrix_command(
+    xyzin: Path | str, output: Path | str | None = None
+) -> OracleGuiCommand:
     argv = [*_oracle(), "gicforge", "bmatrix", str(Path(xyzin))]
     if output is not None:
         argv.append(str(Path(output)))
@@ -617,7 +715,9 @@ def dvr_run_command(
     _append_flag(argv, "--check-only", check_only)
     if timeout is not None:
         argv.extend(["--timeout", str(timeout)])
-    return OracleGuiCommand("Run DVR", tuple(argv), required_sections=("DVR",), produced_sections=("DVR",))
+    return OracleGuiCommand(
+        "Run DVR", tuple(argv), required_sections=("DVR",), produced_sections=("DVR",)
+    )
 
 
 def dvr_collect_command(xyzin: Path | str, *, no_write: bool = False) -> OracleGuiCommand:
@@ -635,7 +735,16 @@ def semiexp_command(
     write_section: bool = True,
     extra_args: Sequence[str] = (),
 ) -> OracleGuiCommand:
-    argv = [*_oracle(), "semiexp", "--job", str(Path(job)), "--outdir", str(Path(outdir)), "--backend", backend]
+    argv = [
+        *_oracle(),
+        "semiexp",
+        "--job",
+        str(Path(job)),
+        "--outdir",
+        str(Path(outdir)),
+        "--backend",
+        backend,
+    ]
     if xyzin is not None:
         argv.extend(["--xyzin", str(Path(xyzin))])
     _append_flag(argv, "--no-write-section", not write_section)

@@ -49,7 +49,7 @@ or figures. They still use the same `xyzin` sections and service boundaries.
 | Workbench | Responsibility | Examples |
 | --- | --- | --- |
 | Rotational Spectroscopy | Collect rotational constants, corrections and assignments; draw rotational spectra. | local WMS-Rot Hamiltonian run, isotopologue comparison, SEFit residuals, WMS-Rot input export/reference launch, line-list/stick/envelope plots, publication CSV/SVG/PDF/LaTeX export |
-| Vibrational Spectroscopy | Collect harmonic, GF/PED, VPT2/VCI and DVR data; draw vibrational spectra. | normal-mode overlap heat maps, force-constant scaling, IR/Raman-style peak tables, publication plots |
+| Vibrational Spectroscopy | Collect harmonic, GF/PED, VPT2/VCI and DVR data; draw vibrational spectra. | IR/Raman/VCD/ROA spectra from harmonic or anharmonic data, mirrored IR/Raman comparisons, signed VCD/ROA comparisons, normal-mode overlap heat maps, force-constant scaling, NIST gas-phase IR comparison, publication CSV/SVG/PDF export |
 | Electronic Spectroscopy | Collect electronic-state and transition data; visualize orbitals/densities. | UV/visible stick/broadened spectra, orbital viewing through Avogadro/Avogadro2/Molden/MOrbVis, transition tables |
 | Molecular Structure / Synthons | Inspect and publish structure, topology, fragments and synthon classifications. | structure tables, synthon maps, fragment maps, Avogadro editing |
 | Thermochemistry / Kinetics | Collect thermochemical functions and kinetic-model outputs. | thermo tables, rovibrational DOS, kinetic comparisons, publication-ready plots/tables |
@@ -71,6 +71,12 @@ through `oracle rovib wmsrot-input`, while production calculations call the
 vendored WMS-Rot Python Hamiltonian through `oracle rovib wmsrot-run`. The
 internal source of truth remains the shared `xyzin` sections, not browser
 JavaScript or uploaded web-state.
+
+Vibrational spectroscopy may fetch NIST IR data automatically only when the
+NIST WebBook JCAMP record declares a gas-phase state. Condensed-phase records,
+missing IR records or unparseable spectra are reported to the GUI as states
+requiring explicit user instructions; they are not silently overlaid with
+gas-phase theoretical spectra.
 
 ## Implementation Boundary
 

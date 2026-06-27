@@ -53,11 +53,6 @@ from oracle_gui import (
     gaussian_promote_electronic_command,
     gaussian_promote_fchk_command,
     gaussian_promote_rovib_command,
-    gaussian_fchk_summary_command,
-    gaussian_formchk_command,
-    gaussian_run_command,
-    gaussian_status_command,
-    gaussian_summary_command,
     gf_command,
     gf_gui_state_lines,
     gicforge_gui_state_lines,
@@ -75,10 +70,7 @@ from oracle_gui import (
     missing_sections_message,
     molden_command,
     morbvis_command,
-    molpro_promote_command,
-    molpro_summary_command,
-    mrcc_promote_command,
-    mrcc_summary_command,
+    nist_ir_command,
     preprocess_command,
     project_state_lines,
     rovib_density_command,
@@ -96,6 +88,8 @@ from oracle_gui import (
     trinity_gui_state_lines,
     load_trinity_gui_state,
     tool_contract_gui_state_lines,
+    vibrational_spectrum_command,
+    vibrational_spectrum_comparison_command,
     wmsrot_command,
     wmsrot_input_command,
     wmsrot_run_command,
@@ -249,6 +243,45 @@ def test_gui_project_state_missing_file_is_reported_without_crashing(tmp_path):
     assert not state.exists
     assert state.validation_status == "MISSING"
     assert state.workflow("dashboard").status == WorkflowStatus.MISSING
+
+
+def test_vibrational_spectroscopy_window_declares_spectrum_and_nist_workflows():
+    spec = window_spec("vibrational_spectroscopy")
+
+    assert "VIBRATIONAL_SPECTRUM" in spec.produced_sections
+    assert any(action.command == "rovib vib-spectrum" for action in spec.actions)
+    assert any(action.command == "rovib vib-compare" for action in spec.actions)
+    assert any(action.command == "rovib nist-ir" for action in spec.actions)
+    assert any("NIST" in capability for capability in spec.capabilities)
+
+
+def test_vibrational_spectrum_and_nist_commands_build_cli_arguments(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    spectrum = vibrational_spectrum_command(
+        xyzin,
+        csv_path=tmp_path / "ir.csv",
+        plot_path=tmp_path / "ir.svg",
+        observable="ROA",
+        source="anharmonic",
+    )
+    comparison = vibrational_spectrum_comparison_command(
+        xyzin,
+        csv_path=tmp_path / "compare.csv",
+        plot_path=tmp_path / "compare.svg",
+        observable="IR",
+    )
+    nist = nist_ir_command("74-82-8", out=tmp_path / "nist.csv")
+
+    assert "vib-spectrum" in spectrum.argv
+    assert "--observable" in spectrum.argv
+    assert "ROA" in spectrum.argv
+    assert "anharmonic" in spectrum.argv
+    assert spectrum.produced_sections == ("VIBRATIONAL_SPECTRUM",)
+    assert "vib-compare" in comparison.argv
+    assert "--second-source" in comparison.argv
+    assert "anharmonic" in comparison.argv
+    assert nist.argv[-2:] == ("--index", "1")
+    assert "nist-ir" in nist.argv
 
 
 def test_gui_tool_contract_state_reports_standalone_readiness(tmp_path):
@@ -752,7 +785,9 @@ def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path
     avogadro = controller.avogadro_command(molden_file, executable="avogadro-test")
     morbvis = controller.morbvis_command()
     monkeypatch.setattr("oracle_gui.electronic._molden_ready", lambda _executable: False)
-    auto_fallback = controller.selected_orbital_viewer_command(0, molden_executable="missing-molden")
+    auto_fallback = controller.selected_orbital_viewer_command(
+        0, molden_executable="missing-molden"
+    )
     monkeypatch.setattr("oracle_gui.electronic._molden_ready", lambda _executable: True)
     auto_molden = controller.selected_orbital_viewer_command(0, molden_executable="molden-test")
     export = controller.export_electronic_publication(
@@ -762,7 +797,14 @@ def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path
 
     assert state.ready
     assert any(row[0] == "ELECTRONIC" and row[1] == "yes" for row in state.sections.rows)
-    assert state.transitions.columns == ("From", "To", "Energy eV", "Wavelength nm", "Osc", "Source")
+    assert state.transitions.columns == (
+        "From",
+        "To",
+        "Energy eV",
+        "Wavelength nm",
+        "Osc",
+        "Source",
+    )
     assert state.transitions.rows == (("S0", "S1", "4.2", "295.2", "0.1", "unit"),)
     assert state.orbitals.columns == ("Kind", "Format", "Role", "Path", "Label", "Source")
     assert state.orbital_records[0].format == "MOLDEN"
@@ -775,11 +817,15 @@ def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path
     assert auto_molden.argv == ("molden-test", str(molden_file))
     assert len(export.paths) == 3
     assert (default_electronic_export_dir(xyzin) / "molecule.electronic.csv").exists()
-    assert (default_electronic_export_dir(xyzin) / "molecule.electronic.svg").read_text(
-        encoding="utf-8"
-    ).startswith("<svg")
-    assert (default_electronic_export_dir(xyzin) / "molecule.electronic.pdf").read_bytes().startswith(
-        b"%PDF"
+    assert (
+        (default_electronic_export_dir(xyzin) / "molecule.electronic.svg")
+        .read_text(encoding="utf-8")
+        .startswith("<svg")
+    )
+    assert (
+        (default_electronic_export_dir(xyzin) / "molecule.electronic.pdf")
+        .read_bytes()
+        .startswith(b"%PDF")
     )
 
 
@@ -812,16 +858,20 @@ def test_thermo_kinetics_gui_state_and_publication_export(tmp_path):
     assert state.ready
     assert state.thermo.rows[-1][0] == "tot"
     assert state.thermo.rows[-1][1] == "24"
-    assert any(row[0] == "vibrational" and row[2] == "yes" and row[3] == "2" for row in state.dos.rows)
+    assert any(
+        row[0] == "vibrational" and row[2] == "yes" and row[3] == "2" for row in state.dos.rows
+    )
     assert "thermo ready: 1" in lines
     assert len(export.paths) == 4
     assert (default_thermo_export_dir(xyzin) / "molecule.thermo.csv").exists()
     assert (default_thermo_export_dir(xyzin) / "molecule.thermo.tex").exists()
-    assert (default_thermo_export_dir(xyzin) / "molecule.thermo.svg").read_text(
-        encoding="utf-8"
-    ).startswith("<svg")
-    assert (default_thermo_export_dir(xyzin) / "molecule.thermo.pdf").read_bytes().startswith(
-        b"%PDF"
+    assert (
+        (default_thermo_export_dir(xyzin) / "molecule.thermo.svg")
+        .read_text(encoding="utf-8")
+        .startswith("<svg")
+    )
+    assert (
+        (default_thermo_export_dir(xyzin) / "molecule.thermo.pdf").read_bytes().startswith(b"%PDF")
     )
 
 
@@ -859,9 +909,13 @@ def test_thermo_kinetics_controller_builds_shared_commands(tmp_path):
     assert "--keep-low-positive" in thermo.argv
     assert vib_dos.argv[3:5] == ("rovib", "dos")
     assert vib_dos.argv[vib_dos.argv.index("--vmax") + 1] == "4"
-    assert vib_dos.argv[vib_dos.argv.index("--out") + 1] == str(default_vibrational_dos_output(xyzin))
+    assert vib_dos.argv[vib_dos.argv.index("--out") + 1] == str(
+        default_vibrational_dos_output(xyzin)
+    )
     assert rovib_dos.argv[3:5] == ("rovib", "dos-rovib")
-    assert rovib_dos.argv[rovib_dos.argv.index("--rot-out") + 1] == str(default_rotational_dos_output(xyzin))
+    assert rovib_dos.argv[rovib_dos.argv.index("--rot-out") + 1] == str(
+        default_rotational_dos_output(xyzin)
+    )
     assert rovib_dos.argv[rovib_dos.argv.index("--q-out") + 1] == str(default_rovib_q_output(xyzin))
     assert rovib_dos.argv[-2:] == ("--jmax", "20")
 
@@ -1070,14 +1124,18 @@ def test_gui_window_specs_cover_primary_oracle_workflows():
     assert "mode heat-map" in window_spec("vibrational_spectroscopy").publication_exports
     assert "Molden" in window_spec("electronic_spectroscopy").external_viewers
     assert "MOrbVis" in window_spec("electronic_spectroscopy").external_viewers
-    assert any(action.key == "view_morbvis" for action in window_spec("electronic_spectroscopy").actions)
+    assert any(
+        action.key == "view_morbvis" for action in window_spec("electronic_spectroscopy").actions
+    )
     assert window_spec("electronic_spectroscopy").produced_sections == (
         "ELECTRONIC",
         "TRANSITIONS",
         "ORBITALS",
     )
     assert "KINETICS" in window_spec("thermochemistry_kinetics").produced_sections
-    assert any(action.key == "rovib_summary" for action in window_spec("thermochemistry_kinetics").actions)
+    assert any(
+        action.key == "rovib_summary" for action in window_spec("thermochemistry_kinetics").actions
+    )
     assert window_spec("trinity").produced_sections == ("TRINITY",)
     assert "GIC" in all_known_sections()
     assert "ELECTRONIC" in all_known_sections()
@@ -1173,8 +1231,7 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
     assert thermo.argv[thermo.argv.index("--cutoff-cm1") + 1] == "20.0"
     assert "--keep-low-positive" in thermo.argv
     assert " ".join(gic.argv).endswith(
-        "gicforge build "
-        f"{xyzin} --symmetrize --sycart --improper-dihedrals"
+        f"gicforge build {xyzin} --symmetrize --sycart --improper-dihedrals"
     )
     assert gic.required_sections == ("SYMMETRY", "TOPOLOGY", "SYNTHONS")
     assert gf.argv[3:6] == ("gf", "--xyzin", str(xyzin))

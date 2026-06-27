@@ -12,6 +12,7 @@ matrix is part of the main numerical workload. This currently covers:
 - Wilson GF and symmetry-block GF diagonalizations.
 - VCI dense blocks and Davidson projected subspaces.
 - Vibro-rotational Hessian normal-mode extraction.
+- DVR Hamiltonians in the puckering DVR backend.
 - The vendored WMS-Rot rotational Hamiltonian engine.
 
 Small geometric diagonalizations, SVDs and inertia tensor utilities can stay
@@ -64,10 +65,10 @@ WMS-Rot engine uses them:
 - SymPy provides symbolic/angular-momentum algebra helpers used by the
   rotational Hamiltonian code.
 
-They are not mathematically required by GF, VCI or the shared diagonalizer. If
-we later replace the WMS-Rot table layer with native ORACLE arrays/records,
-Pandas can become optional for non-rotational workflows. For now it stays in
-`oracle-set` to preserve the validated WMS-Rot behavior.
+They are not mathematically required by DVR, GF, VCI or the shared
+diagonalizer. If we later replace the WMS-Rot table layer with native ORACLE
+arrays/records, Pandas can become optional for non-rotational workflows. For
+now it stays in `oracle-set` to preserve the validated WMS-Rot behavior.
 
 ## Extending The Rotational Hamiltonian
 

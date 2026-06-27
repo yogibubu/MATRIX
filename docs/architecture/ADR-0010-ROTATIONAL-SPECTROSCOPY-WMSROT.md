@@ -77,3 +77,15 @@ MATRIX sections.
   `oracle-rovib`, not an external website call.
 - Future extensions, including internal hindered rotors, should extend this
   local backend rather than starting a second rotational Hamiltonian stack.
+
+## Follow-up TODO
+
+- Replace WMS-Rot `pandas.DataFrame` boundaries with MATRIX typed line-list and
+  assignment records backed by NumPy arrays where appropriate. Keep `pandas` as
+  a compatibility dependency until the output, filtering and CSV behavior has
+  golden-test coverage against the imported WMS-Rot engine.
+- Homologate WMS-Rot further to MATRIX conventions: shared xyzin sections,
+  shared run manifests, shared diagonalizer, shared publication-export backend,
+  and no private Gaussian/QM/topology parsing inside the rotational tool.
+- Keep the vendored WMS-Rot Hamiltonian as the physical source of truth while
+  moving adapters, records and GUI-facing services to ordinary MATRIX modules.

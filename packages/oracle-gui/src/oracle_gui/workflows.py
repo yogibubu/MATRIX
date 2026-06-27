@@ -318,7 +318,13 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
                 key="gaussian_promote_fchk",
                 label="Promote Gaussian FCHK",
                 command="gaussian promote-fchk",
-                produced_sections=("CARTESIAN_HESSIAN", "NORMAL_MODES", "QFF", "ELECTRONIC", "ORBITALS"),
+                produced_sections=(
+                    "CARTESIAN_HESSIAN",
+                    "NORMAL_MODES",
+                    "QFF",
+                    "ELECTRONIC",
+                    "ORBITALS",
+                ),
             ),
             WorkflowActionSpec(
                 key="gaussian_promote_electronic",
@@ -422,18 +428,49 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
     WindowSpec(
         key="vibrational_spectroscopy",
         title="Vibrational Spectroscopy",
-        description="Collect harmonic/anharmonic modes, compare origins and draw spectra.",
+        description=(
+            "Collect harmonic/anharmonic modes, draw spectra and compare gas-phase experiments."
+        ),
         category="spectroscopy",
         required_sections=("VIBRATIONAL",),
-        produced_sections=("GF_PED", "VPT2_VCI", "DVR"),
+        produced_sections=("GF_PED", "VPT2_VCI", "DVR", "VIBRATIONAL_SPECTRUM"),
         capabilities=(
             "compare normal modes from GF, Gaussian, VPT2/VCI and DVR",
             "draw heat maps of normal-mode overlaps or contributions",
             "scale force constants and compare frequency shifts",
-            "simulate IR/Raman-style stick and broadened spectra",
+            "draw harmonic and anharmonic IR, Raman, VCD and ROA spectra when data are present",
+            "compare IR/Raman spectra with the second trace mirrored below zero",
+            "compare VCD/ROA spectra without mirroring because signed intensities carry information",
+            "overlay broadened theoretical spectra with experimental gas-phase NIST IR data",
+            "request user instructions when NIST has only condensed-phase data or no spectrum",
         ),
-        publication_exports=("CSV peak table", "SVG spectrum", "PDF spectrum", "mode heat-map"),
+        publication_exports=(
+            "CSV peak table",
+            "CSV spectrum",
+            "SVG spectrum",
+            "PDF spectrum",
+            "mode heat-map",
+        ),
         actions=(
+            WorkflowActionSpec(
+                key="vibrational_spectrum",
+                label="Draw vibrational spectrum",
+                command="rovib vib-spectrum",
+                required_sections=("VIBRATIONAL",),
+                produced_sections=("VIBRATIONAL_SPECTRUM",),
+            ),
+            WorkflowActionSpec(
+                key="vibrational_compare",
+                label="Compare vibrational spectra",
+                command="rovib vib-compare",
+                required_sections=("VIBRATIONAL",),
+                produced_sections=("VIBRATIONAL_SPECTRUM",),
+            ),
+            WorkflowActionSpec(
+                key="nist_ir",
+                label="Download NIST gas IR",
+                command="rovib nist-ir",
+            ),
             WorkflowActionSpec(
                 key="vibrational_dos",
                 label="Build vibrational DOS",

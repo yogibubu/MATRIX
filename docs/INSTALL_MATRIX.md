@@ -54,9 +54,28 @@ oracle-install-gui-deps
 
 This installs the declared GUI stack, including `PySide6`.
 
+## Development Tools
+
+`ruff` is the preferred local linter/formatter gate for Python code. Install it
+inside the active ORACLE environment:
+
+```bash
+cd /Users/vincenzobarone/ORACLE
+source scripts/oracle_env.sh
+oracle-set
+python -m pip install ruff
+```
+
+Then run:
+
+```bash
+python -m ruff check .
+python -m ruff format --check .
+```
+
 ## Shared Diagonalizer And GPU Acceleration
 
-GF, VCI/Davidson, vibro-rotational normal-mode extraction and the local
+GF, DVR, VCI/Davidson, vibro-rotational normal-mode extraction and the local
 WMS-Rot rotational engine use the shared ORACLE diagonalizer in
 `oracle_core.diagonalizer`. By default it chooses GPU acceleration only when a
 supported GPU backend is already available and the matrix is large enough to

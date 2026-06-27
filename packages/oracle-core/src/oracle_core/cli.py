@@ -236,6 +236,78 @@ def build_parser(
     rovib_wmsrot_run.add_argument("--no-a-type", action="store_true")
     rovib_wmsrot_run.add_argument("--no-b-type", action="store_true")
     rovib_wmsrot_run.add_argument("--no-c-type", action="store_true")
+    rovib_vib_spectrum = rovib_sub.add_parser(
+        "vib-spectrum",
+        help="Build a broadened IR/Raman/VCD/ROA spectrum from #VIBRATIONAL",
+    )
+    rovib_vib_spectrum.add_argument("xyzin", type=Path)
+    rovib_vib_spectrum.add_argument(
+        "--observable",
+        choices=("IR", "RAMAN", "VCD", "ROA"),
+        default="IR",
+    )
+    rovib_vib_spectrum.add_argument(
+        "--source",
+        choices=("harmonic", "anharmonic"),
+        default="harmonic",
+    )
+    rovib_vib_spectrum.add_argument("--csv", type=Path, required=True)
+    rovib_vib_spectrum.add_argument("--plot", type=Path)
+    rovib_vib_spectrum.add_argument("--peaks", type=Path)
+    rovib_vib_spectrum.add_argument("--fwhm-cm1", type=float, default=10.0)
+    rovib_vib_spectrum.add_argument("--step-cm1", type=float, default=1.0)
+    rovib_vib_spectrum.add_argument(
+        "--lineshape",
+        choices=("gaussian", "lorentzian"),
+        default="gaussian",
+    )
+    rovib_vib_spectrum.add_argument("--no-normalize", action="store_true")
+    rovib_vib_compare = rovib_sub.add_parser(
+        "vib-compare",
+        help="Compare two vibrational spectra with mirror plotting for IR/Raman",
+    )
+    rovib_vib_compare.add_argument("xyzin", type=Path)
+    rovib_vib_compare.add_argument(
+        "--observable",
+        choices=("IR", "RAMAN", "VCD", "ROA"),
+        default="IR",
+    )
+    rovib_vib_compare.add_argument(
+        "--first-source",
+        choices=("harmonic", "anharmonic"),
+        default="harmonic",
+    )
+    rovib_vib_compare.add_argument(
+        "--second-source",
+        choices=("harmonic", "anharmonic"),
+        default="anharmonic",
+    )
+    rovib_vib_compare.add_argument("--csv", type=Path, required=True)
+    rovib_vib_compare.add_argument("--plot", type=Path)
+    rovib_vib_compare.add_argument("--fwhm-cm1", type=float, default=10.0)
+    rovib_vib_compare.add_argument("--step-cm1", type=float, default=1.0)
+    rovib_vib_compare.add_argument(
+        "--lineshape",
+        choices=("gaussian", "lorentzian"),
+        default="gaussian",
+    )
+    rovib_vib_compare.add_argument("--no-normalize", action="store_true")
+    rovib_vib_compare.add_argument(
+        "--no-mirror-second",
+        action="store_true",
+        help="Do not mirror the second spectrum even for IR/Raman",
+    )
+    rovib_nist_ir = rovib_sub.add_parser(
+        "nist-ir",
+        help="Download a NIST gas-phase IR JCAMP spectrum and convert it to CSV",
+    )
+    rovib_nist_ir.add_argument(
+        "identifier",
+        help="NIST ID, CAS registry number or molecule name",
+    )
+    rovib_nist_ir.add_argument("--out", type=Path, required=True)
+    rovib_nist_ir.add_argument("--index", type=int, default=1)
+    rovib_nist_ir.add_argument("--timeout", type=float, default=20.0)
     rovib_dos = rovib_sub.add_parser("dos", help="Build direct vibrational DOS from #VIBRATIONAL")
     rovib_dos.add_argument("xyzin", type=Path)
     rovib_dos.add_argument("--vmax", type=int, default=6)
@@ -243,7 +315,9 @@ def build_parser(
     rovib_dos.add_argument("--bin-cm1", type=float, default=50.0)
     rovib_dos.add_argument("--ncap", type=float, default=10.0)
     rovib_dos.add_argument("--out", type=Path)
-    rovib_dos_rovib = rovib_sub.add_parser("dos-rovib", help="Convolve vibrational and rotational DOS")
+    rovib_dos_rovib = rovib_sub.add_parser(
+        "dos-rovib", help="Convolve vibrational and rotational DOS"
+    )
     rovib_dos_rovib.add_argument("xyzin", type=Path)
     rovib_dos_rovib.add_argument("--vib-dos", type=Path)
     rovib_dos_rovib.add_argument("--out", type=Path)
@@ -269,7 +343,9 @@ def build_parser(
     gf.add_argument("--scale", action="append", default=[])
     gf.add_argument("--local", action="store_true", help="Apply local force-field filtering")
     gf.add_argument("--symmetry-blocks", action="store_true", help="Solve separated irrep blocks")
-    gf.add_argument("--force-threshold", type=float, help="Zero internal force constants below threshold")
+    gf.add_argument(
+        "--force-threshold", type=float, help="Zero internal force constants below threshold"
+    )
     gf.add_argument("--no-write-section", action="store_true", help="Do not update #GF_PED")
     gf.add_argument(
         "--subtract-electrostatic",
@@ -293,18 +369,24 @@ def build_parser(
     vpt2_source.add_argument("--xyzin", type=Path, help="ORACLE xyzin containing #QFF")
     vpt2_source.add_argument("--fchk", type=Path, help="Gaussian FCHK adapter input")
     vpt2_source.add_argument("--qff-file", type=Path, help="Indexed QFF text adapter input")
-    vpt2_source.add_argument("--collect", type=Path, help="Collect post-run VPT2/VCI outputs into #VPT2_VCI")
+    vpt2_source.add_argument(
+        "--collect", type=Path, help="Collect post-run VPT2/VCI outputs into #VPT2_VCI"
+    )
     vpt2_vci.add_argument("--max-quanta", type=int, default=2)
     vpt2_vci.add_argument("--roots", type=int, default=10)
     vpt2_vci.add_argument("--vci-method", choices=("dense", "davidson"), default="dense")
     vpt2_vci.add_argument("--run-dir", type=Path, help="Write report, CSV tables and manifest here")
     vpt2_vci.add_argument("--out", type=Path, help="Write the readable VPT2/VCI report")
     vpt2_vci.add_argument("--csv-dir", type=Path, help="Write VPT2/VCI CSV tables")
-    vpt2_vci.add_argument("--no-write", action="store_true", help="With --collect, do not update #VPT2_VCI")
+    vpt2_vci.add_argument(
+        "--no-write", action="store_true", help="With --collect, do not update #VPT2_VCI"
+    )
 
     dvr = sub.add_parser("dvr", help="Prepare scan/path DVR workflows")
     dvr_sub = dvr.add_subparsers(dest="dvr_command")
-    dvr_prepare = dvr_sub.add_parser("prepare", help="Prepare DVR manifest from a Gaussian scan log")
+    dvr_prepare = dvr_sub.add_parser(
+        "prepare", help="Prepare DVR manifest from a Gaussian scan log"
+    )
     dvr_prepare.add_argument("log", type=Path)
     dvr_prepare.add_argument("--outdir", type=Path, required=True)
     dvr_prepare.add_argument("--figdir", type=Path)
@@ -454,7 +536,9 @@ def build_parser(
     )
     semiexp_ensemble_synthon_scan.add_argument("--job", type=Path, required=True)
     semiexp_ensemble_synthon_scan.add_argument("--outdir", type=Path, required=True)
-    semiexp_ensemble_synthon_scan.add_argument("--threshold", type=float, action="append", default=[])
+    semiexp_ensemble_synthon_scan.add_argument(
+        "--threshold", type=float, action="append", default=[]
+    )
 
     semiexp_benchmark = sub.add_parser(
         "semiexp-benchmark",
@@ -665,7 +749,11 @@ def main(
                 print(f"  expanded_name: {PLANNED_FRAMEWORK_EXPANSION}")
             return 0
 
-        rows = (tool_contract(args.tool),) if args.tool else tool_contracts(include_gui=not args.no_gui)
+        rows = (
+            (tool_contract(args.tool),)
+            if args.tool
+            else tool_contracts(include_gui=not args.no_gui)
+        )
         if args.check_xyzin is not None:
             readinesses = tool_contract_readinesses(args.check_xyzin, rows)
             if args.format == "json":
@@ -1014,6 +1102,79 @@ def main(
             return 2
         print(f"Wrote WMS-Rot spectrum line list: {out}")
         return 0
+    if args.command == "rovib" and args.rovib_command == "vib-spectrum":
+        from oracle_rovib import VibrationalSpectrumOptions, write_vibrational_spectrum_outputs
+
+        options = VibrationalSpectrumOptions(
+            fwhm_cm1=args.fwhm_cm1,
+            step_cm1=args.step_cm1,
+            lineshape=args.lineshape,
+            normalize=not args.no_normalize,
+        )
+        spectrum = write_vibrational_spectrum_outputs(
+            args.xyzin,
+            csv_path=args.csv,
+            plot_path=args.plot,
+            peaks_path=args.peaks,
+            observable=args.observable,
+            source=args.source,
+            options=options,
+        )
+        outputs = [f"CSV: {args.csv}"]
+        if args.plot is not None:
+            outputs.append(f"plot: {args.plot}")
+        if args.peaks is not None:
+            outputs.append(f"peaks: {args.peaks}")
+        print(
+            f"Wrote {spectrum.source} {spectrum.observable} spectrum "
+            f"({len(spectrum.peaks)} peaks, {len(spectrum.x_cm1)} points): " + ", ".join(outputs)
+        )
+        return 0
+    if args.command == "rovib" and args.rovib_command == "vib-compare":
+        from oracle_rovib import (
+            VibrationalSpectrumOptions,
+            write_vibrational_spectrum_comparison_outputs,
+        )
+
+        options = VibrationalSpectrumOptions(
+            fwhm_cm1=args.fwhm_cm1,
+            step_cm1=args.step_cm1,
+            lineshape=args.lineshape,
+            normalize=not args.no_normalize,
+        )
+        comparison = write_vibrational_spectrum_comparison_outputs(
+            args.xyzin,
+            csv_path=args.csv,
+            plot_path=args.plot,
+            observable=args.observable,
+            first_source=args.first_source,
+            second_source=args.second_source,
+            options=options,
+            mirror_second=False if args.no_mirror_second else None,
+        )
+        outputs = [f"CSV: {args.csv}"]
+        if args.plot is not None:
+            outputs.append(f"plot: {args.plot}")
+        mirror = "mirrored" if comparison.mirror_second else "not mirrored"
+        print(
+            f"Wrote {args.observable} comparison "
+            f"({args.first_source} vs {args.second_source}, second {mirror}): " + ", ".join(outputs)
+        )
+        return 0
+    if args.command == "rovib" and args.rovib_command == "nist-ir":
+        from oracle_rovib import fetch_nist_ir_gas_phase_csv
+
+        result = fetch_nist_ir_gas_phase_csv(
+            args.identifier,
+            args.out,
+            index=args.index,
+            timeout=args.timeout,
+        )
+        if result.status != "downloaded":
+            print(result.message, file=sys.stderr)
+            return 3
+        print(f"{result.message}: {result.csv_path}")
+        return 0
     if args.command == "rovib" and args.rovib_command == "dos":
         from oracle_rovib import direct_vibrational_dos_from_xyzin
 
@@ -1357,9 +1518,8 @@ def main(
         job = None if legacy_msr_job or not args.job else read_semiexperimental_job(args.job)
         geometry_path = args.xyz or (job.path if job is not None else None)
         observations_inline = job.observations_inline if job is not None else ()
-        observations_path = (
-            args.observations
-            or (None if observations_inline else (job.observations if job is not None else None))
+        observations_path = args.observations or (
+            None if observations_inline else (job.observations if job is not None else None)
         )
         if legacy_msr_job:
             geometry_path = args.xyz or args.job
@@ -1386,7 +1546,9 @@ def main(
         if preprocess.updated_isotopologues:
             print("semiexp_xyzin_isotopologues: updated")
 
-        fixed = _merge_unique(preprocess.source_fixed_parameters, job.fixed_parameters if job else ())
+        fixed = _merge_unique(
+            preprocess.source_fixed_parameters, job.fixed_parameters if job else ()
+        )
         fixed = _merge_unique(fixed, _parse_fixed_parameters(args.fixed))
         if args.fix_hydrogens:
             fixed = _merge_unique(fixed, (HYDROGEN_PARAMETER_CONSTRAINT,))
@@ -1430,7 +1592,9 @@ def main(
         )
         robust_scale = _job_default(args.robust_scale, 0.0, job.robust_scale if job else None)
         leave_one_out = bool(args.leave_one_out or (job.leave_one_out if job else False))
-        checkpoint = args.checkpoint if args.checkpoint is not None else (job.checkpoint if job else None)
+        checkpoint = (
+            args.checkpoint if args.checkpoint is not None else (job.checkpoint if job else None)
+        )
         restart = args.restart if args.restart is not None else (job.restart if job else None)
         request = SemiexperimentalFitRequest(
             initial_geometry=geometry_path,
@@ -1482,11 +1646,19 @@ def main(
             print(f"updated_morpheus_section: {preprocess.xyzin}")
         print(f"manifest: {result.manifest}")
         print(f"report: {report_path}")
-        rms_label = "rms_MHz" if result.diagnostics.observable == "rotational_constants" else "rms_observable"
+        rms_label = (
+            "rms_MHz"
+            if result.diagnostics.observable == "rotational_constants"
+            else "rms_observable"
+        )
         print(f"{rms_label}: {result.rms_MHz:.8g}")
         rot_diffs = [row.difference_MHz for row in result.rotational_constants]
-        rotational_rms = math.sqrt(sum(diff * diff for diff in rot_diffs) / len(rot_diffs)) if rot_diffs else 0.0
-        rotational_mse = sum(diff * diff for diff in rot_diffs) / len(rot_diffs) if rot_diffs else 0.0
+        rotational_rms = (
+            math.sqrt(sum(diff * diff for diff in rot_diffs) / len(rot_diffs)) if rot_diffs else 0.0
+        )
+        rotational_mse = (
+            sum(diff * diff for diff in rot_diffs) / len(rot_diffs) if rot_diffs else 0.0
+        )
         print(f"rotational_rms_MHz: {rotational_rms:.8g}")
         print(f"rotational_mean_square_MHz2: {rotational_mse:.8g}")
         print(f"rotational_mean_square_1e3_MHz2: {1000.0 * rotational_mse:.8g}")
