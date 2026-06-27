@@ -41,7 +41,7 @@ workflows belong to the next release and do not block this release.
 | --- | --- | --- |
 | LINK / Preprocessing | Covered in release manual | Geometry/QM/SMILES import, RDKit use, symmetry/topology execution, Avogadro handoff and generated xyzin sections. |
 | NEO / GICForge | Specialist manual plus release manual | Rename transition from GICForge to NEO, fragment-aware GICs already implemented, symmetry projector, B matrix, Python/Fortran parity and golden tests. |
-| GF/PED | Specialist manual plus release manual | Standalone xyzin mode, `#GF_PED`, local force-field model, electrostatic/vdW subtraction, GIC force-constant scaling and publication tables. |
+| GF/PED | Specialist manual plus release manual | Standalone xyzin mode, Gaussian FCHK/log Hessian promotion, `#GF_PED`, geometry/frequency diagnostics, local force-field model, electrostatic/vdW subtraction, GIC force-constant scaling and publication tables. |
 | MORPHEUS / SEFit | Specialist manual plus release manual | Standalone and GUI workflows, local `se_geometries`, multi-structure refinements and exported diagnostics. |
 | Rotational Spectroscopy / WMS-Rot | Covered in release manual | Local WMS-Rot engine, line-list generation, shared diagonalizer policy, database-comparison roadmap and publication exports. |
 | Vibrational Spectroscopy | Covered in release manual | IR/Raman/VCD/ROA plotting, NIST gas-phase import policy, mirrored comparisons and hybrid level1+level2 spectra with normal-mode overlap checks. |

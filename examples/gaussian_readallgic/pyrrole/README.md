@@ -25,7 +25,29 @@ The example is covered by
 `tests/test_matrix_gaussian_readallgic_examples.py`, so CI can check the
 Gaussian-side ReadAllGIC contract without launching Gaussian.
 
-The same test also promotes the printed Cartesian Hessian from `pyrrole.log`
-into `#CARTESIAN_HESSIAN`, rebuilds the symmetrized `#GIC` section and runs
-GF/PED. The GF frequencies reproduce the Gaussian frequencies within the
-rounding of the printed log matrix.
+Rebuild the MATRIX sections and run GF/PED with:
+
+```bash
+matrix link preprocess pyrrole.gjf pyrrole.xyzin --source-kind gaussian
+matrix validate pyrrole.xyzin
+matrix neo build pyrrole.xyzin --symmetrize
+matrix gaussian promote-log-hessian pyrrole.log pyrrole.xyzin
+matrix gf --xyzin pyrrole.xyzin --symmetry-blocks
+```
+
+The `.gjf` ReadAllGIC block is not imported as the MATRIX GIC definition.
+NEO/MATRIX rebuilds `#GIC` from the molecular topology and symmetry policy.
+The Gaussian log is used only as an external QM result: `promote-log-hessian`
+writes `#CARTESIAN_HESSIAN` and, when the printed table is present,
+`#NORMAL_MODES`.
+
+For Gaussian frequency jobs the printed normal coordinates are emitted in the
+Gaussian normal-coordinate frame, while the Cartesian Hessian is restored to
+the archive/original axes. The adapter stores the archive/original geometry and
+rotates the printed normal modes to that frame when the geometry fit is
+unambiguous. GF/PED reports both a geometry check and a frequency check against
+the source Gaussian frequencies; the GF frequencies reproduce the Gaussian
+frequencies within the rounding of the printed log matrix.
+
+Use `matrix gaussian promote-log-hessian --no-normal-modes pyrrole.log
+pyrrole.xyzin` when only the Cartesian Hessian section should be refreshed.

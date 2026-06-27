@@ -1,6 +1,7 @@
 """Gaussian input/output adapters for ORACLE."""
 
 from .parsers import (
+    GaussianLogNormalModes,
     GaussianLogSummary,
     GaussianLogHessianPromotion,
     GaussianReadAllGICLogCheck,
@@ -11,6 +12,7 @@ from .parsers import (
     read_gaussian_cartesian_input,
     read_gaussian_log_cartesian_hessian,
     read_gaussian_log_geometry,
+    read_gaussian_log_normal_modes,
     read_gaussian_zmatrix_input,
     summarize_gaussian_log,
 )
@@ -75,6 +77,7 @@ __all__ = [
     "GaussianInputError",
     "GaussianLogHessianPromotion",
     "GaussianJobStatus",
+    "GaussianLogNormalModes",
     "GaussianLogSummary",
     "GaussianReadAllGICLogCheck",
     "GaussianRovibData",
@@ -107,6 +110,7 @@ __all__ = [
     "read_gaussian_cartesian_input",
     "read_gaussian_log_cartesian_hessian",
     "read_gaussian_log_geometry",
+    "read_gaussian_log_normal_modes",
     "read_gaussian_topology",
     "read_gaussian_zmatrix_input",
     "read_indexed_qff_text",

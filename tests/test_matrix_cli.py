@@ -548,24 +548,29 @@ def test_gaussian_promote_log_hessian_cli_calls_adapter(tmp_path, monkeypatch, c
     log = tmp_path / "job.log"
     xyzin = tmp_path / "mol.xyzin"
 
-    def fake_promote(log_path, xyzin_path):
+    def fake_promote(log_path, xyzin_path, *, write_normal_modes=True):
         calls["log"] = log_path
         calls["xyzin"] = xyzin_path
+        calls["write_normal_modes"] = write_normal_modes
         return SimpleNamespace(
             log_path=log_path,
             xyzin=xyzin_path,
             wrote_cartesian_hessian=True,
+            wrote_normal_modes=write_normal_modes,
         )
 
     monkeypatch.setattr("matrix_gaussian.promote_gaussian_log_hessian_to_xyzin", fake_promote)
 
-    rc = matrix_run.main(["gaussian", "promote-log-hessian", str(log), str(xyzin)])
+    rc = matrix_run.main(
+        ["gaussian", "promote-log-hessian", str(log), str(xyzin), "--no-normal-modes"]
+    )
     out = capsys.readouterr().out
 
     assert rc == 0
-    assert calls == {"log": log, "xyzin": xyzin}
+    assert calls == {"log": log, "xyzin": xyzin, "write_normal_modes": False}
     assert "Promoted Gaussian log Hessian" in out
     assert "wrote_cartesian_hessian: 1" in out
+    assert "wrote_normal_modes: 0" in out
 
 
 def test_gaussian_promote_electronic_cli_calls_adapter(tmp_path, monkeypatch, capsys):

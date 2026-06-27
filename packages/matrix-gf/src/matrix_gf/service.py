@@ -13,6 +13,7 @@ from matrix_gaussian import hessian_input_from_gaussian_fchk
 from matrix_qm import hessian_input_from_xyzin
 
 from .internal import (
+    BOHR_TO_ANGSTROM,
     GFLocalOptions,
     InternalGFResult,
     gf_from_hessian_input_and_xyzin,
@@ -23,6 +24,24 @@ from .nonbonded import nonbonded_cartesian_hessian_correction, synthon_charges_f
 
 
 @dataclass(frozen=True)
+class GFFrequencyComparison:
+    reference_source: str
+    rows: tuple[tuple[int, float, float, float], ...]
+    rms_delta_cm: float
+    max_abs_delta_cm: float
+    warning: str = ""
+
+
+@dataclass(frozen=True)
+class GFGeometryComparison:
+    raw_rms_angstrom: float
+    raw_max_angstrom: float
+    aligned_rms_angstrom: float
+    aligned_max_angstrom: float
+    warning: str = ""
+
+
+@dataclass(frozen=True)
 class GFReport:
     fchk_path: Path
     result: InternalGFResult
@@ -30,6 +49,8 @@ class GFReport:
     xyzin_path: Path | None = None
     scale_path: Path | None = None
     hessian_source: str = ""
+    frequency_comparison: GFFrequencyComparison | None = None
+    geometry_comparison: GFGeometryComparison | None = None
 
 
 @dataclass(frozen=True)
@@ -95,7 +116,17 @@ def run_gf_report_from_fchk(fchk_path: Path) -> GFReport:
     path = Path(fchk_path)
     hessian_input = hessian_input_from_gaussian_fchk(path)
     result = gf_from_hessian_input_with_matrix_gics(hessian_input)
-    return GFReport(path, result, format_gf_report(path, result))
+    frequency_comparison = _frequency_comparison(
+        result.frequencies_cm,
+        hessian_input.harmonic_frequencies_cm,
+        hessian_input.source or f"FCHK {path}",
+    )
+    return GFReport(
+        path,
+        result,
+        format_gf_report(path, result, frequency_comparison=frequency_comparison),
+        frequency_comparison=frequency_comparison,
+    )
 
 
 def run_xyzin_gf_report_from_fchk(
@@ -228,6 +259,15 @@ def _run_xyzin_gf_report_from_hessian_input(
         cartesian_hessian_correction=correction,
         cartesian_hessian_correction_label=correction_label,
     )
+    frequency_comparison = _frequency_comparison(
+        result.frequencies_cm,
+        hessian_input.harmonic_frequencies_cm,
+        hessian_source,
+    )
+    geometry_comparison = _geometry_comparison(
+        definition.reference_coordinates_angstrom,
+        hessian_input.cartesian_coordinates_bohr,
+    )
     return GFReport(
         Path(source_path),
         result,
@@ -237,10 +277,14 @@ def _run_xyzin_gf_report_from_hessian_input(
             xyzin_path=xyzin,
             scale_path=scale_path,
             hessian_source=hessian_source,
+            frequency_comparison=frequency_comparison,
+            geometry_comparison=geometry_comparison,
         ),
         xyzin_path=xyzin,
         scale_path=scale_path,
         hessian_source=hessian_source,
+        frequency_comparison=frequency_comparison,
+        geometry_comparison=geometry_comparison,
     )
 
 
@@ -251,6 +295,8 @@ def format_gf_report(
     xyzin_path: Path | None = None,
     scale_path: Path | None = None,
     hessian_source: str | None = None,
+    frequency_comparison: GFFrequencyComparison | None = None,
+    geometry_comparison: GFGeometryComparison | None = None,
 ) -> str:
     lines = [
         "GF/PED from ORACLE non-redundant GICs",
@@ -261,8 +307,6 @@ def format_gf_report(
         f"Matrix model: {result.matrix_model}",
         f"Cartesian Hessian correction: {result.hessian_correction}",
         f"GIC count: {len(result.gic_labels)}",
-        "",
-        "Frequencies (cm-1):",
     ]
     if xyzin_path is not None:
         lines.insert(2, f"Frozen xyzin: {Path(xyzin_path)}")
@@ -284,6 +328,30 @@ def format_gf_report(
             for label in dict.fromkeys(result.block_labels)
         )
         lines.insert(3 if xyzin_path is not None else 2, f"GF blocks: {counts}")
+    if geometry_comparison is not None:
+        lines.append(
+            "Geometry check: "
+            f"raw RMS={geometry_comparison.raw_rms_angstrom:.6g} Angstrom "
+            f"max={geometry_comparison.raw_max_angstrom:.6g}; "
+            f"aligned RMS={geometry_comparison.aligned_rms_angstrom:.6g} Angstrom "
+            f"max={geometry_comparison.aligned_max_angstrom:.6g}"
+        )
+        if geometry_comparison.warning:
+            lines.append(f"Geometry warning: {geometry_comparison.warning}")
+    if frequency_comparison is not None:
+        lines.append(
+            f"Frequency check vs {frequency_comparison.reference_source}: "
+            f"compared={len(frequency_comparison.rows)} "
+            f"RMS delta={frequency_comparison.rms_delta_cm:.6g} cm-1 "
+            f"max |delta|={frequency_comparison.max_abs_delta_cm:.6g} cm-1"
+        )
+        if frequency_comparison.warning:
+            lines.append(f"Frequency warning: {frequency_comparison.warning}")
+        lines.append("Frequency comparison (cm-1, sorted):")
+        lines.append("  mode        GF       source        delta")
+        for mode, gf_freq, ref_freq, delta in frequency_comparison.rows:
+            lines.append(f"  {mode:4d} {gf_freq:10.3f} {ref_freq:12.3f} {delta:12.3f}")
+    lines.extend(["", "Frequencies (cm-1):"])
     for idx, freq in enumerate(result.frequencies_cm, start=1):
         lines.append(f"  mode {idx:3d}: {freq:12.3f}")
 
@@ -302,6 +370,82 @@ def format_gf_report(
         values = " ".join(f"{value:7.2f}" for value in row)
         lines.append(f"  GIC{idx:03d} {values}")
     return "\n".join(lines)
+
+
+def _frequency_comparison(
+    gf_frequencies,
+    reference_frequencies,
+    reference_source: str,
+) -> GFFrequencyComparison | None:
+    gf_values = np.asarray(gf_frequencies, dtype=float).reshape(-1)
+    ref_values = np.asarray(reference_frequencies, dtype=float).reshape(-1)
+    gf_values = gf_values[np.isfinite(gf_values)]
+    ref_values = ref_values[np.isfinite(ref_values)]
+    if gf_values.size == 0 or ref_values.size == 0:
+        return None
+    warning = ""
+    if gf_values.size != ref_values.size:
+        warning = (
+            f"frequency count mismatch: GF has {gf_values.size}, "
+            f"reference has {ref_values.size}; compared sorted overlap"
+        )
+    count = int(min(gf_values.size, ref_values.size))
+    gf_sorted = np.sort(gf_values)[:count]
+    ref_sorted = np.sort(ref_values)[:count]
+    deltas = gf_sorted - ref_sorted
+    rows = tuple(
+        (index + 1, float(gf_sorted[index]), float(ref_sorted[index]), float(deltas[index]))
+        for index in range(count)
+    )
+    rms = float(np.sqrt(np.mean(deltas * deltas))) if count else 0.0
+    max_abs = float(np.max(np.abs(deltas))) if count else 0.0
+    return GFFrequencyComparison(
+        reference_source=reference_source,
+        rows=rows,
+        rms_delta_cm=rms,
+        max_abs_delta_cm=max_abs,
+        warning=warning,
+    )
+
+
+def _geometry_comparison(
+    definition_coordinates_angstrom,
+    hessian_coordinates_bohr,
+) -> GFGeometryComparison | None:
+    definition = np.asarray(definition_coordinates_angstrom, dtype=float)
+    hessian = np.asarray(hessian_coordinates_bohr, dtype=float) * BOHR_TO_ANGSTROM
+    if definition.shape != hessian.shape or definition.ndim != 2 or definition.shape[1] != 3:
+        return None
+    raw_delta = definition - hessian
+    raw_distances = np.linalg.norm(raw_delta, axis=1)
+    raw_rms = float(np.sqrt(np.mean(raw_distances * raw_distances)))
+    raw_max = float(np.max(raw_distances)) if raw_distances.size else 0.0
+    definition_centered = definition - np.mean(definition, axis=0)
+    hessian_centered = hessian - np.mean(hessian, axis=0)
+    try:
+        u, _singular, vt = np.linalg.svd(definition_centered.T @ hessian_centered)
+        rotation = u @ vt
+        aligned_delta = definition_centered @ rotation - hessian_centered
+    except np.linalg.LinAlgError:
+        aligned_delta = definition_centered - hessian_centered
+    aligned_distances = np.linalg.norm(aligned_delta, axis=1)
+    aligned_rms = float(np.sqrt(np.mean(aligned_distances * aligned_distances)))
+    aligned_max = float(np.max(aligned_distances)) if aligned_distances.size else 0.0
+    warning = ""
+    if aligned_max > 1.0e-3:
+        warning = (
+            "Hessian geometry differs from frozen #GIC reference geometry; "
+            "the B matrix is evaluated on the Hessian geometry."
+        )
+    elif raw_max > 1.0e-3:
+        warning = "Coordinate frames differ, but the aligned geometry is consistent."
+    return GFGeometryComparison(
+        raw_rms_angstrom=raw_rms,
+        raw_max_angstrom=raw_max,
+        aligned_rms_angstrom=aligned_rms,
+        aligned_max_angstrom=aligned_max,
+        warning=warning,
+    )
 
 
 def gf_csv_tables(report: GFReport) -> dict[str, str]:
@@ -338,7 +482,7 @@ def gf_csv_tables(report: GFReport) -> dict[str, str]:
         irrep = report.result.gic_irreps[idx - 1] if idx <= len(report.result.gic_irreps) else "UNK"
         ped_rows.append([f"GIC{idx:03d}", name, irrep, *[f"{value:.10g}" for value in row]])
 
-    return {
+    tables = {
         "frequencies.csv": _csv_text(freq_rows),
         "gic_labels.csv": _csv_text(label_rows),
         "ped.csv": _csv_text(ped_rows),
@@ -350,6 +494,17 @@ def gf_csv_tables(report: GFReport) -> dict[str, str]:
         ),
         "g_matrix.csv": _csv_text(_square_gic_table(report.result.g_matrix, report.result)),
     }
+    if report.frequency_comparison is not None:
+        tables["frequency_comparison.csv"] = _csv_text(
+            [
+                ["mode", "gf_frequency_cm-1", "source_frequency_cm-1", "delta_cm-1"],
+                *[
+                    [mode, f"{gf_freq:.10g}", f"{ref_freq:.10g}", f"{delta:.10g}"]
+                    for mode, gf_freq, ref_freq, delta in report.frequency_comparison.rows
+                ],
+            ]
+        )
+    return tables
 
 
 def write_csv_tables(report: GFReport, outdir: Path, *, prefix: str = "gf") -> dict[str, Path]:

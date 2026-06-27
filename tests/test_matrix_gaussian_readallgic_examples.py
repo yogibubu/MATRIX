@@ -8,11 +8,13 @@ from matrix_gaussian import (
     hessian_input_from_gaussian_log,
     promote_gaussian_log_hessian_to_xyzin,
     read_gaussian_log_cartesian_hessian,
+    read_gaussian_log_normal_modes,
     summarize_gaussian_log,
 )
 from matrix_gf import run_xyzin_gf_report_from_xyzin
 from matrix_gf.harmonic import HESSIAN_EIGENVALUE_TO_CM
 from matrix_neo import write_gicforge_build_sections
+from matrix_qm import read_normal_modes_section
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,16 +86,37 @@ def test_pyrrole_gf_uses_log_hessian_and_symmetrized_gics(tmp_path: Path) -> Non
     preprocess_to_enriched_xyz(PYRROLE / "pyrrole.gjf", xyzin, source_kind="gaussian")
     write_validation_section(xyzin)
     write_gicforge_build_sections(xyzin, symmetrize=True)
-    promote_gaussian_log_hessian_to_xyzin(PYRROLE / "pyrrole.log", xyzin)
+    promotion = promote_gaussian_log_hessian_to_xyzin(PYRROLE / "pyrrole.log", xyzin)
 
     report = run_xyzin_gf_report_from_xyzin(xyzin)
     gaussian_frequencies = np.asarray(
         summarize_gaussian_log(PYRROLE / "pyrrole.log").frequencies_cm
     )
+    normal_modes = read_normal_modes_section(xyzin)
 
+    assert promotion.wrote_cartesian_hessian is True
+    assert promotion.wrote_normal_modes is True
     assert report.result.point_group == "C2v"
     assert report.result.symmetrized_gics is True
     assert report.result.gic_names[:3] == ("A1Str001", "A1Str002", "A1Str003")
     assert "A2RPck001" in report.result.gic_names
     assert "B1OuPl003" in report.result.gic_names
+    assert normal_modes.modes.shape == (24, 30)
+    assert np.allclose(normal_modes.frequencies_cm, gaussian_frequencies)
+    assert report.frequency_comparison is not None
+    assert report.geometry_comparison is not None
+    assert "Frequency check vs" in report.text
+    assert "Geometry check:" in report.text
+    assert report.frequency_comparison.max_abs_delta_cm < 0.02
     assert np.allclose(report.result.frequencies_cm, gaussian_frequencies, atol=0.02)
+
+
+def test_pyrrole_log_normal_modes_parser_reads_gaussian_table() -> None:
+    normal_modes = read_gaussian_log_normal_modes(PYRROLE / "pyrrole.log")
+    gaussian_frequencies = np.asarray(
+        summarize_gaussian_log(PYRROLE / "pyrrole.log").frequencies_cm
+    )
+
+    assert normal_modes.modes.shape == (24, 30)
+    assert normal_modes.rotated_to_archive_axes is True
+    assert np.allclose(normal_modes.frequencies_cm, gaussian_frequencies)

@@ -128,6 +128,7 @@ def build_parser(
     )
     gaussian_promote_log_hessian.add_argument("log", type=Path)
     gaussian_promote_log_hessian.add_argument("xyzin", type=Path)
+    gaussian_promote_log_hessian.add_argument("--no-normal-modes", action="store_true")
     gaussian_promote_electronic = gaussian_sub.add_parser(
         "promote-electronic",
         help="Promote Gaussian electronic states/transitions into a MATRIX xyzin",
@@ -968,9 +969,14 @@ def main(
     if args.command == "gaussian" and args.gaussian_command == "promote-log-hessian":
         from matrix_gaussian import promote_gaussian_log_hessian_to_xyzin
 
-        result = promote_gaussian_log_hessian_to_xyzin(args.log, args.xyzin)
+        result = promote_gaussian_log_hessian_to_xyzin(
+            args.log,
+            args.xyzin,
+            write_normal_modes=not args.no_normal_modes,
+        )
         print(f"Promoted Gaussian log Hessian: {result.log_path} -> {result.xyzin}")
         print(f"wrote_cartesian_hessian: {int(result.wrote_cartesian_hessian)}")
+        print(f"wrote_normal_modes: {int(result.wrote_normal_modes)}")
         return 0
     if args.command == "gaussian" and args.gaussian_command == "promote-electronic":
         from matrix_gaussian import promote_gaussian_electronic_log_to_xyzin

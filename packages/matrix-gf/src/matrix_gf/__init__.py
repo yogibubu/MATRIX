@@ -42,6 +42,8 @@ from .sections import (
 )
 
 _SERVICE_EXPORTS = {
+    "GFFrequencyComparison",
+    "GFGeometryComparison",
     "GFScalingAssignment",
     "GFScalingClass",
     "GFScalingPreview",
@@ -70,6 +72,8 @@ def __getattr__(name: str):
 __all__ = [
     "BOHR_TO_ANGSTROM",
     "GFGICRow",
+    "GFFrequencyComparison",
+    "GFGeometryComparison",
     "GFLocalOptions",
     "GFModeRow",
     "GFPEDSection",
