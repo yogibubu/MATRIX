@@ -8,6 +8,9 @@ import sys
 from collections.abc import Sequence
 
 
+MORBVIS_URL = "https://yasuaki-ito.github.io/morbvis/"
+
+
 @dataclass(frozen=True)
 class OracleGuiCommand:
     label: str
@@ -60,6 +63,10 @@ def molden_command(
     executable: str = "molden",
 ) -> OracleGuiCommand:
     return external_viewer_command(target, executable=executable, label="Open in Molden")
+
+
+def morbvis_command(*, url: str = MORBVIS_URL) -> OracleGuiCommand:
+    return OracleGuiCommand("Open MOrbVis", (sys.executable, "-m", "webbrowser", "-t", url))
 
 
 def gaussian_summary_command(log: Path | str) -> OracleGuiCommand:

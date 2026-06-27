@@ -50,7 +50,7 @@ or figures. They still use the same `xyzin` sections and service boundaries.
 | --- | --- | --- |
 | Rotational Spectroscopy | Collect rotational constants, corrections and assignments; draw rotational spectra. | isotopologue comparison, SEFit residuals, line-list/stick/envelope plots, publication CSV/SVG/PDF/LaTeX export |
 | Vibrational Spectroscopy | Collect harmonic, GF/PED, VPT2/VCI and DVR data; draw vibrational spectra. | normal-mode overlap heat maps, force-constant scaling, IR/Raman-style peak tables, publication plots |
-| Electronic Spectroscopy | Collect electronic-state and transition data; visualize orbitals/densities. | UV/visible stick/broadened spectra, orbital viewing through Avogadro/Avogadro2/Molden, transition tables |
+| Electronic Spectroscopy | Collect electronic-state and transition data; visualize orbitals/densities. | UV/visible stick/broadened spectra, orbital viewing through Avogadro/Avogadro2/Molden/MOrbVis, transition tables |
 | Molecular Structure / Synthons | Inspect and publish structure, topology, fragments and synthon classifications. | structure tables, synthon maps, fragment maps, Avogadro editing |
 | Thermochemistry / Kinetics | Collect thermochemical functions and kinetic-model outputs. | thermo tables, rovibrational DOS, kinetic comparisons, publication-ready plots/tables |
 
@@ -61,9 +61,9 @@ LaTeX, SVG and PDF. Spectral plotting backends can implement the remaining
 declared targets without changing the scientific services.
 
 Orbital visualization is delegated to external viewers. ORACLE should prepare
-or pass through supported files, then launch Avogadro/Avogadro2, Molden or
-another configured viewer through `oracle_gui.commands`, rather than embedding
-a private orbital renderer in the first GUI pass.
+or pass through supported files, then launch Avogadro/Avogadro2, Molden,
+MOrbVis or another configured viewer through `oracle_gui.commands`, rather
+than embedding a private orbital renderer in the first GUI pass.
 
 ## Implementation Boundary
 
@@ -231,6 +231,9 @@ provides:
   `#ORBITALS` sections when a QM adapter has created them;
 - Molden and Avogadro/Avogadro2 launch controls for orbital, density, FCHK,
   Molden or cube-style files selected by the user;
+- a MOrbVis launcher for browser-based WebGPU/CPU orbital and density viewing
+  from Molden or Cube files, with the reference paper stored in
+  `bibliography/`;
 - publication export targets for future electronic transition tables and
   spectra.
 

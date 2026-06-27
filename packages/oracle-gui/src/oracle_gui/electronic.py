@@ -5,7 +5,13 @@ from pathlib import Path
 
 from oracle_core import has_section, read_sectioned_lines, section_content
 
-from .commands import OracleGuiCommand, external_viewer_command, molden_command
+from .commands import (
+    MORBVIS_URL,
+    OracleGuiCommand,
+    external_viewer_command,
+    molden_command,
+    morbvis_command,
+)
 
 
 ELECTRONIC_SECTION_NAMES = ("ELECTRONIC", "TRANSITIONS", "ORBITALS")
@@ -59,6 +65,9 @@ class OracleElectronicController:
         executable: str = "avogadro2",
     ) -> OracleGuiCommand:
         return external_viewer_command(target, executable=executable, label="Open in Avogadro")
+
+    def morbvis_command(self, *, url: str = MORBVIS_URL) -> OracleGuiCommand:
+        return morbvis_command(url=url)
 
 
 def load_electronic_gui_state(path: Path | str) -> ElectronicGuiState:

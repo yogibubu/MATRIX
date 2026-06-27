@@ -2,6 +2,7 @@
 
 from .dvr_state import DVRGuiState, dvr_gui_state_lines, load_dvr_gui_state
 from .commands import (
+    MORBVIS_URL,
     OracleGuiCommand,
     avogadro_command,
     dvr_collect_command,
@@ -23,6 +24,7 @@ from .commands import (
     gicforge_report_command,
     preprocess_command,
     molden_command,
+    morbvis_command,
     molpro_promote_command,
     molpro_summary_command,
     mrcc_promote_command,
@@ -162,6 +164,7 @@ from .workflows import (
 
 __all__ = [
     "ORACLE_GUI_WINDOWS",
+    "MORBVIS_URL",
     "WINDOWS_BY_KEY",
     "DVRGuiState",
     "DashboardAction",
@@ -266,6 +269,7 @@ __all__ = [
     "missing_sections_guidance",
     "missing_sections_message",
     "molden_command",
+    "morbvis_command",
     "molpro_promote_command",
     "molpro_summary_command",
     "mrcc_promote_command",

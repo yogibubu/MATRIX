@@ -12,6 +12,7 @@ from .contracts import (
 from .dashboard import DashboardAction, OracleDashboardController
 from .electronic import (
     ElectronicTable,
+    MORBVIS_URL,
     OracleElectronicController,
     electronic_gui_state_lines,
     load_electronic_gui_state,
@@ -1657,25 +1658,34 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             tab = QWidget()
             layout = QVBoxLayout(tab)
 
-            viewer_row = QHBoxLayout()
-            viewer_row.addWidget(QLabel("Orbital / density file"))
+            file_row = QHBoxLayout()
+            file_row.addWidget(QLabel("Orbital / density file"))
             self.electronic_viewer_target = QLineEdit()
             browse_button = QPushButton("Browse")
             browse_button.clicked.connect(self.browse_electronic_viewer_target)
+            file_row.addWidget(self.electronic_viewer_target, stretch=1)
+            file_row.addWidget(browse_button)
+            layout.addLayout(file_row)
+
+            viewer_row = QHBoxLayout()
             self.electronic_molden_executable = QLineEdit("molden")
             self.electronic_avogadro_executable = QLineEdit("avogadro2")
+            self.electronic_morbvis_url = QLineEdit(MORBVIS_URL)
             molden_button = QPushButton("Molden")
             molden_button.clicked.connect(self.run_electronic_molden)
             avogadro_button = QPushButton("Avogadro")
             avogadro_button.clicked.connect(self.run_electronic_avogadro)
-            viewer_row.addWidget(self.electronic_viewer_target, stretch=1)
-            viewer_row.addWidget(browse_button)
+            morbvis_button = QPushButton("MOrbVis")
+            morbvis_button.clicked.connect(self.run_electronic_morbvis)
             viewer_row.addWidget(QLabel("Molden exe"))
             viewer_row.addWidget(self.electronic_molden_executable)
             viewer_row.addWidget(QLabel("Avogadro exe"))
             viewer_row.addWidget(self.electronic_avogadro_executable)
+            viewer_row.addWidget(QLabel("MOrbVis URL"))
+            viewer_row.addWidget(self.electronic_morbvis_url)
             viewer_row.addWidget(molden_button)
             viewer_row.addWidget(avogadro_button)
+            viewer_row.addWidget(morbvis_button)
             layout.addLayout(viewer_row)
 
             self.electronic_summary = QTextEdit()
@@ -1721,6 +1731,13 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 return
             executable = self.electronic_avogadro_executable.text().strip() or "avogadro2"
             command = self.electronic_controller.avogadro_command(target, executable=executable)
+            self._start_command(command, command.label)
+
+        def run_electronic_morbvis(self) -> None:
+            if not self._ensure_electronic_idle("MOrbVis"):
+                return
+            url = self.electronic_morbvis_url.text().strip() or MORBVIS_URL
+            command = self.electronic_controller.morbvis_command(url=url)
             self._start_command(command, command.label)
 
         def _ensure_electronic_idle(self, title: str) -> bool:

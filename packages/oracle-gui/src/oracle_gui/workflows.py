@@ -433,12 +433,12 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
         produced_sections=("ELECTRONIC", "TRANSITIONS", "ORBITALS"),
         capabilities=(
             "collect electronic-state and transition data from QM adapters",
-            "visualize orbitals and densities with external viewers",
+            "visualize orbitals and densities with Molden, Avogadro or MOrbVis",
             "draw UV/visible or electronic stick/broadened spectra",
             "export publication-ready electronic spectra",
         ),
         publication_exports=("CSV transition table", "SVG spectrum", "PDF spectrum"),
-        external_viewers=("Avogadro", "Avogadro2", "Molden"),
+        external_viewers=("Avogadro", "Avogadro2", "Molden", "MOrbVis"),
         actions=(
             WorkflowActionSpec(
                 key="promote_fchk",
@@ -455,6 +455,11 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
                 key="view_avogadro",
                 label="View orbitals in Avogadro",
                 command="avogadro2",
+            ),
+            WorkflowActionSpec(
+                key="view_morbvis",
+                label="View orbitals in MOrbVis",
+                command="morbvis",
             ),
         ),
     ),

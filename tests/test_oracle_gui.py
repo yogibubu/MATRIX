@@ -15,6 +15,7 @@ from oracle_thermo import ThermoContribution, ThermoSection, write_thermo_sectio
 from oracle_trinity import TrinitySection, write_trinity_section
 from oracle_gui import (
     DashboardActionTemplate,
+    MORBVIS_URL,
     ORACLE_GUI_WINDOWS,
     OracleDashboardController,
     OracleElectronicController,
@@ -70,6 +71,7 @@ from oracle_gui import (
     load_workbench_gui_state,
     missing_sections_message,
     molden_command,
+    morbvis_command,
     molpro_promote_command,
     molpro_summary_command,
     mrcc_promote_command,
@@ -731,6 +733,7 @@ def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path
     lines = electronic_gui_state_lines(state)
     molden = controller.molden_command(molden_file, executable="molden-test")
     avogadro = controller.avogadro_command(molden_file, executable="avogadro-test")
+    morbvis = controller.morbvis_command()
 
     assert state.ready
     assert ("ELECTRONIC", "yes", "3") in state.sections.rows
@@ -740,6 +743,7 @@ def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path
     assert "ready: 1" in lines
     assert molden.argv == ("molden-test", str(molden_file))
     assert avogadro.argv == ("avogadro-test", str(molden_file))
+    assert morbvis.argv == (sys.executable, "-m", "webbrowser", "-t", MORBVIS_URL)
 
 
 def test_thermo_kinetics_gui_state_and_publication_export(tmp_path):
@@ -1023,6 +1027,8 @@ def test_gui_window_specs_cover_primary_oracle_workflows():
     assert window_spec("rotational_spectroscopy").category == "spectroscopy"
     assert "mode heat-map" in window_spec("vibrational_spectroscopy").publication_exports
     assert "Molden" in window_spec("electronic_spectroscopy").external_viewers
+    assert "MOrbVis" in window_spec("electronic_spectroscopy").external_viewers
+    assert any(action.key == "view_morbvis" for action in window_spec("electronic_spectroscopy").actions)
     assert window_spec("electronic_spectroscopy").produced_sections == (
         "ELECTRONIC",
         "TRANSITIONS",
@@ -1049,6 +1055,7 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
     preprocess = preprocess_command(source, xyzin, source_kind="xyz")
     avogadro = avogadro_command(xyzin, executable="avogadro")
     molden = molden_command(fchk)
+    morbvis = morbvis_command()
     promote_fchk = gaussian_promote_fchk_command(fchk, xyzin, qff=False)
     promote_rovib = gaussian_promote_rovib_command(log, xyzin, exclude_modes=(1, 3))
     rovib_summary = rovib_summary_command(xyzin)
@@ -1091,6 +1098,7 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
     assert preprocess.argv[-2:] == ("--source-kind", "xyz")
     assert avogadro.argv == ("avogadro", str(xyzin))
     assert molden.argv == ("molden", str(fchk))
+    assert morbvis.argv == (sys.executable, "-m", "webbrowser", "-t", MORBVIS_URL)
     assert promote_fchk.argv[-1] == "--no-qff"
     assert promote_fchk.produced_sections == ("CARTESIAN_HESSIAN", "NORMAL_MODES")
     assert promote_rovib.argv[-4:] == ("--exclude-mode", "1", "--exclude-mode", "3")

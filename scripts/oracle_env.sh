@@ -262,6 +262,22 @@ if ok:
 else:
     raise SystemExit(1)
 PY
+    local runtime_status=$?
+    if [ "$runtime_status" -ne 0 ]; then
+        return "$runtime_status"
+    fi
+    if command -v molden >/dev/null 2>&1; then
+        echo "[OK] molden $(molden -h 2>/dev/null | awk 'NR==1 {print $1}')"
+    else
+        echo "[WARN] molden: not found in PATH"
+    fi
+    if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+        if [ -d /Applications/Utilities/XQuartz.app ]; then
+            echo "[OK] XQuartz installed"
+        else
+            echo "[WARN] XQuartz missing: Molden GUI windows require XQuartz on macOS"
+        fi
+    fi
 }
 
 oracle-install-gui-deps() {
