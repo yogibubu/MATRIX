@@ -15,6 +15,11 @@ SCF_RE = re.compile(r"SCF Done:\s+E\([^)]+\)\s+=\s+([-+]?\d+\.\d+)")
 NORMAL_TERMINATION = "Normal termination of Gaussian"
 STANDARD_ORIENTATION = "Standard orientation:"
 INPUT_ORIENTATION = "Input orientation:"
+POINT_GROUP_RE = re.compile(r"Full point group\s+(\S+)", flags=re.IGNORECASE)
+RANK_RE = re.compile(r"NTRed=\s*(\d+).*?NRank=\s*(\d+)", flags=re.IGNORECASE)
+NIMAG_RE = re.compile(r"N\s*Imag\s*=\s*(\d+)", flags=re.IGNORECASE)
+READALLGIC_RE = re.compile(r"\breadallgic\b", flags=re.IGNORECASE)
+PARAMETER_LINE_RE = re.compile(r"^\s*!\s*(?P<label>\S+)\s+(?P<body>.*?)\s*!\s*$")
 
 
 @dataclass(frozen=True)
@@ -28,6 +33,28 @@ class GaussianLogSummary:
     puckering_marker_count: int
     frequencies_cm: tuple[float, ...] = ()
     last_orientation: MolecularGeometry | None = None
+
+
+@dataclass(frozen=True)
+class GaussianReadAllGICLogCheck:
+    path: Path
+    normal_termination_count: int
+    route_has_readallgic: bool
+    point_groups: tuple[str, ...]
+    ranks: tuple[tuple[int, int], ...]
+    labels: tuple[str, ...]
+    active_labels: tuple[str, ...]
+    frozen_labels: tuple[str, ...]
+    frequency_count: int
+    imaginary_frequency_count: int
+    n_imag: int | None
+    optimization_completed: bool
+    stationary_point: bool
+    errors: tuple[str, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
 
 
 @dataclass(frozen=True)
@@ -152,6 +179,75 @@ def summarize_gaussian_log(path: Path) -> GaussianLogSummary:
         puckering_marker_count=text.count("QPck") + text.count("PhiP") + text.count("RPck"),
         frequencies_cm=tuple(_parse_frequencies(text)),
         last_orientation=orientation,
+    )
+
+
+def check_gaussian_readallgic_log(
+    path: Path,
+    *,
+    expected_point_group: str | None = None,
+    expected_rank: int | None = None,
+    expected_frozen_labels: tuple[str, ...] = (),
+    expected_active_labels: tuple[str, ...] = (),
+    require_frequency: bool = False,
+    require_no_imaginary: bool = False,
+) -> GaussianReadAllGICLogCheck:
+    """Validate the Gaussian-side result of a MATRIX ReadAllGIC input."""
+    target = Path(path)
+    text = target.read_text(encoding="utf-8", errors="replace")
+    summary = summarize_gaussian_log(target)
+    normal_termination_count = text.count(NORMAL_TERMINATION)
+    labels, frozen_labels = _parse_parameter_labels(text)
+    frozen = set(frozen_labels)
+    active_labels = tuple(label for label in labels if label not in frozen)
+    point_groups = tuple(match.group(1).upper() for match in POINT_GROUP_RE.finditer(text))
+    ranks = tuple((int(match.group(1)), int(match.group(2))) for match in RANK_RE.finditer(text))
+    n_imag = _parse_last_nimag(text)
+    imaginary_frequency_count = sum(1 for frequency in summary.frequencies_cm if frequency < 0.0)
+
+    errors: list[str] = []
+    if normal_termination_count == 0:
+        errors.append("Gaussian log has no normal termination")
+    if not READALLGIC_RE.search(text):
+        errors.append("Gaussian log does not contain readallgic")
+    if expected_point_group is not None:
+        expected = expected_point_group.upper()
+        if expected not in point_groups:
+            errors.append(f"expected point group {expected}, found {point_groups or 'none'}")
+    if expected_rank is not None and (expected_rank, expected_rank) not in ranks:
+        errors.append(f"expected NTRed/NRank {expected_rank}, found {ranks or 'none'}")
+    missing_frozen = tuple(label for label in expected_frozen_labels if label not in frozen)
+    if missing_frozen:
+        errors.append(f"missing frozen labels: {', '.join(missing_frozen)}")
+    missing_active = tuple(label for label in expected_active_labels if label not in labels)
+    if missing_active:
+        errors.append(f"missing active labels: {', '.join(missing_active)}")
+    frozen_active = tuple(label for label in expected_active_labels if label in frozen)
+    if frozen_active:
+        errors.append(f"expected active labels are frozen: {', '.join(frozen_active)}")
+    if require_frequency and not summary.frequencies_cm:
+        errors.append("Gaussian log contains no vibrational frequencies")
+    if require_no_imaginary:
+        if n_imag is not None and n_imag != 0:
+            errors.append(f"expected NImag=0, found NImag={n_imag}")
+        if n_imag is None and imaginary_frequency_count:
+            errors.append(f"expected no imaginary frequencies, found {imaginary_frequency_count}")
+
+    return GaussianReadAllGICLogCheck(
+        path=target,
+        normal_termination_count=normal_termination_count,
+        route_has_readallgic=READALLGIC_RE.search(text) is not None,
+        point_groups=point_groups,
+        ranks=ranks,
+        labels=labels,
+        active_labels=active_labels,
+        frozen_labels=frozen_labels,
+        frequency_count=len(summary.frequencies_cm),
+        imaginary_frequency_count=imaginary_frequency_count,
+        n_imag=n_imag,
+        optimization_completed="Optimization completed" in text,
+        stationary_point="Stationary point found" in text,
+        errors=tuple(errors),
     )
 
 
@@ -327,6 +423,39 @@ def _parse_frequencies(text: str) -> list[float]:
             except ValueError:
                 continue
     return values
+
+
+def _parse_parameter_labels(text: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    labels: list[str] = []
+    frozen_labels: list[str] = []
+    seen: set[str] = set()
+    seen_frozen: set[str] = set()
+    for line in text.splitlines():
+        match = PARAMETER_LINE_RE.match(line)
+        if not match:
+            continue
+        label = match.group("label")
+        if not _looks_like_parameter_label(label):
+            continue
+        body = match.group("body")
+        if label not in seen:
+            labels.append(label)
+            seen.add(label)
+        if "frozen" in body.lower() and label not in seen_frozen:
+            frozen_labels.append(label)
+            seen_frozen.add(label)
+    return tuple(labels), tuple(frozen_labels)
+
+
+def _looks_like_parameter_label(label: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", label) and re.search(r"\d", label))
+
+
+def _parse_last_nimag(text: str) -> int | None:
+    matches = tuple(NIMAG_RE.finditer(text))
+    if not matches:
+        return None
+    return int(matches[-1].group(1))
 
 
 def _parse_last_orientation(lines: list[str], *, source_path: Path) -> MolecularGeometry | None:

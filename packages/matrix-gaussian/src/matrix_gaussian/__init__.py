@@ -2,6 +2,8 @@
 
 from .parsers import (
     GaussianLogSummary,
+    GaussianReadAllGICLogCheck,
+    check_gaussian_readallgic_log,
     read_gaussian_input,
     read_gaussian_cartesian_input,
     read_gaussian_log_geometry,
@@ -69,11 +71,13 @@ __all__ = [
     "GaussianInputError",
     "GaussianJobStatus",
     "GaussianLogSummary",
+    "GaussianReadAllGICLogCheck",
     "GaussianRovibData",
     "GaussianRovibPromotion",
     "GaussianRunResult",
     "GaussianTopologyData",
     "anharmonic_input_from_gaussian_fchk",
+    "check_gaussian_readallgic_log",
     "compute_deltavib_from_alpha",
     "ensure_gjf_input",
     "formchk_checkpoint",

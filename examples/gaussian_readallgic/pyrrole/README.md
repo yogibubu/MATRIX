@@ -20,3 +20,7 @@ The example demonstrates that:
   `Frozen`.
 - Gaussian preserves `C2V` symmetry, finds a stationary point and reports
   `NImag=0`.
+
+The example is covered by
+`tests/test_matrix_gaussian_readallgic_examples.py`, so CI can check the
+Gaussian-side ReadAllGIC contract without launching Gaussian.
