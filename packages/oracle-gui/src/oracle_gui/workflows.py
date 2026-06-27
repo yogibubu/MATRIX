@@ -278,6 +278,9 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
             "VIBRATIONAL",
             "ROTATIONAL",
             "DELTABVIB",
+            "ELECTRONIC",
+            "TRANSITIONS",
+            "ORBITALS",
         ),
         capabilities=(
             "write Gaussian GIC inputs from the frozen #GIC contract",
@@ -285,6 +288,7 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
             "run formchk on Gaussian checkpoint files",
             "promote FCHK Hessian, normal-mode and QFF data",
             "promote rovibrational output sections from Gaussian logs",
+            "promote electronic states, transitions and orbital file records from Gaussian outputs",
             "promote Molpro and MRCC geometries through the shared QM adapters",
         ),
         external_viewers=("Avogadro", "Molden"),
@@ -314,7 +318,13 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
                 key="gaussian_promote_fchk",
                 label="Promote Gaussian FCHK",
                 command="gaussian promote-fchk",
-                produced_sections=("CARTESIAN_HESSIAN", "NORMAL_MODES", "QFF"),
+                produced_sections=("CARTESIAN_HESSIAN", "NORMAL_MODES", "QFF", "ELECTRONIC", "ORBITALS"),
+            ),
+            WorkflowActionSpec(
+                key="gaussian_promote_electronic",
+                label="Promote Gaussian electronic data",
+                command="gaussian promote-electronic",
+                produced_sections=("ELECTRONIC", "TRANSITIONS", "ORBITALS"),
             ),
             WorkflowActionSpec(
                 key="gaussian_promote_rovib",

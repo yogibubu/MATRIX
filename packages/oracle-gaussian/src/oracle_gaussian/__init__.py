@@ -29,6 +29,12 @@ from .fchk import (
     read_gaussian_fchk_qff,
     read_indexed_qff_text,
 )
+from .electronic import (
+    GaussianElectronicData,
+    GaussianElectronicPromotion,
+    parse_gaussian_electronic_log,
+    promote_gaussian_electronic_log_to_xyzin,
+)
 from .jobs import (
     FORMCHK_EXECUTABLE,
     GAUSSIAN_EXECUTABLE,
@@ -58,6 +64,8 @@ __all__ = [
     "GaussianWriteError",
     "FCHKData",
     "GaussianFCHKPromotion",
+    "GaussianElectronicData",
+    "GaussianElectronicPromotion",
     "GaussianInputError",
     "GaussianJobStatus",
     "GaussianLogSummary",
@@ -78,7 +86,9 @@ __all__ = [
     "lower_to_symmetric",
     "promote_gaussian_fchk_to_xyzin",
     "parse_gaussian_topology",
+    "parse_gaussian_electronic_log",
     "parse_gaussian_rovib_log",
+    "promote_gaussian_electronic_log_to_xyzin",
     "promote_gaussian_rovib_to_xyzin",
     "read_gaussian_fchk",
     "read_gaussian_fchk_qff",

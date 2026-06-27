@@ -382,18 +382,24 @@ def test_gaussian_promote_fchk_cli_calls_adapter(tmp_path, monkeypatch, capsys):
         write_cartesian_hessian=True,
         write_normal_modes=True,
         write_qff=True,
+        write_electronic=True,
+        write_orbitals=True,
     ):
         calls["fchk"] = fchk_path
         calls["xyzin"] = xyzin_path
         calls["write_cartesian_hessian"] = write_cartesian_hessian
         calls["write_normal_modes"] = write_normal_modes
         calls["write_qff"] = write_qff
+        calls["write_electronic"] = write_electronic
+        calls["write_orbitals"] = write_orbitals
         return SimpleNamespace(
             fchk_path=fchk_path,
             xyzin=xyzin_path,
             wrote_cartesian_hessian=write_cartesian_hessian,
             wrote_normal_modes=write_normal_modes,
             wrote_qff=write_qff,
+            wrote_electronic=write_electronic,
+            wrote_orbitals=write_orbitals,
         )
 
     monkeypatch.setattr("oracle_gaussian.promote_gaussian_fchk_to_xyzin", fake_promote)
@@ -405,6 +411,7 @@ def test_gaussian_promote_fchk_cli_calls_adapter(tmp_path, monkeypatch, capsys):
             str(fchk),
             str(xyzin),
             "--no-normal-modes",
+            "--no-electronic",
         ]
     )
     out = capsys.readouterr().out
@@ -416,8 +423,65 @@ def test_gaussian_promote_fchk_cli_calls_adapter(tmp_path, monkeypatch, capsys):
         "write_cartesian_hessian": True,
         "write_normal_modes": False,
         "write_qff": True,
+        "write_electronic": False,
+        "write_orbitals": True,
     }
     assert "wrote_normal_modes: 0" in out
+    assert "wrote_electronic: 0" in out
+
+
+def test_gaussian_promote_electronic_cli_calls_adapter(tmp_path, monkeypatch, capsys):
+    calls = {}
+    log = tmp_path / "td.log"
+    xyzin = tmp_path / "mol.xyzin"
+    molden = tmp_path / "mol.molden"
+
+    def fake_promote(
+        log_path,
+        xyzin_path,
+        *,
+        write_electronic=True,
+        write_transitions=True,
+        orbital_files=(),
+    ):
+        calls["log"] = log_path
+        calls["xyzin"] = xyzin_path
+        calls["write_electronic"] = write_electronic
+        calls["write_transitions"] = write_transitions
+        calls["orbital_files"] = orbital_files
+        return SimpleNamespace(
+            log_path=log_path,
+            xyzin=xyzin_path,
+            wrote_electronic=write_electronic,
+            wrote_transitions=write_transitions,
+            wrote_orbitals=bool(orbital_files),
+        )
+
+    monkeypatch.setattr("oracle_gaussian.promote_gaussian_electronic_log_to_xyzin", fake_promote)
+
+    rc = oracle_run.main(
+        [
+            "gaussian",
+            "promote-electronic",
+            str(log),
+            str(xyzin),
+            "--no-transitions",
+            "--orbital-file",
+            str(molden),
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert calls == {
+        "log": log,
+        "xyzin": xyzin,
+        "write_electronic": True,
+        "write_transitions": False,
+        "orbital_files": (molden,),
+    }
+    assert "wrote_transitions: 0" in out
+    assert "wrote_orbitals: 1" in out
 
 
 def test_gaussian_promote_rovib_cli_calls_adapter(tmp_path, monkeypatch, capsys):

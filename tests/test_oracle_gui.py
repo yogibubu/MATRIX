@@ -35,6 +35,7 @@ from oracle_gui import (
     default_gicforge_bmatrix_output,
     default_gicforge_gaussian_output,
     default_gicforge_report_output,
+    default_electronic_export_dir,
     default_qm_formchk_output,
     default_qm_gaussian_input_output,
     default_qm_gaussian_workdir,
@@ -48,6 +49,7 @@ from oracle_gui import (
     default_trinity_run_dir,
     default_vibrational_dos_output,
     electronic_gui_state_lines,
+    gaussian_promote_electronic_command,
     gaussian_promote_fchk_command,
     gaussian_promote_rovib_command,
     gaussian_fchk_summary_command,
@@ -689,7 +691,12 @@ def test_qm_jobs_controller_builds_adapter_commands(tmp_path):
     assert formchk.argv[5:7] == (str(chk), str(fchk))
     assert formchk.produced_sections == ("FCHK",)
     assert fchk_summary.argv[3:5] == ("gaussian", "fchk-summary")
-    assert fchk_promote.produced_sections == ("CARTESIAN_HESSIAN", "NORMAL_MODES")
+    assert fchk_promote.produced_sections == (
+        "CARTESIAN_HESSIAN",
+        "NORMAL_MODES",
+        "ELECTRONIC",
+        "ORBITALS",
+    )
     assert rovib.argv[-4:] == ("--exclude-mode", "1", "--exclude-mode", "3")
     assert rovib.produced_sections == ("VIBRATIONAL", "ROTATIONAL", "DELTABVIB")
     assert molpro.argv[3:5] == ("molpro", "promote")
@@ -700,9 +707,12 @@ def test_qm_jobs_controller_builds_adapter_commands(tmp_path):
     assert mrcc_summary.argv[3:5] == ("mrcc", "summary")
 
 
-def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path):
+def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path, monkeypatch):
     xyzin = tmp_path / "molecule.xyzin"
     molden_file = tmp_path / "orbitals.molden"
+    cube_file = tmp_path / "density.cube"
+    molden_file.write_text("[Molden Format]\n", encoding="utf-8")
+    cube_file.write_text("cube\n", encoding="utf-8")
     xyzin.write_text(
         "\n".join(
             [
@@ -712,16 +722,19 @@ def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path
                 "",
                 "#ELECTRONIC",
                 "SCHEMA oracle.xyz.electronic.v1",
-                "STATE S0 ENERGY_EV=0.0",
+                "COLUMNS LABEL ENERGY_HARTREE ENERGY_EV MULTIPLICITY SYMMETRY SOURCE",
+                "S0 -0.5 0.0 1 A1 unit",
                 "",
                 "#TRANSITIONS",
                 "SCHEMA oracle.xyz.transitions.v1",
-                "COLUMNS FROM TO ENERGY_EV OSC",
-                "S0 S1 4.20 0.10",
+                "COLUMNS FROM TO ENERGY_EV WAVELENGTH_NM OSC STRENGTH SOURCE",
+                "S0 S1 4.20 295.2 0.10 electric-dipole unit",
                 "",
                 "#ORBITALS",
                 "SCHEMA oracle.xyz.orbitals.v1",
-                f"MOLDEN {molden_file}",
+                "COLUMNS KIND FORMAT ROLE PATH LABEL SOURCE",
+                f"FILE MOLDEN orbitals {molden_file} orbitals unit",
+                f"FILE CUBE density {cube_file} density unit",
             ]
         )
         + "\n",
@@ -734,16 +747,36 @@ def test_electronic_gui_state_reads_sections_and_builds_viewer_commands(tmp_path
     molden = controller.molden_command(molden_file, executable="molden-test")
     avogadro = controller.avogadro_command(molden_file, executable="avogadro-test")
     morbvis = controller.morbvis_command()
+    monkeypatch.setattr("oracle_gui.electronic._molden_ready", lambda _executable: False)
+    auto_fallback = controller.selected_orbital_viewer_command(0, molden_executable="missing-molden")
+    monkeypatch.setattr("oracle_gui.electronic._molden_ready", lambda _executable: True)
+    auto_molden = controller.selected_orbital_viewer_command(0, molden_executable="molden-test")
+    export = controller.export_electronic_publication(
+        default_electronic_export_dir(xyzin),
+        formats=("csv", "svg", "pdf"),
+    )
 
     assert state.ready
-    assert ("ELECTRONIC", "yes", "3") in state.sections.rows
-    assert state.transitions.columns == ("FROM", "TO", "ENERGY_EV", "OSC")
-    assert state.transitions.rows == (("S0", "S1", "4.20", "0.10"),)
-    assert state.orbitals.rows == (("1", f"MOLDEN {molden_file}"),)
+    assert any(row[0] == "ELECTRONIC" and row[1] == "yes" for row in state.sections.rows)
+    assert state.transitions.columns == ("From", "To", "Energy eV", "Wavelength nm", "Osc", "Source")
+    assert state.transitions.rows == (("S0", "S1", "4.2", "295.2", "0.1", "unit"),)
+    assert state.orbitals.columns == ("Kind", "Format", "Role", "Path", "Label", "Source")
+    assert state.orbital_records[0].format == "MOLDEN"
+    assert state.orbital_records[1].role == "density"
     assert "ready: 1" in lines
     assert molden.argv == ("molden-test", str(molden_file))
     assert avogadro.argv == ("avogadro-test", str(molden_file))
     assert morbvis.argv == (sys.executable, "-m", "webbrowser", "-t", MORBVIS_URL)
+    assert auto_fallback.argv == (sys.executable, "-m", "webbrowser", "-t", MORBVIS_URL)
+    assert auto_molden.argv == ("molden-test", str(molden_file))
+    assert len(export.paths) == 3
+    assert (default_electronic_export_dir(xyzin) / "molecule.electronic.csv").exists()
+    assert (default_electronic_export_dir(xyzin) / "molecule.electronic.svg").read_text(
+        encoding="utf-8"
+    ).startswith("<svg")
+    assert (default_electronic_export_dir(xyzin) / "molecule.electronic.pdf").read_bytes().startswith(
+        b"%PDF"
+    )
 
 
 def test_thermo_kinetics_gui_state_and_publication_export(tmp_path):
@@ -1057,6 +1090,7 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
     molden = molden_command(fchk)
     morbvis = morbvis_command()
     promote_fchk = gaussian_promote_fchk_command(fchk, xyzin, qff=False)
+    promote_electronic = gaussian_promote_electronic_command(log, xyzin, orbital_files=(fchk,))
     promote_rovib = gaussian_promote_rovib_command(log, xyzin, exclude_modes=(1, 3))
     rovib_summary = rovib_summary_command(xyzin)
     vib_dos = rovib_vibrational_dos_command(xyzin, out=tmp_path / "dos_vib.dat")
@@ -1100,7 +1134,14 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
     assert molden.argv == ("molden", str(fchk))
     assert morbvis.argv == (sys.executable, "-m", "webbrowser", "-t", MORBVIS_URL)
     assert promote_fchk.argv[-1] == "--no-qff"
-    assert promote_fchk.produced_sections == ("CARTESIAN_HESSIAN", "NORMAL_MODES")
+    assert promote_fchk.produced_sections == (
+        "CARTESIAN_HESSIAN",
+        "NORMAL_MODES",
+        "ELECTRONIC",
+        "ORBITALS",
+    )
+    assert promote_electronic.produced_sections == ("ELECTRONIC", "TRANSITIONS", "ORBITALS")
+    assert promote_electronic.argv[-2:] == ("--orbital-file", str(fchk))
     assert promote_rovib.argv[-4:] == ("--exclude-mode", "1", "--exclude-mode", "3")
     assert promote_rovib.produced_sections == ("VIBRATIONAL", "ROTATIONAL", "DELTABVIB")
     assert rovib_summary.argv[-3:] == ("rovib", "summarize", str(xyzin))

@@ -224,23 +224,25 @@ It launches `oracle semiexp`, then reloads `#MORPHEUS` through
 ## Electronic Spectroscopy Tab
 
 The Electronic tab uses `oracle_gui.electronic`. It is operational as a
-section/viewer workbench, not yet as an electronic-structure parser. It
-provides:
+section/viewer and publication workbench. It provides:
 
 - read-only tables for normalized `#ELECTRONIC`, `#TRANSITIONS` and
   `#ORBITALS` sections when a QM adapter has created them;
 - Molden and Avogadro/Avogadro2 launch controls for orbital, density, FCHK,
   Molden or cube-style files selected by the user;
+- automatic viewer selection from the selected `#ORBITALS` row: Avogadro for
+  geometry records, Molden for FCHK and for Molden/Cube when Molden plus
+  XQuartz are available, and MOrbVis as the browser fallback for Molden/Cube;
 - a MOrbVis launcher for browser-based WebGPU/CPU orbital and density viewing
   from Molden or Cube files, with the reference paper stored in
   `bibliography/`;
-- publication export targets for future electronic transition tables and
-  spectra.
+- publication export of electronic transition tables and stick/broadened
+  spectra to CSV, SVG and PDF.
 
 The tab must not infer excited states, oscillator strengths, densities or
-orbital data from raw QM output. Those adapters still need to be implemented in
-the owning QM packages, after which the GUI will consume only the normalized
-sections.
+orbital data from raw QM output. Gaussian adapters in `oracle-gaussian` write
+the normalized sections; future QM adapters must follow the same single-adapter
+pattern.
 
 ## Thermo / Kinetics Tab
 

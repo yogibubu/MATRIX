@@ -13,6 +13,7 @@ from .commands import (
     gaussian_promote_rovib_command,
     gaussian_fchk_summary_command,
     gaussian_formchk_command,
+    gaussian_promote_electronic_command,
     gaussian_run_command,
     gaussian_status_command,
     gaussian_summary_command,
@@ -58,8 +59,10 @@ from .electronic import (
     ElectronicGuiState,
     ElectronicTable,
     OracleElectronicController,
+    default_electronic_export_dir,
     electronic_gui_state_lines,
     load_electronic_gui_state,
+    viewer_command_for_orbital_record,
 )
 from .gicforge import (
     GICForgeGuiState,
@@ -95,7 +98,7 @@ from .project import (
     load_oracle_project_state,
     project_state_lines,
 )
-from .publication import PublicationExportResult, export_thermo_table
+from .publication import PublicationExportResult, SpectrumPeak, export_electronic_spectrum, export_thermo_table
 from .qm_jobs import (
     OracleQMJobsController,
     default_qm_formchk_output,
@@ -190,6 +193,7 @@ __all__ = [
     "OracleThermoKineticsController",
     "OracleTrinityController",
     "PublicationExportResult",
+    "SpectrumPeak",
     "SEFitGuiState",
     "SEFitSummary",
     "SEFitTable",
@@ -218,6 +222,7 @@ __all__ = [
     "dvr_gui_state_lines",
     "dvr_run_command",
     "default_dashboard_action_templates",
+    "default_electronic_export_dir",
     "default_gicforge_bmatrix_output",
     "default_gicforge_gaussian_output",
     "default_gicforge_report_output",
@@ -238,11 +243,13 @@ __all__ = [
     "electronic_gui_state_lines",
     "external_viewer_command",
     "export_thermo_table",
+    "export_electronic_spectrum",
     "fragments_command",
     "gaussian_promote_fchk_command",
     "gaussian_promote_rovib_command",
     "gaussian_fchk_summary_command",
     "gaussian_formchk_command",
+    "gaussian_promote_electronic_command",
     "gaussian_run_command",
     "gaussian_status_command",
     "gaussian_summary_command",
@@ -290,6 +297,7 @@ __all__ = [
     "trinity_prepare_command",
     "trinity_status_command",
     "validate_command",
+    "viewer_command_for_orbital_record",
     "vpt2_vci_collect_command",
     "vpt2_vci_command",
     "vpt2_vci_gui_state_lines",

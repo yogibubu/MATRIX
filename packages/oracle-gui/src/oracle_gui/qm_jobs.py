@@ -6,6 +6,7 @@ from .commands import (
     OracleGuiCommand,
     gaussian_fchk_summary_command,
     gaussian_formchk_command,
+    gaussian_promote_electronic_command,
     gaussian_promote_fchk_command,
     gaussian_promote_rovib_command,
     gaussian_run_command,
@@ -80,6 +81,8 @@ class OracleQMJobsController:
         cartesian_hessian: bool = True,
         normal_modes: bool = True,
         qff: bool = True,
+        electronic: bool = True,
+        orbitals: bool = True,
     ) -> OracleGuiCommand:
         if self.xyzin is None:
             raise ValueError("no ORACLE xyzin project is loaded")
@@ -89,6 +92,26 @@ class OracleQMJobsController:
             cartesian_hessian=cartesian_hessian,
             normal_modes=normal_modes,
             qff=qff,
+            electronic=electronic,
+            orbitals=orbitals,
+        )
+
+    def gaussian_promote_electronic_command(
+        self,
+        log: Path | str,
+        *,
+        electronic: bool = True,
+        transitions: bool = True,
+        orbital_files: tuple[Path | str, ...] = (),
+    ) -> OracleGuiCommand:
+        if self.xyzin is None:
+            raise ValueError("no ORACLE xyzin project is loaded")
+        return gaussian_promote_electronic_command(
+            log,
+            self.xyzin,
+            electronic=electronic,
+            transitions=transitions,
+            orbital_files=orbital_files,
         )
 
     def gaussian_promote_rovib_command(

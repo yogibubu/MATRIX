@@ -109,6 +109,23 @@ def build_parser(
     gaussian_promote_fchk.add_argument("--no-cartesian-hessian", action="store_true")
     gaussian_promote_fchk.add_argument("--no-normal-modes", action="store_true")
     gaussian_promote_fchk.add_argument("--no-qff", action="store_true")
+    gaussian_promote_fchk.add_argument("--no-electronic", action="store_true")
+    gaussian_promote_fchk.add_argument("--no-orbitals", action="store_true")
+    gaussian_promote_electronic = gaussian_sub.add_parser(
+        "promote-electronic",
+        help="Promote Gaussian electronic states/transitions into an ORACLE xyzin",
+    )
+    gaussian_promote_electronic.add_argument("log", type=Path)
+    gaussian_promote_electronic.add_argument("xyzin", type=Path)
+    gaussian_promote_electronic.add_argument("--no-electronic", action="store_true")
+    gaussian_promote_electronic.add_argument("--no-transitions", action="store_true")
+    gaussian_promote_electronic.add_argument(
+        "--orbital-file",
+        type=Path,
+        action="append",
+        default=[],
+        help="Register an external Molden/Cube/FCHK orbital or density file in #ORBITALS",
+    )
     gaussian_promote_rovib = gaussian_sub.add_parser(
         "promote-rovib",
         help="Promote Gaussian rovibrational log data into an ORACLE xyzin",
@@ -742,11 +759,30 @@ def main(
             write_cartesian_hessian=not args.no_cartesian_hessian,
             write_normal_modes=not args.no_normal_modes,
             write_qff=not args.no_qff,
+            write_electronic=not args.no_electronic,
+            write_orbitals=not args.no_orbitals,
         )
         print(f"Promoted Gaussian FCHK data: {result.fchk_path} -> {result.xyzin}")
         print(f"wrote_cartesian_hessian: {int(result.wrote_cartesian_hessian)}")
         print(f"wrote_normal_modes: {int(result.wrote_normal_modes)}")
         print(f"wrote_qff: {int(result.wrote_qff)}")
+        print(f"wrote_electronic: {int(result.wrote_electronic)}")
+        print(f"wrote_orbitals: {int(result.wrote_orbitals)}")
+        return 0
+    if args.command == "gaussian" and args.gaussian_command == "promote-electronic":
+        from oracle_gaussian import promote_gaussian_electronic_log_to_xyzin
+
+        result = promote_gaussian_electronic_log_to_xyzin(
+            args.log,
+            args.xyzin,
+            write_electronic=not args.no_electronic,
+            write_transitions=not args.no_transitions,
+            orbital_files=tuple(args.orbital_file),
+        )
+        print(f"Promoted Gaussian electronic data: {result.log_path} -> {result.xyzin}")
+        print(f"wrote_electronic: {int(result.wrote_electronic)}")
+        print(f"wrote_transitions: {int(result.wrote_transitions)}")
+        print(f"wrote_orbitals: {int(result.wrote_orbitals)}")
         return 0
     if args.command == "gaussian" and args.gaussian_command == "promote-rovib":
         from oracle_gaussian import promote_gaussian_rovib_to_xyzin

@@ -14,6 +14,7 @@ from .electronic import (
     ElectronicTable,
     MORBVIS_URL,
     OracleElectronicController,
+    default_electronic_export_dir,
     electronic_gui_state_lines,
     load_electronic_gui_state,
 )
@@ -291,6 +292,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._set_default_gicforge_outputs(state.xyzin)
             self._set_default_gf_outputs(state.xyzin)
             self._set_default_qm_jobs_outputs(state.xyzin)
+            self._set_default_electronic_outputs(state.xyzin)
             self._set_default_sefit_outputs(state.xyzin)
             self._set_default_thermo_kinetics_outputs(state.xyzin)
             self._set_default_trinity_outputs(state.xyzin)
@@ -1231,6 +1233,10 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.qm_write_normal_modes.setChecked(True)
             self.qm_write_qff = QCheckBox("#QFF")
             self.qm_write_qff.setChecked(True)
+            self.qm_write_fchk_electronic = QCheckBox("#ELECTRONIC")
+            self.qm_write_fchk_electronic.setChecked(True)
+            self.qm_write_fchk_orbitals = QCheckBox("#ORBITALS")
+            self.qm_write_fchk_orbitals.setChecked(True)
             fchk_summary_button = QPushButton("Summary")
             fchk_summary_button.clicked.connect(self.run_qm_fchk_summary)
             promote_fchk_button = QPushButton("Promote FCHK")
@@ -1240,6 +1246,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             fchk_row.addWidget(self.qm_write_cartesian_hessian)
             fchk_row.addWidget(self.qm_write_normal_modes)
             fchk_row.addWidget(self.qm_write_qff)
+            fchk_row.addWidget(self.qm_write_fchk_electronic)
+            fchk_row.addWidget(self.qm_write_fchk_orbitals)
             fchk_row.addWidget(fchk_summary_button)
             fchk_row.addWidget(promote_fchk_button)
             layout.addLayout(fchk_row)
@@ -1273,6 +1281,30 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             rovib_row.addWidget(log_summary_button)
             rovib_row.addWidget(promote_rovib_button)
             layout.addLayout(rovib_row)
+
+            electronic_row = QHBoxLayout()
+            electronic_row.addWidget(QLabel("Electronic log"))
+            self.qm_electronic_log_path = QLineEdit()
+            electronic_log_browse = QPushButton("Browse")
+            electronic_log_browse.clicked.connect(self.browse_qm_electronic_log_path)
+            self.qm_electronic_orbital_file = QLineEdit()
+            self.qm_electronic_orbital_file.setPlaceholderText("optional Molden/Cube/FCHK")
+            electronic_orbital_browse = QPushButton("Orbital File")
+            electronic_orbital_browse.clicked.connect(self.browse_qm_electronic_orbital_file)
+            self.qm_write_electronic = QCheckBox("#ELECTRONIC")
+            self.qm_write_electronic.setChecked(True)
+            self.qm_write_transitions = QCheckBox("#TRANSITIONS")
+            self.qm_write_transitions.setChecked(True)
+            promote_electronic_button = QPushButton("Promote Electronic")
+            promote_electronic_button.clicked.connect(self.run_qm_promote_electronic)
+            electronic_row.addWidget(self.qm_electronic_log_path, stretch=1)
+            electronic_row.addWidget(electronic_log_browse)
+            electronic_row.addWidget(self.qm_electronic_orbital_file, stretch=1)
+            electronic_row.addWidget(electronic_orbital_browse)
+            electronic_row.addWidget(self.qm_write_electronic)
+            electronic_row.addWidget(self.qm_write_transitions)
+            electronic_row.addWidget(promote_electronic_button)
+            layout.addLayout(electronic_row)
 
             external_row = QHBoxLayout()
             external_row.addWidget(QLabel("QM output"))
@@ -1383,6 +1415,28 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             )
             if path:
                 self.qm_log_path.setText(path)
+                if hasattr(self, "qm_electronic_log_path") and not self.qm_electronic_log_path.text().strip():
+                    self.qm_electronic_log_path.setText(path)
+
+        def browse_qm_electronic_log_path(self) -> None:
+            path, _selected = QFileDialog.getOpenFileName(
+                self,
+                "Select Gaussian electronic log/output",
+                self.qm_electronic_log_path.text().strip() or str(Path.cwd()),
+                "Gaussian log (*.log *.out);;All files (*)",
+            )
+            if path:
+                self.qm_electronic_log_path.setText(path)
+
+        def browse_qm_electronic_orbital_file(self) -> None:
+            path, _selected = QFileDialog.getOpenFileName(
+                self,
+                "Select orbital or density file",
+                self.qm_electronic_orbital_file.text().strip() or str(Path.cwd()),
+                "Orbital/density files (*.molden *.molden.input *.cube *.cub *.fchk *.fch);;All files (*)",
+            )
+            if path:
+                self.qm_electronic_orbital_file.setText(path)
 
         def browse_qm_external_output(self) -> None:
             path, _selected = QFileDialog.getOpenFileName(
@@ -1501,6 +1555,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 cartesian_hessian=self.qm_write_cartesian_hessian.isChecked(),
                 normal_modes=self.qm_write_normal_modes.isChecked(),
                 qff=self.qm_write_qff.isChecked(),
+                electronic=self.qm_write_fchk_electronic.isChecked(),
+                orbitals=self.qm_write_fchk_orbitals.isChecked(),
             )
             self.pending_xyzin_after_run = self.controller.xyzin
             self._start_command(command, command.label)
@@ -1530,6 +1586,26 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 deltabvib=self.qm_write_deltabvib.isChecked(),
                 invert_imaginary=self.qm_invert_imaginary.isChecked(),
                 exclude_modes=exclude_modes,
+            )
+            self.pending_xyzin_after_run = self.controller.xyzin
+            self._start_command(command, command.label)
+
+        def run_qm_promote_electronic(self) -> None:
+            if not self._ensure_qm_project("Promote Gaussian electronic data"):
+                return
+            log = self._qm_required_path(
+                self.qm_electronic_log_path,
+                "Promote Gaussian electronic data",
+                "Gaussian electronic log",
+            )
+            if log is None:
+                return
+            orbital_file = self._qm_optional_path(self.qm_electronic_orbital_file)
+            command = self.qm_jobs_controller.gaussian_promote_electronic_command(
+                log,
+                electronic=self.qm_write_electronic.isChecked(),
+                transitions=self.qm_write_transitions.isChecked(),
+                orbital_files=() if orbital_file is None else (orbital_file,),
             )
             self.pending_xyzin_after_run = self.controller.xyzin
             self._start_command(command, command.label)
@@ -1677,6 +1753,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             avogadro_button.clicked.connect(self.run_electronic_avogadro)
             morbvis_button = QPushButton("MOrbVis")
             morbvis_button.clicked.connect(self.run_electronic_morbvis)
+            selected_button = QPushButton("Open Selected")
+            selected_button.clicked.connect(self.run_electronic_selected_viewer)
             viewer_row.addWidget(QLabel("Molden exe"))
             viewer_row.addWidget(self.electronic_molden_executable)
             viewer_row.addWidget(QLabel("Avogadro exe"))
@@ -1686,7 +1764,29 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             viewer_row.addWidget(molden_button)
             viewer_row.addWidget(avogadro_button)
             viewer_row.addWidget(morbvis_button)
+            viewer_row.addWidget(selected_button)
             layout.addLayout(viewer_row)
+
+            export_row = QHBoxLayout()
+            export_row.addWidget(QLabel("Publication"))
+            self.electronic_export_dir = QLineEdit()
+            export_browse = QPushButton("Browse")
+            export_browse.clicked.connect(self.browse_electronic_export_dir)
+            self.electronic_export_csv = QCheckBox("CSV")
+            self.electronic_export_csv.setChecked(True)
+            self.electronic_export_svg = QCheckBox("SVG")
+            self.electronic_export_svg.setChecked(True)
+            self.electronic_export_pdf = QCheckBox("PDF")
+            self.electronic_export_pdf.setChecked(True)
+            export_button = QPushButton("Export Spectrum")
+            export_button.clicked.connect(self.run_electronic_publication_export)
+            export_row.addWidget(self.electronic_export_dir, stretch=1)
+            export_row.addWidget(export_browse)
+            export_row.addWidget(self.electronic_export_csv)
+            export_row.addWidget(self.electronic_export_svg)
+            export_row.addWidget(self.electronic_export_pdf)
+            export_row.addWidget(export_button)
+            layout.addLayout(export_row)
 
             self.electronic_summary = QTextEdit()
             self.electronic_summary.setReadOnly(True)
@@ -1740,6 +1840,55 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             command = self.electronic_controller.morbvis_command(url=url)
             self._start_command(command, command.label)
 
+        def run_electronic_selected_viewer(self) -> None:
+            if not self._ensure_electronic_idle("Open selected orbital"):
+                return
+            row = self.electronic_orbital_table.currentRow()
+            try:
+                command = self.electronic_controller.selected_orbital_viewer_command(
+                    row,
+                    molden_executable=self.electronic_molden_executable.text().strip() or "molden",
+                    avogadro_executable=self.electronic_avogadro_executable.text().strip() or "avogadro2",
+                    morbvis_url=self.electronic_morbvis_url.text().strip() or MORBVIS_URL,
+                )
+            except (FileNotFoundError, ValueError) as exc:
+                QMessageBox.warning(self, "Open selected orbital", str(exc))
+                return
+            self._start_command(command, command.label)
+
+        def browse_electronic_export_dir(self) -> None:
+            path = QFileDialog.getExistingDirectory(
+                self,
+                "Select electronic publication export directory",
+                self.electronic_export_dir.text().strip() or str(Path.cwd()),
+            )
+            if path:
+                self.electronic_export_dir.setText(path)
+
+        def run_electronic_publication_export(self) -> None:
+            if self.controller.xyzin is None:
+                QMessageBox.warning(self, "Electronic publication export", "Open an ORACLE xyzin first.")
+                return
+            formats = self._electronic_export_formats()
+            if not formats:
+                QMessageBox.warning(
+                    self,
+                    "Electronic publication export",
+                    "Select at least one export format.",
+                )
+                return
+            outdir = Path(self.electronic_export_dir.text().strip()) if self.electronic_export_dir.text().strip() else default_electronic_export_dir(self.controller.xyzin)
+            try:
+                result = self.electronic_controller.export_electronic_publication(outdir, formats=formats)
+            except ValueError as exc:
+                QMessageBox.warning(self, "Electronic publication export", str(exc))
+                return
+            QMessageBox.information(
+                self,
+                "Electronic publication export",
+                "Wrote Electronic publication export:\n" + "\n".join(str(path) for path in result.paths),
+            )
+
         def _ensure_electronic_idle(self, title: str) -> bool:
             if self.process is not None:
                 QMessageBox.information(self, "ORACLE", "A command is already running.")
@@ -1766,6 +1915,19 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             ):
                 if table is not None:
                     table.setRowCount(0)
+
+        def _electronic_export_formats(self) -> tuple[str, ...]:
+            formats: list[str] = []
+            if self.electronic_export_csv.isChecked():
+                formats.append("csv")
+            if self.electronic_export_svg.isChecked():
+                formats.append("svg")
+            if self.electronic_export_pdf.isChecked():
+                formats.append("pdf")
+            return tuple(formats)
+
+        def _set_default_electronic_outputs(self, xyzin: Path) -> None:
+            self.electronic_export_dir.setText(str(default_electronic_export_dir(xyzin)))
 
         def _build_sefit_tab(self) -> QWidget:
             tab = QWidget()

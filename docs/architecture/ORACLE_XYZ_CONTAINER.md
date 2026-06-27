@@ -137,6 +137,24 @@ finished parsing:
 GF/PED can then run from `oracle gf --xyzin molecule.xyzin` without reparsing the
 FCHK. VPT2/VCI loaders can read `#QFF` directly from the same container.
 
+`oracle-qm` also owns the normalized electronic sections:
+
+- `#ELECTRONIC` stores electronic-state records with canonical columns
+  `LABEL`, `ENERGY_HARTREE`, `ENERGY_EV`, `MULTIPLICITY`, `SYMMETRY` and
+  `SOURCE`.
+- `#TRANSITIONS` stores transition records with canonical columns `FROM`, `TO`,
+  `ENERGY_EV`, `WAVELENGTH_NM`, `OSC`, `STRENGTH` and `SOURCE`.
+- `#ORBITALS` stores external orbital/density/geometry file records with
+  canonical columns `KIND`, `FORMAT`, `ROLE`, `PATH`, `LABEL` and `SOURCE`.
+  Supported external file formats include FCHK/FCH, Molden, Cube/Cub and XYZ.
+
+`oracle gaussian promote-fchk` registers the FCHK file in `#ORBITALS` and writes
+the ground electronic state when the FCHK contains a total energy. `oracle
+gaussian promote-electronic` promotes excited-state energies and oscillator
+strengths from Gaussian logs and can register associated Molden/Cube/FCHK files.
+GUI and scientific tools consume these sections; they must not parse Gaussian
+logs or FCHK files privately.
+
 `oracle gf --xyzin molecule.xyzin` updates `#GF_PED` by default. The section
 uses schema `oracle.xyz.gf_ped.v1` and stores the Hessian source, coordinate
 source, point group, matrix model, nonbonded correction label, frequencies,

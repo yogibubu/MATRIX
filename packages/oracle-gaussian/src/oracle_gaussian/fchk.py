@@ -7,8 +7,9 @@ import re
 import numpy as np
 
 
+_FLOAT_TOKEN_RE = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[DEde][-+]?\d+)?"
 _HEADER_RE = re.compile(
-    r"^(?P<label>.+?)\s+(?P<kind>[IRC])(?:\s+N=\s*(?P<count>\d+)|\s+(?P<scalar>[-+]?\d+))\s*$"
+    rf"^(?P<label>.+?)\s+(?P<kind>[IRC])(?:\s+N=\s*(?P<count>\d+)|\s+(?P<scalar>{_FLOAT_TOKEN_RE}))\s*$"
 )
 
 
@@ -24,6 +25,11 @@ class FCHKData:
     anharmonic_frequencies_cm: np.ndarray
     anharmonic_e2: np.ndarray
     normal_modes: np.ndarray
+    total_energy_hartree: float | None = None
+    multiplicity: int | None = None
+    alpha_orbital_energies_hartree: tuple[float, ...] = ()
+    beta_orbital_energies_hartree: tuple[float, ...] = ()
+    has_total_scf_density: bool = False
 
     def to_hessian_input(self):
         from oracle_gf import HessianInput
@@ -61,6 +67,8 @@ class GaussianFCHKPromotion:
     wrote_cartesian_hessian: bool
     wrote_normal_modes: bool
     wrote_qff: bool
+    wrote_electronic: bool = False
+    wrote_orbitals: bool = False
 
 
 def read_gaussian_fchk(path: Path) -> FCHKData:
@@ -87,6 +95,8 @@ def read_gaussian_fchk(path: Path) -> FCHKData:
         if ("Anharmonic Vib-Modes" in blocks or "Vib-Modes" in blocks)
         else np.array((), dtype=float)
     )
+    alpha_orbital_energies = _optional_array(blocks, "Alpha Orbital Energies")
+    beta_orbital_energies = _optional_array(blocks, "Beta Orbital Energies")
 
     harmonic = (
         vib_e2[: int(blocks.get("Vib-NDim", len(masses) * 3))]
@@ -104,6 +114,11 @@ def read_gaussian_fchk(path: Path) -> FCHKData:
         anharmonic_frequencies_cm=anharmonic,
         anharmonic_e2=anh_e2,
         normal_modes=modes,
+        total_energy_hartree=_optional_scalar(blocks, "Total Energy", "SCF Energy"),
+        multiplicity=_optional_int_scalar(blocks, "Multiplicity"),
+        alpha_orbital_energies_hartree=tuple(float(value) for value in alpha_orbital_energies),
+        beta_orbital_energies_hartree=tuple(float(value) for value in beta_orbital_energies),
+        has_total_scf_density="Total SCF Density" in blocks,
     )
 
 
@@ -129,13 +144,20 @@ def promote_gaussian_fchk_to_xyzin(
     write_cartesian_hessian: bool = True,
     write_normal_modes: bool = True,
     write_qff: bool = True,
+    write_electronic: bool = True,
+    write_orbitals: bool = True,
 ) -> GaussianFCHKPromotion:
     """Promote Gaussian FCHK harmonic/QFF payloads into shared ORACLE xyzin sections."""
     from oracle_qm import (
+        ElectronicSection,
+        ElectronicStateRecord,
         cartesian_hessian_section_from_hessian_input,
+        merge_orbitals_section,
         normal_modes_section_from_arrays,
+        orbital_file_record_from_path,
         qff_section_from_anharmonic_input,
         write_cartesian_hessian_section,
+        write_electronic_section,
         write_normal_modes_section,
         write_qff_section,
     )
@@ -146,6 +168,8 @@ def promote_gaussian_fchk_to_xyzin(
     wrote_hessian = False
     wrote_modes = False
     wrote_force_field = False
+    wrote_electronic_section = False
+    wrote_orbitals_section = False
     if write_cartesian_hessian:
         write_cartesian_hessian_section(
             target,
@@ -175,12 +199,38 @@ def promote_gaussian_fchk_to_xyzin(
             qff_section_from_anharmonic_input(data.to_anharmonic_input(), source="gaussian-fchk"),
         )
         wrote_force_field = True
+    if write_electronic and data.total_energy_hartree is not None:
+        write_electronic_section(
+            target,
+            ElectronicSection(
+                (
+                    ElectronicStateRecord(
+                        label="S0",
+                        energy_hartree=data.total_energy_hartree,
+                        energy_ev=0.0,
+                        multiplicity="" if data.multiplicity is None else str(data.multiplicity),
+                        source="gaussian-fchk",
+                    ),
+                )
+            ),
+        )
+        wrote_electronic_section = True
+    if write_orbitals:
+        records = [
+            orbital_file_record_from_path(source, role="orbitals", source="gaussian-fchk"),
+        ]
+        if data.has_total_scf_density:
+            records.append(orbital_file_record_from_path(source, role="density", source="gaussian-fchk"))
+        merge_orbitals_section(target, tuple(records))
+        wrote_orbitals_section = True
     return GaussianFCHKPromotion(
         xyzin=target,
         fchk_path=source,
         wrote_cartesian_hessian=wrote_hessian,
         wrote_normal_modes=wrote_modes,
         wrote_qff=wrote_force_field,
+        wrote_electronic=wrote_electronic_section,
+        wrote_orbitals=wrote_orbitals_section,
     )
 
 
@@ -301,3 +351,24 @@ def _first_array(blocks: dict[str, object], *labels: str) -> np.ndarray:
         if isinstance(value, np.ndarray):
             return value.astype(float, copy=False)
     raise ValueError(f"FCHK block not found: {' / '.join(labels)}")
+
+
+def _optional_array(blocks: dict[str, object], *labels: str) -> np.ndarray:
+    for label in labels:
+        value = blocks.get(label)
+        if isinstance(value, np.ndarray):
+            return value.astype(float, copy=False)
+    return np.array((), dtype=float)
+
+
+def _optional_scalar(blocks: dict[str, object], *labels: str) -> float | None:
+    for label in labels:
+        value = blocks.get(label)
+        if isinstance(value, (int, float)):
+            return float(value)
+    return None
+
+
+def _optional_int_scalar(blocks: dict[str, object], *labels: str) -> int | None:
+    value = _optional_scalar(blocks, *labels)
+    return None if value is None else int(value)

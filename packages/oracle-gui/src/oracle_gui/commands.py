@@ -158,11 +158,15 @@ def gaussian_promote_fchk_command(
     cartesian_hessian: bool = True,
     normal_modes: bool = True,
     qff: bool = True,
+    electronic: bool = True,
+    orbitals: bool = True,
 ) -> OracleGuiCommand:
     argv = [*_oracle(), "gaussian", "promote-fchk", str(Path(fchk)), str(Path(xyzin))]
     _append_flag(argv, "--no-cartesian-hessian", not cartesian_hessian)
     _append_flag(argv, "--no-normal-modes", not normal_modes)
     _append_flag(argv, "--no-qff", not qff)
+    _append_flag(argv, "--no-electronic", not electronic)
+    _append_flag(argv, "--no-orbitals", not orbitals)
     produced: list[str] = []
     if cartesian_hessian:
         produced.append("CARTESIAN_HESSIAN")
@@ -170,7 +174,34 @@ def gaussian_promote_fchk_command(
         produced.append("NORMAL_MODES")
     if qff:
         produced.append("QFF")
+    if electronic:
+        produced.append("ELECTRONIC")
+    if orbitals:
+        produced.append("ORBITALS")
     return OracleGuiCommand("Promote Gaussian FCHK data", tuple(argv), produced_sections=tuple(produced))
+
+
+def gaussian_promote_electronic_command(
+    log: Path | str,
+    xyzin: Path | str,
+    *,
+    electronic: bool = True,
+    transitions: bool = True,
+    orbital_files: Sequence[Path | str] = (),
+) -> OracleGuiCommand:
+    argv = [*_oracle(), "gaussian", "promote-electronic", str(Path(log)), str(Path(xyzin))]
+    _append_flag(argv, "--no-electronic", not electronic)
+    _append_flag(argv, "--no-transitions", not transitions)
+    for orbital_file in orbital_files:
+        argv.extend(["--orbital-file", str(Path(orbital_file))])
+    produced: list[str] = []
+    if electronic:
+        produced.append("ELECTRONIC")
+    if transitions:
+        produced.append("TRANSITIONS")
+    if orbital_files:
+        produced.append("ORBITALS")
+    return OracleGuiCommand("Promote Gaussian electronic data", tuple(argv), produced_sections=tuple(produced))
 
 
 def gaussian_promote_rovib_command(

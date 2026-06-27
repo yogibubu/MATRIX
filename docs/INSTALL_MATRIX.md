@@ -101,6 +101,9 @@ user loads the `.molden`, `.molden.input`, `.cube` or `.cub` file from inside
 the browser UI. MOrbVis uses WebGPU when available and falls back to CPU/Web
 Workers when WebGPU is unavailable.
 
+The `Open Selected` button in the Electronic tab chooses MOrbVis automatically
+for selected Molden/Cube records when Molden or XQuartz is not available.
+
 The reference paper is stored in:
 
 ```text
