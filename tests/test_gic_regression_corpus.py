@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from matrix_link import rdkit_available
@@ -11,6 +12,9 @@ from matrix_neo import (
 
 
 CORPUS = Path(__file__).resolve().parent / "fixtures" / "test_molecules" / "molecules"
+GOLDEN_CORPUS = (
+    Path(__file__).resolve().parent / "fixtures" / "golden_corpus" / "neo_gic_golden.json"
+)
 ENV_HELPERS = Path(__file__).resolve().parents[1] / "scripts" / "matrix_env.sh"
 
 
@@ -26,6 +30,49 @@ def test_gic_regression_corpus_is_available():
         "azulene.inp",
         "norbornane.inp",
     } <= names
+
+
+def test_official_neo_gic_golden_corpus_registry_is_stable():
+    root = Path(__file__).resolve().parents[1]
+    registry = json.loads(GOLDEN_CORPUS.read_text(encoding="utf-8"))
+    entries = registry["entries"]
+    ids = {entry["id"] for entry in entries}
+    roles = {role for entry in entries for role in entry["roles"]}
+
+    assert registry["schema"] == "matrix.golden_corpus.v1"
+    assert len(entries) >= 20
+    assert len(ids) == len(entries)
+    assert {
+        "benzene",
+        "pyrrole",
+        "azulene",
+        "norbornane",
+        "norbornene",
+        "norbornadiene",
+        "norcamphor",
+        "thujone",
+        "ribose",
+        "cubane",
+        "ferrocene_d5h",
+        "ferrocene_d5d",
+        "formic_acid_water_hbond",
+        "spiro",
+        "pyrene",
+    } <= ids
+    assert {
+        "ring",
+        "fused_ring",
+        "polycyclic",
+        "bridged_ring",
+        "spiro_ring",
+        "hbond",
+        "pseudo_bond",
+        "metal_center",
+        "special_coordinates",
+        "python_fortran_parity",
+    } <= roles
+    for entry in entries:
+        assert (root / entry["path"]).is_file(), entry["path"]
 
 
 def test_gic_regression_corpus_keeps_qm_adapter_outputs():

@@ -1,3 +1,37 @@
+import numpy as np
+
+
+def _vector_angle(left, right):
+    left_vec = np.asarray(left, dtype=float)
+    right_vec = np.asarray(right, dtype=float)
+    denom = np.linalg.norm(left_vec) * np.linalg.norm(right_vec)
+    if denom <= 1.0e-14:
+        return 0.0
+    cosine = np.dot(left_vec, right_vec) / denom
+    return float(np.arccos(np.clip(cosine, -1.0, 1.0)))
+
+
+def _dihedral_angle(p1, p2, p3, p4):
+    a = np.asarray(p1, dtype=float)
+    b = np.asarray(p2, dtype=float)
+    c = np.asarray(p3, dtype=float)
+    d = np.asarray(p4, dtype=float)
+    b1 = b - a
+    b2 = c - b
+    b3 = d - c
+    n1 = np.cross(b1, b2)
+    n2 = np.cross(b2, b3)
+    n1_norm = np.linalg.norm(n1)
+    n2_norm = np.linalg.norm(n2)
+    b2_norm = np.linalg.norm(b2)
+    if min(n1_norm, n2_norm, b2_norm) <= 1.0e-14:
+        return 0.0
+    n1 /= n1_norm
+    n2 /= n2_norm
+    m1 = np.cross(n1, b2 / b2_norm)
+    return float(np.arctan2(np.dot(m1, n2), np.dot(n1, n2)))
+
+
 class Ring:
     """
     Topological + geometrical ring object.
@@ -80,4 +114,3 @@ class Ring:
     def _dihedral(self, i, j, k, l):
         p = [self.coords[self.atoms.index(x)] for x in (i, j, k, l)]
         return _dihedral_angle(*p)
-

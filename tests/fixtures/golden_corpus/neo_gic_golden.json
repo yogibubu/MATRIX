@@ -1,0 +1,107 @@
+{
+  "schema": "matrix.golden_corpus.v1",
+  "name": "NEO/GICForge official golden corpus",
+  "description": "Stable regression anchors for MATRIX NEO/GIC construction, symmetry, ring coordinates, fragment coordinates and Python/Fortran parity.",
+  "entries": [
+    {
+      "id": "benzene",
+      "path": "tests/fixtures/test_molecules/molecules/benzene.inp",
+      "roles": ["aromatic", "ring", "d6h_symmetry", "projector"]
+    },
+    {
+      "id": "pyrrole",
+      "path": "tests/fixtures/test_molecules/molecules/pyrrole.inp",
+      "roles": ["heteroaromatic", "ring", "c2v_symmetry", "projector"]
+    },
+    {
+      "id": "azulene",
+      "path": "tests/fixtures/test_molecules/molecules/azulene.inp",
+      "roles": ["nonbenzenoid", "fused_ring", "butterfly", "projector"]
+    },
+    {
+      "id": "naphthalene",
+      "path": "tests/fixtures/test_molecules/molecules/naphtalene.inp",
+      "roles": ["fused_ring", "polycyclic", "projector"]
+    },
+    {
+      "id": "phenanthrene",
+      "path": "tests/fixtures/test_molecules/molecules/phenantrene.inp",
+      "roles": ["fused_ring", "polycyclic", "projector"]
+    },
+    {
+      "id": "anthracene",
+      "path": "tests/fixtures/test_molecules/molecules/anthracene.inp",
+      "roles": ["fused_ring", "polycyclic", "projector"]
+    },
+    {
+      "id": "pyrene",
+      "path": "tests/fixtures/test_molecules/molecules/pyrene.inp",
+      "roles": ["fused_ring", "polycyclic", "projector"]
+    },
+    {
+      "id": "fluorene",
+      "path": "tests/fixtures/test_molecules/molecules/fluorene.inp",
+      "roles": ["fused_ring", "polycyclic", "butterfly"]
+    },
+    {
+      "id": "norbornane",
+      "path": "tests/fixtures/test_molecules/molecules/norbornane.inp",
+      "roles": ["bridged_ring", "ring_puckering", "python_fortran_parity"]
+    },
+    {
+      "id": "norbornene",
+      "path": "tests/fixtures/test_molecules/molecules/norbornene.inp",
+      "roles": ["bridged_ring", "ring_puckering", "python_fortran_parity"]
+    },
+    {
+      "id": "norbornadiene",
+      "path": "tests/fixtures/test_molecules/molecules/norbornadiene.inp",
+      "roles": ["bridged_ring", "ring_puckering", "python_fortran_parity"]
+    },
+    {
+      "id": "norcamphor",
+      "path": "tests/fixtures/test_molecules/molecules/norcamphor.inp",
+      "roles": ["bridged_ring", "carbonyl", "python_fortran_parity"]
+    },
+    {
+      "id": "thujone",
+      "path": "tests/fixtures/test_molecules/molecules/thujone.inp",
+      "roles": ["large_aliphatic", "bridged_ring", "python_fortran_parity"]
+    },
+    {
+      "id": "ribose",
+      "path": "tests/fixtures/test_molecules/molecules/ribose.inp",
+      "roles": ["oxygenated_ring", "flexible_ring", "ring_puckering"]
+    },
+    {
+      "id": "cubane",
+      "path": "tests/fixtures/test_molecules/molecules/cubane.inp",
+      "roles": ["high_symmetry", "oh_symmetry", "butterfly", "cyclic_bend"]
+    },
+    {
+      "id": "ferrocene_d5h",
+      "path": "tests/fixtures/test_molecules/molecules/ferrocene.inp",
+      "roles": ["metal_center", "ring_center", "d5h_symmetry", "special_coordinates"]
+    },
+    {
+      "id": "ferrocene_d5d",
+      "path": "tests/fixtures/test_molecules/molecules/ferrocene_staggered.inp",
+      "roles": ["metal_center", "ring_center", "d5d_symmetry", "special_coordinates"]
+    },
+    {
+      "id": "spiro",
+      "path": "tests/fixtures/test_molecules/molecules/spiro.inp",
+      "roles": ["spiro_ring", "ring_puckering", "projector"]
+    },
+    {
+      "id": "cyclottane",
+      "path": "tests/fixtures/test_molecules/molecules/cyclottane.inp",
+      "roles": ["large_ring", "ring_puckering", "python_fortran_parity"]
+    },
+    {
+      "id": "formic_acid_water_hbond",
+      "path": "tests/fixtures/golden_corpus/formic_acid_water.xyz",
+      "roles": ["noncovalent_complex", "hbond", "pseudo_bond", "fragments"]
+    }
+  ]
+}

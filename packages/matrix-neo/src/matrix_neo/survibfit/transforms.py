@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import numpy as np
 
 from .pipeline import b_matrix, eval_primitives, zeff_from_topology

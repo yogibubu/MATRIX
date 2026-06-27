@@ -18,6 +18,27 @@ The copied corpus excludes local OS artifacts such as `.DS_Store`, but keeps
 scientific `.log` and `.out` files when they are part of the regression input
 or adapter baseline.
 
+## Official Golden Registry
+
+The official first-release NEO/GICForge golden set is machine-readable:
+
+```text
+tests/fixtures/golden_corpus/neo_gic_golden.json
+```
+
+This registry is the stable gate for molecules that must not drift without an
+explicit review. It currently anchors benzene, pyrrole, azulene, the fused PAH
+set, norbornane/norbornene/norbornadiene/norcamphor, thujone, ribose, cubane,
+ferrocene in D5h and D5d forms, spiro rings, cyclottane and the
+formic-acid--water H-bond complex. Each entry records the source file and the
+scientific role it protects: ring coordinates, fused/polycyclic behavior,
+bridged rings, special metal/ring-center coordinates, H-bond pseudo-bonds,
+fragment coordinates, symmetry projectors and Python/Fortran parity.
+
+Inputs in the registry are deliberately versioned. Larger generated audit
+workdirs, numerical reports and run outputs are not committed; their provenance
+belongs in run manifests.
+
 Use this corpus as an input library, not as a second implementation:
 
 1. LINK parses each legacy input into the canonical enriched XYZ.

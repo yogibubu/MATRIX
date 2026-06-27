@@ -28,6 +28,10 @@ Rules:
 - Important numerical fits should use shared MATRIX numerical primitives for
   damped normal equations, step limiting and rank/condition diagnostics unless
   a workflow has a documented reason to use a specialized solver.
+- Run manifests must be built through `matrix_core.build_run_manifest`. The
+  shared builder records MATRIX version, command line, Python version,
+  input/output checksums, detected `xyzin` sections and external backend
+  metadata.
 - Use `tests/fixtures/test_molecules` for demanding GICForge/parser
   regressions instead of inventing ad hoc molecule inputs.
 - Store new project outputs under `inputs/`, `runs/`, `outputs/`, `reports/`,
@@ -45,10 +49,12 @@ matrix-set
 python -m matrix --help
 python -m oracle --help
 matrix-run --help
+python -m ruff check packages tests
 python -m pytest -q
 ```
 
 The CI job enables `MATRIX_AUTO_INSTALL_GUI_DEPS=1`, `QT_QPA_PLATFORM=offscreen`
 and `MPLBACKEND=Agg`, installs `gfortran` and Qt headless system libraries, and
-therefore covers CLI imports, ORACLE GUI importability and the Fortran-backed
-regression tests when the vendored sources can be compiled.
+therefore covers CLI imports, ORACLE GUI importability, the ruff correctness
+gate and the Fortran-backed regression tests when the vendored sources can be
+compiled.

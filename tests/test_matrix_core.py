@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from matrix_core import (
+    MATRIX_MANIFEST_FRAMEWORK,
     ORACLE_MANIFEST_SCHEMA,
     ORACLE_XYZ_ISOTOPOLOGUES_SCHEMA,
     MERLINO_XYZIN_ISOTOPOLOGUES_SCHEMA,
@@ -39,7 +40,45 @@ def test_workspace_layout(tmp_path):
 def test_manifest_schema(tmp_path):
     manifest = build_run_manifest(workflow="smoke", status="completed", run_dir=tmp_path)
     assert manifest.schema_version == ORACLE_MANIFEST_SCHEMA
+    assert manifest.framework == MATRIX_MANIFEST_FRAMEWORK
+    assert manifest.matrix_version
     assert manifest.to_dict()["workflow"] == "smoke"
+
+
+def test_run_manifest_records_command_version_and_xyzin_sections(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text(
+        "\n".join(
+            [
+                "1",
+                "h",
+                "H 0 0 0",
+                "",
+                "#BASIC",
+                "SCHEMA oracle.xyz.basic.v1",
+                "",
+                "#GIC",
+                "SCHEMA oracle.xyz.gic.v1",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_run_manifest(
+        workflow="neo",
+        status="completed",
+        run_dir=tmp_path,
+        inputs={"xyzin": xyzin},
+        command=("matrix", "neo", "build", str(xyzin)),
+        backend={"executable": "/usr/bin/gicforge"},
+    ).to_dict()
+
+    assert manifest["framework"] == "MATRIX"
+    assert manifest["matrix_version"]
+    assert manifest["command"] == ["matrix", "neo", "build", str(xyzin)]
+    assert manifest["xyzin_sections"] == {"xyzin": ["BASIC", "GIC"]}
+    assert manifest["external_backends"]["executable"] == "/usr/bin/gicforge"
 
 
 def test_tool_contract_registry_records_standalone_sections_and_future_names():

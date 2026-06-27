@@ -85,6 +85,13 @@ jobs:
           print(f"imported {len(modules)} MATRIX packages and ORACLE GUI")
           PY
 
+      - name: Ruff correctness gate
+        shell: bash
+        run: |
+          source scripts/matrix_env.sh
+          matrix-set
+          python -m ruff check packages tests
+
       - name: Run pytest
         shell: bash
         run: |

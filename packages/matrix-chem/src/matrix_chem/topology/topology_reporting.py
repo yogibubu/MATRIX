@@ -210,6 +210,7 @@ def print_topology_report(
     """
 
     Z = cg.Z
+    symbols = [_element_symbol(z) for z in Z]
     coords = cg.coords
 
     # --- write output into cwd/working ---

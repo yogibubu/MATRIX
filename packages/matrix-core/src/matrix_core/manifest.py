@@ -4,11 +4,16 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import hashlib
 import json
+import platform
+import sys
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
+
+from .sectioned_xyz import is_section_header_line
 
 
 ORACLE_MANIFEST_SCHEMA = "oracle.run.v1"
+MATRIX_MANIFEST_FRAMEWORK = "MATRIX"
 
 
 def sha256_file(path: Path) -> str:
@@ -48,10 +53,20 @@ class RunManifest:
     messages: list[str] = field(default_factory=list)
     schema_version: str = ORACLE_MANIFEST_SCHEMA
     created_at_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    framework: str = MATRIX_MANIFEST_FRAMEWORK
+    matrix_version: str = field(default_factory=lambda: matrix_version())
+    python_version: str = field(default_factory=platform.python_version)
+    command: tuple[str, ...] = field(default_factory=lambda: tuple(sys.argv))
+    xyzin_sections: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    external_backends: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["run_dir"] = str(self.run_dir)
+        data["command"] = list(self.command)
+        data["xyzin_sections"] = {
+            name: list(sections) for name, sections in self.xyzin_sections.items()
+        }
         return data
 
     def write(self, path: Path | None = None) -> Path:
@@ -69,9 +84,21 @@ def build_run_manifest(
     parameters: Mapping[str, Any] | None = None,
     backend: Mapping[str, Any] | None = None,
     messages: list[str] | None = None,
+    command: Sequence[str] | str | None = None,
+    xyzin_sections: Mapping[str, Sequence[str]] | None = None,
+    external_backends: Mapping[str, Any] | None = None,
 ) -> RunManifest:
     input_paths = dict(inputs or {})
     output_paths = dict(outputs or {})
+    backend_data = dict(backend or {})
+    detected_sections = _detected_xyzin_sections(input_paths | output_paths)
+    if xyzin_sections is not None:
+        detected_sections.update(
+            {
+                name: tuple(str(section) for section in sections)
+                for name, sections in xyzin_sections.items()
+            }
+        )
     return RunManifest(
         workflow=workflow,
         status=status,
@@ -81,6 +108,66 @@ def build_run_manifest(
         input_sha256=file_checksums(input_paths),
         output_sha256=file_checksums(output_paths),
         parameters=dict(parameters or {}),
-        backend=dict(backend or {}),
+        backend=backend_data,
         messages=list(messages or []),
+        command=_normalize_command(command),
+        xyzin_sections=dict(sorted(detected_sections.items())),
+        external_backends=dict(external_backends or _external_backend_summary(backend_data)),
     )
+
+
+def matrix_version() -> str:
+    try:
+        from matrix import __version__
+
+        return str(__version__)
+    except Exception:
+        return "unknown"
+
+
+def _normalize_command(command: Sequence[str] | str | None) -> tuple[str, ...]:
+    if command is None:
+        return tuple(str(item) for item in sys.argv)
+    if isinstance(command, str):
+        return (command,)
+    return tuple(str(item) for item in command)
+
+
+def _detected_xyzin_sections(paths: Mapping[str, Path]) -> dict[str, tuple[str, ...]]:
+    sections: dict[str, tuple[str, ...]] = {}
+    for name, path in sorted(paths.items()):
+        target = Path(path)
+        if target.suffix.lower() != ".xyzin" or not target.is_file():
+            continue
+        detected = _section_names(target)
+        if detected:
+            sections[name] = detected
+    return sections
+
+
+def _section_names(path: Path) -> tuple[str, ...]:
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError:
+        return ()
+    names: list[str] = []
+    for line in lines:
+        text = line.strip()
+        if is_section_header_line(text):
+            names.append(text[1:].strip().upper())
+    return tuple(names)
+
+
+def _external_backend_summary(backend: Mapping[str, Any]) -> dict[str, Any]:
+    keys = (
+        "name",
+        "solver",
+        "executable",
+        "executable_sha256",
+        "engine_command",
+        "external_protocol",
+        "python_executable",
+        "fortran77_source",
+        "vci_method",
+    )
+    return {key: backend[key] for key in keys if key in backend}

@@ -76,9 +76,11 @@
   4. rename distributions/packages only after tests and downstream scripts are
      covered by compatibility shims;
   5. remove legacy ORACLE/Merlino wording only after one deprecation cycle.
-- Make the repository-wide `ruff check packages tests` clean and turn it into a
-  CI/release gate. Current full-repo lint debt is legacy cleanup work and should
-  be separated from scientific feature changes.
+- Keep `ruff check packages tests` as a CI correctness gate. The active ruff
+  profile gates syntax/undefined-name failures now; broader style cleanup for
+  legacy ports, scientific index names and vendored WMS-Rot code remains a
+  separate maintenance track and must not be mixed with scientific feature
+  changes.
 
 ## WMS-Rot Homologation
 

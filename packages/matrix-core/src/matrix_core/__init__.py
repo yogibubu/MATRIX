@@ -11,10 +11,12 @@ from .diagonalizer import (
     eigvalsh_array,
 )
 from .manifest import (
+    MATRIX_MANIFEST_FRAMEWORK,
     ORACLE_MANIFEST_SCHEMA,
     RunManifest,
     build_run_manifest,
     file_checksums,
+    matrix_version,
     sha256_file,
     write_manifest,
 )
@@ -112,6 +114,7 @@ __all__ = [
     "InputError",
     "MERLINO_XYZIN_ISOTOPOLOGUES_SCHEMA",
     "MERLINO_XYZIN_BASIC_SCHEMA",
+    "MATRIX_MANIFEST_FRAMEWORK",
     "ORACLE_MANIFEST_SCHEMA",
     "ORACLE_XYZ_BASIC_SCHEMA",
     "ORACLE_XYZ_ISOTOPOLOGUES_SCHEMA",
@@ -153,6 +156,7 @@ __all__ = [
     "has_xyzin_isotopologues",
     "is_section_header_line",
     "limit_step",
+    "matrix_version",
     "merge_xyzin_isotopologue_records",
     "missing_sections_guidance",
     "missing_sections_message",
