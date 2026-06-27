@@ -21,6 +21,7 @@ from matrix_engines import (
 from matrix_neo import (
     GICForgeFortranAudit,
     GICForgeFortranAuditResult,
+    audit_gicforge_fortran_corpus,
     build_gic_b_matrix,
     format_gicforge_fortran_audit_cases,
     format_gicforge_fortran_audit_summary,
@@ -37,6 +38,15 @@ def _test_molecule_path(name: str) -> Path:
         / "molecules"
         / name
     )
+
+
+def _skip_if_smiles_requires_rdkit(path: Path) -> None:
+    header = "\n".join(path.read_text(encoding="utf-8").splitlines()[:3]).upper()
+    if "SMILES" in header:
+        pytest.importorskip("rdkit")
+
+
+ORIGINAL_MERLINO_GICFORGE = Path("/Users/vincenzobarone/merlino3.0/bin/gicforge.x")
 
 
 def _row_space_basis(matrix: np.ndarray) -> tuple[np.ndarray, int]:
@@ -98,19 +108,17 @@ def test_fortran_audit_report_includes_projector_diagnostics(tmp_path):
     assert "total_symmetric_gics=2" in cases
 
 
-def test_legacy_merlino_group_dispatch_matches_classifier_families():
+def test_legacy_merlino_group_dispatch_includes_ih_and_dnd_extensions():
     root = Path(__file__).resolve().parents[1]
     symm = (
         root / "engines" / "fortran" / "gicforge" / "legacy_merlino" / "symm.f"
     ).read_text(encoding="utf-8")
 
-    assert "FAM .EQ. 'Cnv'" in symm
-    assert "FAM .EQ. 'Cnh'" in symm
-    assert "FAM .EQ. 'Dn'" in symm
-    assert "GROUP .EQ. 'td'" in symm
-    assert "GROUP .EQ. 'oh'" in symm
-    assert "GROUP .EQ. 'ih'" in symm
+    assert "FAM .EQ. 'Dnd'" in symm
+    assert "CALL OPS_DND" in symm
+    assert "GROUP .EQ. 'Ih'" in symm
     assert "CALL OPS_IH" in symm
+    assert "SUBROUTINE OPS_IH" in symm
 
 
 def test_legacy_merlino_ring_and_butterfly_blocks_remain_reference():
@@ -150,12 +158,41 @@ def test_legacy_merlino_gicforge_backend_compiles():
     assert str(layout.legacy_executable) in result.stdout
 
 
+def test_legacy_merlino_benzene_fortran_baseline_is_unchanged(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    layout = gicforge_fortran_layout(root)
+    if shutil.which("gfortran") is None and not layout.legacy_executable.is_file():
+        pytest.skip("gfortran is not available")
+
+    source = _test_molecule_path("benzene.inp")
+    xyzin = tmp_path / "benzene.xyzin"
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    geometry = read_enriched_xyz(xyzin)
+
+    legacy = run_legacy_gicforge(
+        tmp_path / "benzene-legacy",
+        atoms=geometry.atoms,
+        coordinates_angstrom=geometry.coordinates_angstrom,
+        point_group="D6h",
+        title="benzene",
+        keywords=("GNIC", "BMAT"),
+        repo_root=root,
+    )
+
+    assert "Point Group from symm.f: C2v" in legacy.provout
+
+
 @pytest.mark.parametrize(
     ("molecule", "expected_rank"),
     [
+        ("pyrrole.inp", 24),
+        ("benzene.inp", 30),
         ("naphtalene.inp", 48),
         ("phenantrene.inp", 66),
+        ("anthracene.inp", 66),
         ("pyrene.inp", 72),
+        ("fluorene.inp", 63),
     ],
 )
 def test_legacy_merlino_executable_bmatrix_span_matches_oracle_corpus(
@@ -198,31 +235,214 @@ def test_legacy_merlino_executable_bmatrix_span_matches_oracle_corpus(
     assert _row_space_basis(legacy_b_matrix)[1] == expected_rank
     assert _row_space_basis(oracle_b_matrix)[1] == expected_rank
     assert _row_space_residual(oracle_b_matrix, legacy_b_matrix) < 2.0e-8
-    if molecule == "pyrene.inp":
-        assert "Dihe" in legacy_prefixes
+    fused = molecule in {
+        "naphtalene.inp",
+        "phenantrene.inp",
+        "anthracene.inp",
+        "pyrene.inp",
+        "fluorene.inp",
+    }
+    if fused:
+        assert {"RPck"}.issubset(legacy_prefixes)
+        assert "QPck" not in legacy_prefixes
+        assert "PhiP" not in legacy_prefixes
+        assert oracle_rpck_labels
     else:
         assert {"RPck", "QPck", "PhiP"}.issubset(legacy_prefixes)
-    assert oracle_rpck_labels
+        assert oracle_rpck_labels
 
 
-def test_legacy_merlino_icosahedral_group_builder_runs(tmp_path):
+@pytest.mark.parametrize(
+    ("molecule", "expected_rank"),
+    [
+        ("azulene.inp", 48),
+        ("norbornane.inp", 51),
+        ("norbornene.inp", 45),
+        ("norbornadiene.inp", 39),
+        ("norcamphor.inp", 48),
+        ("spiro.inp", 87),
+    ],
+)
+def test_legacy_merlino_executable_bmatrix_span_matches_bridged_ring_probe(
+    tmp_path,
+    molecule,
+    expected_rank,
+):
+    root = Path(__file__).resolve().parents[1]
+    layout = gicforge_fortran_layout(root)
+    if shutil.which("gfortran") is None and not layout.legacy_executable.is_file():
+        pytest.skip("gfortran is not available")
+
+    source = _test_molecule_path(molecule)
+    _skip_if_smiles_requires_rdkit(source)
+    xyzin = tmp_path / f"{Path(molecule).stem}.xyzin"
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    geometry = read_enriched_xyz(xyzin)
+    oracle_b_matrix = np.asarray(build_gic_b_matrix(definition).rows, dtype=float)
+
+    legacy = run_legacy_gicforge(
+        tmp_path / f"{Path(molecule).stem}-legacy",
+        atoms=geometry.atoms,
+        coordinates_angstrom=geometry.coordinates_angstrom,
+        point_group="C1",
+        title=Path(molecule).stem,
+        keywords=("GNIC", "BMAT"),
+        repo_root=root,
+    )
+    legacy_b_matrix = np.asarray(legacy.b_matrix_rows, dtype=float)
+    legacy_prefixes = {label[:4] for label in legacy.gic_labels}
+
+    assert definition.target_rank == expected_rank
+    assert definition.rank == expected_rank
+    assert legacy.final_counts[-1] == expected_rank
+    assert "Post-pruning GIC count below" not in legacy.provout
+    assert "RPck" in legacy_prefixes
+    if molecule == "spiro.inp":
+        assert "Spir" in legacy_prefixes
+        assert any(gic.family == "SPIRO_BEND" for gic in definition.gics)
+    assert _row_space_basis(legacy_b_matrix)[1] == expected_rank
+    assert _row_space_basis(oracle_b_matrix)[1] == expected_rank
+    assert _row_space_residual(oracle_b_matrix, legacy_b_matrix) < 2.0e-7
+    if molecule == "azulene.inp":
+        assert "BtFl" in legacy_prefixes
+        assert "QPck" not in legacy_prefixes
+        assert "PhiP" not in legacy_prefixes
+
+
+@pytest.mark.parametrize(
+    ("molecule", "expected_rank"),
+    [
+        ("c2h2.inp", 7),
+        ("c4s.inp", 10),
+        ("thujone.inp", 75),
+        ("ribose.inp", 51),
+        ("cubane.inp", 42),
+        ("cyclottane.inp", 66),
+    ],
+)
+def test_fortran_audit_handles_added_gic_regressions(
+    tmp_path,
+    molecule,
+    expected_rank,
+):
+    root = Path(__file__).resolve().parents[1]
+    layout = gicforge_fortran_layout(root)
+    if shutil.which("gfortran") is None and not layout.legacy_executable.is_file():
+        pytest.skip("gfortran is not available")
+
+    audit = audit_gicforge_fortran_corpus(
+        root=_test_molecule_path("benzene.inp").parent,
+        molecules=(molecule,),
+        workdir=tmp_path / "audit",
+        repo_root=root,
+    )
+    result = audit.results[0]
+
+    assert result.status == "PASS", result.message
+    assert result.oracle_rank == expected_rank
+    assert result.fortran_rank == expected_rank
+    assert result.oracle_row_rank == expected_rank
+    assert result.fortran_row_rank == expected_rank
+
+
+@pytest.mark.skipif(
+    not ORIGINAL_MERLINO_GICFORGE.is_file(),
+    reason="original merlino3.0 GICForge executable is not available",
+)
+@pytest.mark.parametrize(
+    "molecule",
+    [
+        "pyrrole.inp",
+        "benzene.inp",
+        "naphtalene.inp",
+        "phenantrene.inp",
+        "anthracene.inp",
+        "pyrene.inp",
+        "fluorene.inp",
+    ],
+)
+def test_vendored_gicforge_matches_original_merlino_executable(tmp_path, molecule):
+    root = Path(__file__).resolve().parents[1]
+    layout = gicforge_fortran_layout(root)
+    if shutil.which("gfortran") is None and not layout.legacy_executable.is_file():
+        pytest.skip("gfortran is not available")
+
+    source = _test_molecule_path(molecule)
+    xyzin = tmp_path / f"{Path(molecule).stem}.xyzin"
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    geometry = read_enriched_xyz(xyzin)
+    run_kwargs = {
+        "atoms": geometry.atoms,
+        "coordinates_angstrom": geometry.coordinates_angstrom,
+        "point_group": "C1",
+        "title": Path(molecule).stem,
+        "keywords": ("GNIC", "BMAT"),
+    }
+
+    vendored = run_legacy_gicforge(
+        tmp_path / f"{Path(molecule).stem}-vendored",
+        repo_root=root,
+        **run_kwargs,
+    )
+    original = run_legacy_gicforge(
+        tmp_path / f"{Path(molecule).stem}-merlino",
+        repo_root=root,
+        executable=ORIGINAL_MERLINO_GICFORGE,
+        **run_kwargs,
+    )
+
+    fused = molecule in {
+        "naphtalene.inp",
+        "phenantrene.inp",
+        "anthracene.inp",
+        "pyrene.inp",
+        "fluorene.inp",
+    }
+    vendored_b = np.asarray(vendored.b_matrix_rows, dtype=float)
+    original_b = np.asarray(original.b_matrix_rows, dtype=float)
+    if fused:
+        vendored_prefixes = {label[:4] for label in vendored.gic_labels}
+        assert vendored.final_counts[-1] == original.final_counts[-1]
+        assert {"RPck"}.issubset(vendored_prefixes)
+        assert "QPck" not in vendored_prefixes
+        assert "PhiP" not in vendored_prefixes
+        assert _row_space_residual(vendored_b, original_b) < 2.0e-8
+    else:
+        assert vendored.final_counts == original.final_counts
+        assert vendored.gic_labels == original.gic_labels
+        np.testing.assert_allclose(
+            vendored_b,
+            original_b,
+            rtol=0.0,
+            atol=1.0e-12,
+        )
+
+
+def test_merlino_group_builders_cover_ih_and_dnd(tmp_path):
     gfortran = shutil.which("gfortran")
     if gfortran is None:
         pytest.skip("gfortran is not available")
 
     root = Path(__file__).resolve().parents[1]
     source = root / "engines" / "fortran" / "gicforge" / "legacy_merlino" / "symm.f"
-    driver = tmp_path / "test_ih.f"
-    executable = tmp_path / "test_ih"
+    driver = tmp_path / "test_groups.f"
+    executable = tmp_path / "test_groups"
     driver.write_text(
         """
-      Program TIH
+      Program TGRP
       Double Precision R(3,3,200)
       Integer NOPS
-      Call OPS_IH(R,NOPS)
-      If (NOPS .NE. 120) Stop 1
-      Call OPS_I(R,NOPS)
-      If (NOPS .NE. 60) Stop 2
+      Call BUILD_GROUP_OPS('I',' ',0,R,NOPS)
+      If (NOPS .NE. 60) Stop 1
+      Call BUILD_GROUP_OPS('Ih',' ',0,R,NOPS)
+      If (NOPS .NE. 120) Stop 2
+      Call BUILD_GROUP_OPS('D2d','Dnd',2,R,NOPS)
+      If (NOPS .NE. 8) Stop 3
+      Call BUILD_GROUP_OPS('D3d','Dnd',3,R,NOPS)
+      If (NOPS .NE. 12) Stop 4
       End
 """,
         encoding="utf-8",

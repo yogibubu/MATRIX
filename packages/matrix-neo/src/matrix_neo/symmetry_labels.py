@@ -372,7 +372,7 @@ def _rotation_character(label: str, n: int, order: int) -> float:
 
 def _cnv_one_dim_character(label: str, n: int, order: int, reflection_sign: int) -> float:
     if _is_vertical_reflection(label):
-        mirror_index = _vertical_reflection_index(label)
+        mirror_index = _vertical_reflection_index(label, n)
         phase = 1.0 if order == 0 else (-1.0 if (mirror_index % 2) else 1.0)
         return float(reflection_sign) * phase
     return _rotation_character(label, n, order)
@@ -395,7 +395,7 @@ def _cnh_character(label: str, n: int, order: int, reflection_sign: int) -> floa
 
 def _dn_one_dim_character(label: str, n: int, order: int, c2_sign: int) -> float:
     if _is_c2_prime(label):
-        mirror_index = _c2_prime_index(label)
+        mirror_index = _c2_prime_index(label, n)
         phase = 1.0 if order == 0 else (-1.0 if (mirror_index % 2) else 1.0)
         return float(c2_sign) * phase
     return _rotation_character(label, n, order)
@@ -607,6 +607,8 @@ def _dnd_odd_underlying_labels(
             reflected = float(np.linalg.det(matrix)) < 0.0
             proper = -matrix if reflected else matrix
             underlying = _dn_label_from_matrix(proper, n)
+            if underlying is None:
+                underlying, reflected = _dnd_odd_underlying_label(label, n)
         else:
             underlying, reflected = _dnd_odd_underlying_label(label, n)
         if underlying is None:
@@ -618,6 +620,19 @@ def _dnd_odd_underlying_labels(
 def _dnd_odd_underlying_label(label: str, n: int) -> tuple[str | None, bool]:
     if label == "i":
         return "E", True
+    if label in {"sigma_xz", "sigma_yz"} or label.startswith("sigma_v"):
+        return "C2_xy", True
+    match = re.fullmatch(r"sigma_h\*C(\d+)z\^(\d+)", label)
+    if match:
+        operation_order, power = (int(item) for item in match.groups())
+        if operation_order != 2 * n or power % 2 != 1:
+            return None, True
+        return f"C{n}z^{((n + power) // 2) % n}", True
+    match = re.fullmatch(r"C2_xy_(\d+)_(\d+)", label)
+    if match:
+        operation_order, index = (int(item) for item in match.groups())
+        if operation_order == 2 * n and index % 2 == 1:
+            return "C2_xy", False
     if label.startswith("Dnd_") or label.startswith("sigma"):
         return None, True
     if label == "E" or label.startswith("C"):
@@ -788,16 +803,43 @@ def _diagonal_reflection_matrix() -> np.ndarray:
 
 
 def _dnh_value(label: str, n: int, irrep: str, reflection_sign: int) -> float:
-    underlying, reflected = _dnh_underlying_operation(label, n)
+    if n % 2 == 0:
+        underlying, reflected = _dnh_even_underlying_operation(label, n)
+    else:
+        underlying, reflected = _dnh_odd_underlying_operation(label, n)
     value = _dn_irrep_value(underlying, n, irrep)
     return value * (float(reflection_sign) if reflected else 1.0)
 
 
-def _dnh_underlying_operation(label: str, n: int) -> tuple[str, bool]:
+def _dnh_even_underlying_operation(label: str, n: int) -> tuple[str, bool]:
+    if label == "i":
+        return "E", True
+    if label == "sigma_xy":
+        return "C2z", True
+    if label == "sigma_xz":
+        return "C2y", True
+    if label == "sigma_yz":
+        return "C2x", True
+    if _is_vertical_reflection(label):
+        return label.replace("sigma_v", "C2_xy"), True
+    match = re.fullmatch(r"sigma_h\*C(\d+)z\^(\d+)", label)
+    if match:
+        order, power = match.groups()
+        relative = n * int(power) / int(order)
+        nearest = int(round(relative))
+        if abs(relative - nearest) > 1.0e-8:
+            return label, False
+        return f"C{n}z^{(nearest + n // 2) % n}", True
+    return label, False
+
+
+def _dnh_odd_underlying_operation(label: str, n: int) -> tuple[str, bool]:
     if label == "sigma_xy":
         return "E", True
-    if label == "i" and n % 2 == 0:
-        return (f"C{n}z^{n // 2}", True)
+    if label == "sigma_xz":
+        return "C2x", True
+    if label == "sigma_yz":
+        return "C2y", True
     if _is_vertical_reflection(label):
         return label.replace("sigma_v", "C2_xy"), True
     match = re.fullmatch(r"sigma_h\*C(\d+)z\^(\d+)", label)
@@ -1353,12 +1395,13 @@ def _is_vertical_reflection(label: str) -> bool:
     return label in {"sigma_xz", "sigma_yz"} or label.startswith("sigma_v")
 
 
-def _vertical_reflection_index(label: str) -> int:
+def _vertical_reflection_index(label: str, n: int) -> int:
     match = re.fullmatch(r"sigma_v_(\d+)_(\d+)", label)
     if match:
-        return int(match.group(2))
+        order, index = match.groups()
+        return int(round(n * int(index) / int(order))) % n
     if label == "sigma_xz":
-        return 0
+        return n // 2 if n % 2 == 0 else 1
     if label == "sigma_yz":
         return 1
     return 0
@@ -1374,14 +1417,15 @@ def _is_c2_prime(label: str) -> bool:
     return label.startswith("C2_xy") or label in {"C2x", "C2y"}
 
 
-def _c2_prime_index(label: str) -> int:
+def _c2_prime_index(label: str, n: int) -> int:
     match = re.fullmatch(r"C2_xy_(\d+)_(\d+)", label)
     if match:
-        return int(match.group(2))
+        order, index = match.groups()
+        return int(round(n * int(index) / int(order))) % n
     if label == "C2x":
         return 0
     if label == "C2y":
-        return 1
+        return n // 2 if n % 2 == 0 else 1
     return 0
 
 

@@ -236,13 +236,15 @@ but chemically opaque coordinates.
 
 For ring systems, endocyclic torsions are not meant to appear as an arbitrary
 list of raw dihedrals in the final model.  They are the primitive source from
-which \program{} builds the active \(q\)- and \(\phi\)-like ring deformation
-coordinates.  ORACLE stores the linear \texttt{RPck} components in the frozen
-GIC definition because their B rows are analytic linear combinations of
-dihedral B rows.  The Gaussian block writes those \texttt{RPck} components as
-inactive auxiliaries and derives the selected active \texttt{QPck} and
-\texttt{PhiP} functionals from consecutive \texttt{RPck} pairs, matching
-Merlino3.0 \texttt{PrtPckQP}.
+which \program{} builds protected ring-puckering components.  ORACLE stores the
+linear \texttt{RPck} components in the frozen GIC definition because their B
+rows are analytic linear combinations of dihedral B rows.  For isolated rings,
+the Gaussian block can write those \texttt{RPck} components as inactive
+auxiliaries and derive active \texttt{QPck} and \texttt{PhiP} functionals from
+consecutive \texttt{RPck} pairs.  For fused rings, the selected
+\texttt{RPck} components remain the active exported coordinates and are
+symmetrized directly; the code does not collapse the fused-ring puckering
+space into polar coordinates for individual rings.
 
 \subsection{Rank reduction and final basis}
 
@@ -336,9 +338,9 @@ of primitive dihedrals
   D(a_{i-1},a_i,a_{i+1},a_{i+2}).
 \]
 The primitive torsions are first transformed to \texttt{RPck} components.  The
-frozen ORACLE B matrix uses these linear components directly.  For Gaussian
-ReadGIC export, consecutive selected \texttt{RPck} pairs are written as
-inactive auxiliaries and converted to active puckering coordinates
+frozen ORACLE B matrix uses these linear components directly.  For isolated
+rings in Gaussian ReadGIC export, consecutive selected \texttt{RPck} pairs are
+written as inactive auxiliaries and converted to active puckering coordinates
 \texttt{QPck} and \texttt{PhiP}:
 \[
   Q = \sqrt{RPck_i^2 + RPck_j^2}, \qquad
@@ -360,14 +362,17 @@ Final ring torsion coordinates
 \end{lstlisting}
 
 \noindent
-For six-membered and larger rings, the same rule is used: the primitive basis
-is endocyclic torsional, but the Gaussian-active coordinates are the independent
-\(q\)- and \(\phi\)-like ring deformation coordinates derived from selected
-\texttt{RPck} pairs.  If an odd component remains after pairing, it stays as an
-inactive \texttt{RPck} auxiliary, as in Merlino3.0.  Fused rings add
-\texttt{BtFl} butterfly coordinates around shared bonds.  Butterfly coordinates
-remain in the torsional family for pruning because their B rows describe
-ring-puckering motion.
+For six-membered and larger isolated rings, the same rule is used: the
+primitive basis is endocyclic torsional, but the Gaussian-active coordinates are
+the independent \(q\)- and \(\phi\)-like ring deformation coordinates derived
+from selected \texttt{RPck} pairs.  If an odd component remains after pairing,
+it stays as an inactive \texttt{RPck} auxiliary.  Fused rings are treated
+differently: each elementary fused-ring cycle contributes its own protected
+ring-puckering source space, the fused set is reduced only within the protected
+ring family, and the surviving \texttt{RPck} components are exported directly.
+Fused rings also add \texttt{BtFl} butterfly coordinates around shared bonds.
+Butterfly coordinates remain in the torsional family for pruning because their
+B rows describe ring-puckering motion.
 
 \section{Coordinate Families}
 
@@ -394,8 +399,9 @@ Ring bend & Endocyclic valence-angle combinations are generated ring by ring,
 with canonical ring numbering. \\
 Ring torsion & Endocyclic torsions are converted to \texttt{RPck} components
 before pruning.  The frozen ORACLE basis keeps selected \texttt{RPck} rows for
-linear analytic B-matrix evaluation; the Gaussian block marks them inactive and
-adds active \texttt{QPck}/\texttt{PhiP} functionals for complete pairs. \\
+linear analytic B-matrix evaluation; isolated rings may additionally export
+active \texttt{QPck}/\texttt{PhiP} functionals for complete pairs, while fused
+rings keep the selected \texttt{RPck} rows active. \\
 Butterfly & Fused-ring butterfly coordinates are generated around shared bonds
 and kept as torsional ring-family coordinates. \\
 Out-of-plane & Default non-planarity primitives are \texttt{U(...)} out-of-plane
@@ -726,6 +732,8 @@ The minimum regression set should cover:
   \item saccharine and other heteroatom rings;
   \item naphthalene, anthracene, pyrene and coronene for fused PAHs;
   \item norbornene and norbornadiene for bridged non-planar rings;
+  \item spiro systems with two rings sharing one atom, which must keep the
+        Merlino \texttt{Spir} inter-ring angle block;
   \item \texttt{GICSYM} variants for nontrivial point groups;
   \item \texttt{SYCART} variants for symmetry-adapted Cartesian output.
 \end{itemize}

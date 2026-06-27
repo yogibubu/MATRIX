@@ -331,13 +331,13 @@ C Build Dihedral GNICs
          If(ITst.eq.KAt) Koin3C=.true.
    20   continue
        EndIf
-       if(Join3C.or.Koin3C) go to 10
        IBut=0
        Do 30 jk=1,NBrL
         If(IBut.eq.2) go to 30
         If(JAT.eq.IBrL(1,jk).and.KAt.eq.IBrL(2,jk))IBut=2
         If(JAT.eq.IBrL(2,jk).and.KAt.eq.IBrL(1,jk))IBut=2
    30  Continue
+       if(IBut.eq.0.and.(Join3C.or.Koin3C)) go to 10
        If(IBut.eq.0.and.IAtCyc(JAt).ne.0.and.IAtCyc(KAt).ne.0) go to 10
        NBJ=NBond(JAt)
        NBK=NBond(KAt)
@@ -1665,7 +1665,9 @@ C       Value1=OutAngOLd(C(1,IAt2),C(1,IAt1),C(1,IAt3),C(1,IAt4))*ToDeg
 *Deck PrtPckQP
       Subroutine PrtPckQP(IOut,NVar,ITPV,ValTot,PrtVal)
       Implicit Real*8 (A-H,O-Z)
+      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,20),IBrA(5,20),IBrD(6,20)
       Integer IOut,NVar,ITPV(*),IPair,IVar,JVar
+      Integer NBrL,NBrA,NBrD,IBrL,IBrA,IBrD
       Logical PrtVal
       Dimension ValTot(*)
       Character S1*4,S2*4,SP*4
@@ -1676,6 +1678,7 @@ C     consecutive pairs.  Each complete pair defines:
 C       Q   = SQRT(RPck_i*RPck_i + RPck_j*RPck_j)
 C       Phi = ATAN2(RPck_j, RPck_i)
 C
+      If(NBrL.gt.0) Return
       IPair=0
       IVar=1
    10 If(IVar.gt.NVar) Return

@@ -373,6 +373,12 @@ def build_parser(
         default=[],
         help="Apply one Pulay factor to a named GIC class, name:factor:pattern|pattern",
     )
+    gf.add_argument(
+        "--scale-preview",
+        "--dry-run-scaling",
+        action="store_true",
+        help="Print Pulay scaling assignments from #GIC and exit without running GF",
+    )
     gf.add_argument("--local", action="store_true", help="Apply local force-field filtering")
     gf.add_argument("--symmetry-blocks", action="store_true", help="Solve separated irrep blocks")
     gf.add_argument(
@@ -1310,12 +1316,26 @@ def main(
         return 0
     if args.command == "gf":
         from matrix_gf import (
+            format_gf_scaling_preview,
+            gf_scaling_preview_from_xyzin,
             run_gf_report_from_fchk,
             run_xyzin_gf_report_from_fchk,
             run_xyzin_gf_report_from_xyzin,
             write_csv_tables,
             write_gf_ped_section_from_report,
         )
+
+        if args.scale_preview:
+            if args.xyzin is None:
+                raise ValueError("gf --scale-preview needs --xyzin with a frozen #GIC section")
+            preview = gf_scaling_preview_from_xyzin(
+                args.xyzin,
+                scale_path=args.scale_file,
+                scale_records=tuple(args.scale),
+                scale_class_records=tuple(args.scale_class),
+            )
+            print(format_gf_scaling_preview(preview))
+            return 0
 
         if args.xyzin is None:
             if args.fchk is None:

@@ -694,6 +694,47 @@ def test_gf_cli_can_use_hessian_from_xyzin_without_fchk(tmp_path, monkeypatch, c
     assert section.gics[0].ped == (100.0,)
 
 
+def test_gf_cli_scaling_preview_does_not_run_gf(tmp_path, monkeypatch, capsys):
+    calls = {}
+    xyzin = tmp_path / "molecule.xyzin"
+    scale = tmp_path / "scale.txt"
+    xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
+    scale.write_text("class CH 0.95 R(\n", encoding="utf-8")
+
+    def fake_preview_from_xyzin(xyzin_path, *, scale_path=None, scale_records=(), scale_class_records=()):
+        calls["preview"] = (xyzin_path, scale_path, scale_records, scale_class_records)
+        return SimpleNamespace()
+
+    def fake_format(preview):
+        calls["format"] = preview
+        return "scaling preview text"
+
+    def fake_report(*args, **kwargs):
+        raise AssertionError("GF report should not run during scaling preview")
+
+    monkeypatch.setattr("matrix_gf.gf_scaling_preview_from_xyzin", fake_preview_from_xyzin)
+    monkeypatch.setattr("matrix_gf.format_gf_scaling_preview", fake_format)
+    monkeypatch.setattr("matrix_gf.run_xyzin_gf_report_from_xyzin", fake_report)
+
+    rc = matrix_run.main(
+        [
+            "gf",
+            "--xyzin",
+            str(xyzin),
+            "--scale-preview",
+            "--scale-file",
+            str(scale),
+            "--scale-class",
+            "CH:0.95:R(",
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert calls["preview"] == (xyzin, scale, (), ("CH:0.95:R(",))
+    assert out.strip() == "scaling preview text"
+
+
 def test_vpt2_vci_cli_uses_qff_section_from_xyzin(tmp_path, monkeypatch, capsys):
     calls = {}
     xyzin = tmp_path / "molecule.xyzin"
@@ -1460,9 +1501,9 @@ def test_gicforge_corpus_cli_prints_inventory(capsys):
 
     out = capsys.readouterr().out
     assert rc == 0
-    assert "TOTAL_FILES 153" in out
-    assert "SUFFIX .inp 126" in out
-    assert "ROLE legacy_gic_input 126" in out
+    assert "TOTAL_FILES 155" in out
+    assert "SUFFIX .inp 128" in out
+    assert "ROLE legacy_gic_input 128" in out
 
 
 def test_gicforge_corpus_cli_filters_paths(capsys):
@@ -1492,12 +1533,12 @@ def test_gicforge_corpus_audit_cli_prints_parser_budget(capsys):
 
     out = capsys.readouterr().out
     assert rc == 0
-    assert "TOTAL_FILES 129" in out
+    assert "TOTAL_FILES 131" in out
     if rdkit_available():
         assert "PASS " in out
         assert "FAIL " in out
     else:
-        assert "PASS 114" in out
+        assert "PASS 116" in out
         assert "FAIL 15" in out
     assert "SOURCE_FORMAT gaussian_zmatrix_input " in out
 

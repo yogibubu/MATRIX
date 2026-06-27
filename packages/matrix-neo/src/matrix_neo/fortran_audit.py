@@ -21,7 +21,29 @@ from .definition import (
 from .policy import SPECIAL_REDUCTION_CLASS, primitive_reduction_class
 
 
-DEFAULT_FORTRAN_AUDIT_MOLECULES = ("naphtalene.inp", "phenantrene.inp", "pyrene.inp")
+DEFAULT_FORTRAN_AUDIT_MOLECULES = (
+    "pyrrole.inp",
+    "benzene.inp",
+    "pyridine.inp",
+    "pyrimidine.inp",
+    "naphtalene.inp",
+    "phenantrene.inp",
+    "anthracene.inp",
+    "pyrene.inp",
+    "fluorene.inp",
+    "azulene.inp",
+    "norbornane.inp",
+    "norbornene.inp",
+    "norbornadiene.inp",
+    "norcamphor.inp",
+    "spiro.inp",
+    "c2h2.inp",
+    "c4s.inp",
+    "thujone.inp",
+    "ribose.inp",
+    "cubane.inp",
+    "cyclottane.inp",
+)
 
 
 @dataclass(frozen=True)
@@ -29,6 +51,7 @@ class GICForgeFortranAuditResult:
     molecule: str
     source: Path
     status: str
+    point_group: str = ""
     oracle_rank: int = 0
     fortran_rank: int = 0
     oracle_shape: tuple[int, int] = (0, 0)
@@ -193,6 +216,7 @@ def format_gicforge_fortran_audit_cases(
             "CASE "
             f"{result.status} "
             f"{_display_path(result.source, root=audit.root)} "
+            f"point_group={result.point_group or 'UNKNOWN'} "
             f"oracle_rank={result.oracle_rank} "
             f"fortran_rank={result.fortran_rank} "
             f"oracle_row_rank={result.oracle_row_rank} "
@@ -244,16 +268,26 @@ def _audit_one(
         definition = write_gicforge_build_sections(xyzin)
         symmetrized = build_gic_definition_from_xyzin(xyzin, symmetrize=True)
         projector = _projector_audit(definition, symmetrized)
+        projector_required = _requires_point_group_projector(definition.point_group)
         geometry = read_enriched_xyz(xyzin)
-        oracle_b = np.asarray(build_gic_b_matrix(definition).rows, dtype=float)
+        legacy_keywords = _legacy_keywords_for_definition(definition)
         legacy = run_legacy_gicforge(
             case_dir / "legacy",
             atoms=geometry.atoms,
             coordinates_angstrom=geometry.coordinates_angstrom,
             point_group="C1",
             title=source.stem,
-            keywords=("GNIC", "BMAT"),
+            keywords=legacy_keywords,
             repo_root=repo_root,
+        )
+        b_coordinates = (
+            legacy.eckart_coordinates_angstrom
+            if "ECKART" in legacy_keywords and legacy.eckart_coordinates_angstrom is not None
+            else geometry.coordinates_angstrom
+        )
+        oracle_b = np.asarray(
+            build_gic_b_matrix(definition, coordinates_angstrom=b_coordinates).rows,
+            dtype=float,
         )
         fortran_b = np.asarray(legacy.b_matrix_rows, dtype=float)
         oracle_row_rank = _row_space_rank(oracle_b)
@@ -266,12 +300,17 @@ def _audit_one(
             and oracle_row_rank == fortran_row_rank == oracle_rank
             and oracle_b.shape == fortran_b.shape
             and residual <= tolerance
+            and (
+                not projector_required
+                or projector["projector_status"] == "POINT_GROUP_PROJECTOR"
+            )
             and projector["mixed_symmetry_group_count"] == 0
         )
         return GICForgeFortranAuditResult(
             molecule=molecule,
             source=source,
             status="PASS" if passed else "FAIL",
+            point_group=definition.point_group,
             oracle_rank=oracle_rank,
             fortran_rank=fortran_rank,
             oracle_shape=tuple(int(value) for value in oracle_b.shape),
@@ -288,7 +327,14 @@ def _audit_one(
             special_symmetry_group_count=int(projector["special_symmetry_group_count"]),
             mixed_symmetry_group_count=int(projector["mixed_symmetry_group_count"]),
             total_symmetric_gic_count=int(projector["total_symmetric_gic_count"]),
-            message="" if passed else _failure_message(residual, tolerance, projector),
+            message=""
+            if passed
+            else _failure_message(
+                residual,
+                tolerance,
+                projector,
+                projector_required=projector_required,
+            ),
             workdir=case_dir,
         )
     except Exception as exc:
@@ -328,7 +374,7 @@ def _projector_audit(
         if primitive_reduction_class(group.family) == SPECIAL_REDUCTION_CLASS:
             special_groups += 1
     return {
-        "projector_status": diagnostics.status,
+        "projector_status": diagnostics.method,
         "symmetry_group_count": len(diagnostics.groups),
         "special_symmetry_group_count": special_groups,
         "mixed_symmetry_group_count": mixed_groups,
@@ -340,15 +386,37 @@ def _failure_message(
     residual: float,
     tolerance: float,
     projector: dict[str, object],
+    *,
+    projector_required: bool,
 ) -> str:
     reasons: list[str] = []
     if residual > tolerance:
         reasons.append("row-space residual exceeds tolerance")
+    if projector_required and projector["projector_status"] != "POINT_GROUP_PROJECTOR":
+        reasons.append("symmetry projector was not applied")
     if int(projector["mixed_symmetry_group_count"]):
         reasons.append("symmetry projector mixed coordinate families")
     if not reasons:
         reasons.append("rank, shape or row-space residual mismatch")
     return "; ".join(reasons)
+
+
+def _requires_point_group_projector(point_group: str) -> bool:
+    normalized = _normalized_point_group(point_group)
+    return normalized not in {"", "C1", "CINFV", "DINFH"}
+
+
+def _legacy_keywords_for_definition(
+    definition: GICDefinition,
+) -> tuple[str, ...]:
+    # In Merlino, the legacy Linear flag is set in the Eckart orientation path.
+    if _normalized_point_group(definition.point_group) in {"CINFV", "DINFH"}:
+        return ("ECKART", "GNIC", "BMAT")
+    return ("GNIC", "BMAT")
+
+
+def _normalized_point_group(point_group: str) -> str:
+    return point_group.strip().upper().replace("∞", "INF")
 
 
 def _row_space_basis(matrix: np.ndarray) -> tuple[np.ndarray, int]:

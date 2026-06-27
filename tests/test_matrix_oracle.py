@@ -695,6 +695,17 @@ def test_gf_controller_builds_run_command_with_options(tmp_path):
     assert command.argv[command.argv.index("--nonbonded-14-scale") + 1] == "0.25"
     assert "--no-write-section" in command.argv
 
+    preview = controller.scaling_preview_command(
+        scale_file=scale,
+        scale_records=("GIC003=0.9",),
+        scale_class_records=("CH_stretches:0.95:R(1,2)|R(1,3)",),
+    )
+    assert preview.argv[:4] == (sys.executable, "-m", "matrix", "gf")
+    assert "--scale-preview" in preview.argv
+    assert preview.argv[preview.argv.index("--scale-file") + 1] == str(scale)
+    assert preview.argv[preview.argv.index("--scale") + 1] == "GIC003=0.9"
+    assert preview.argv[preview.argv.index("--scale-class") + 1] == "CH_stretches:0.95:R(1,2)|R(1,3)"
+
 
 def test_qm_jobs_controller_builds_adapter_commands(tmp_path):
     xyzin = tmp_path / "molecule.xyzin"

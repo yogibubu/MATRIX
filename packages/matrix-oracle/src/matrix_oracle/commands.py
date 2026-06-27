@@ -605,6 +605,29 @@ def gf_command(
     )
 
 
+def gf_scaling_preview_command(
+    xyzin: Path | str,
+    *,
+    scale_file: Path | str | None = None,
+    scale_records: Sequence[str] = (),
+    scale_class_records: Sequence[str] = (),
+) -> OracleGuiCommand:
+    argv = [*_matrix_cli(), "gf", "--xyzin", str(Path(xyzin)), "--scale-preview"]
+    if scale_file is not None:
+        argv.extend(["--scale-file", str(Path(scale_file))])
+    for record in scale_records:
+        if str(record).strip():
+            argv.extend(["--scale", str(record).strip()])
+    for record in scale_class_records:
+        if str(record).strip():
+            argv.extend(["--scale-class", str(record).strip()])
+    return OracleGuiCommand(
+        "Preview GF scaling",
+        tuple(argv),
+        required_sections=("GIC",),
+    )
+
+
 def thermo_command(
     xyzin: Path | str,
     *,

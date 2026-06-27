@@ -17,6 +17,101 @@ ORACLE_XYZ_INTERACTION_CENTERS_SCHEMA = "oracle.xyz.interaction_centers.v1"
 REQUIRED_TOPOLOGY_SCHEMA = "oracle.xyz.topology.v1"
 REQUIRED_SYNTHONS_SCHEMA = "oracle.xyz.synthons.v1"
 RANK_TOLERANCE = 1.0e-8
+METAL_SYMBOLS = frozenset(
+    {
+        "Li",
+        "Na",
+        "K",
+        "Rb",
+        "Cs",
+        "Fr",
+        "Be",
+        "Mg",
+        "Ca",
+        "Sr",
+        "Ba",
+        "Ra",
+        "Sc",
+        "Ti",
+        "V",
+        "Cr",
+        "Mn",
+        "Fe",
+        "Co",
+        "Ni",
+        "Cu",
+        "Zn",
+        "Y",
+        "Zr",
+        "Nb",
+        "Mo",
+        "Tc",
+        "Ru",
+        "Rh",
+        "Pd",
+        "Ag",
+        "Cd",
+        "Hf",
+        "Ta",
+        "W",
+        "Re",
+        "Os",
+        "Ir",
+        "Pt",
+        "Au",
+        "Hg",
+        "Rf",
+        "Db",
+        "Sg",
+        "Bh",
+        "Hs",
+        "Mt",
+        "Ds",
+        "Rg",
+        "Cn",
+        "Al",
+        "Ga",
+        "In",
+        "Tl",
+        "Sn",
+        "Pb",
+        "Bi",
+        "Nh",
+        "Fl",
+        "Mc",
+        "Lv",
+        "La",
+        "Ce",
+        "Pr",
+        "Nd",
+        "Pm",
+        "Sm",
+        "Eu",
+        "Gd",
+        "Tb",
+        "Dy",
+        "Ho",
+        "Er",
+        "Tm",
+        "Yb",
+        "Lu",
+        "Ac",
+        "Th",
+        "Pa",
+        "U",
+        "Np",
+        "Pu",
+        "Am",
+        "Cm",
+        "Bk",
+        "Cf",
+        "Es",
+        "Fm",
+        "Md",
+        "No",
+        "Lr",
+    }
+)
 
 
 class FragmentContractError(ValueError):
@@ -183,7 +278,7 @@ def build_interaction_center_definition_from_xyzin(path: Path) -> InteractionCen
                 source="TOPOLOGY_BOND",
             )
         )
-    for ring_index, atoms in rings:
+    for ring_index, atoms in _interaction_ring_centers(rings, geometry.atoms):
         centers.append(
             InteractionCenterRecord(
                 identifier=f"C{len(centers) + 1:03d}",
@@ -200,6 +295,7 @@ def build_interaction_center_definition_from_xyzin(path: Path) -> InteractionCen
         bonds=bonds,
         coords=coords,
         natoms=geometry.natoms,
+        atom_symbols=geometry.atoms,
     )
     return InteractionCenterDefinition(
         strategy="TOPOLOGY_EQUIDISTANT_CENTER_CANDIDATES",
@@ -423,12 +519,42 @@ def _topology_rings(lines: list[str], *, natoms: int) -> tuple[tuple[int, tuple[
     return tuple(rings)
 
 
+def _interaction_ring_centers(
+    rings: tuple[tuple[int, tuple[int, ...]], ...],
+    atom_symbols: tuple[str, ...],
+) -> tuple[tuple[int, tuple[int, ...]], ...]:
+    accepted: list[tuple[int, tuple[int, ...]]] = []
+    seen: set[tuple[int, ...]] = set()
+    for ring_index, atoms in rings:
+        if not _valid_interaction_ring_atoms(atoms, atom_symbols):
+            continue
+        key = tuple(sorted(atoms))
+        if key in seen:
+            continue
+        seen.add(key)
+        accepted.append((ring_index, atoms))
+    return tuple(accepted)
+
+
+def _valid_interaction_ring_atoms(
+    atoms: tuple[int, ...],
+    atom_symbols: tuple[str, ...],
+) -> bool:
+    if len(atoms) < 3:
+        return False
+    symbols = tuple(_atom_symbol(atom_symbols, atom) for atom in atoms)
+    if any(symbol == "H" for symbol in symbols):
+        return False
+    return not any(_is_metal_symbol(symbol) for symbol in symbols)
+
+
 def _atom_center_interactions(
     centers: tuple[InteractionCenterRecord, ...],
     *,
     bonds: tuple[tuple[int, int], ...],
     coords: np.ndarray,
     natoms: int,
+    atom_symbols: tuple[str, ...],
 ) -> tuple[AtomCenterInteractionRecord, ...]:
     bonded = {tuple(sorted(bond)) for bond in bonds}
     interactions: list[AtomCenterInteractionRecord] = []
@@ -437,7 +563,16 @@ def _atom_center_interactions(
         for atom in range(1, natoms + 1):
             if atom in center_atoms:
                 continue
-            if any(tuple(sorted((atom, member))) in bonded for member in center_atoms):
+            if not _allowed_atom_center_candidate(atom, center, atom_symbols):
+                continue
+            bonded_to_center = any(
+                tuple(sorted((atom, member))) in bonded for member in center_atoms
+            )
+            if bonded_to_center and not _allow_bonded_atom_center_interaction(
+                atom,
+                center,
+                atom_symbols,
+            ):
                 continue
             score = _atom_center_score(atom, center, coords)
             if score <= 0.0:
@@ -452,7 +587,87 @@ def _atom_center_interactions(
                     source="AUTO_EQUIDISTANT_GEOMETRY",
                 )
             )
-    return tuple(interactions)
+    return _suppress_ring_redundant_bond_center_interactions(
+        tuple(interactions),
+        centers=centers,
+        atom_symbols=atom_symbols,
+    )
+
+
+def _allowed_atom_center_candidate(
+    atom: int,
+    center: InteractionCenterRecord,
+    atom_symbols: tuple[str, ...],
+) -> bool:
+    center_symbols = tuple(_atom_symbol(atom_symbols, member) for member in center.atoms)
+    if any(_is_metal_symbol(symbol) for symbol in center_symbols):
+        return False
+    atom_symbol = _atom_symbol(atom_symbols, atom)
+    if _is_metal_symbol(atom_symbol):
+        return center.kind in {"BOND_CENTER", "RING_CENTER"}
+    if atom_symbol == "H":
+        return center.kind == "RING_CENTER"
+    return False
+
+
+def _allow_bonded_atom_center_interaction(
+    atom: int,
+    center: InteractionCenterRecord,
+    atom_symbols: tuple[str, ...],
+) -> bool:
+    if center.kind not in {"BOND_CENTER", "RING_CENTER"}:
+        return False
+    if not _is_metal_symbol(_atom_symbol(atom_symbols, atom)):
+        return False
+    center_symbols = tuple(_atom_symbol(atom_symbols, member) for member in center.atoms)
+    return not any(_is_metal_symbol(symbol) for symbol in center_symbols)
+
+
+def _suppress_ring_redundant_bond_center_interactions(
+    interactions: tuple[AtomCenterInteractionRecord, ...],
+    *,
+    centers: tuple[InteractionCenterRecord, ...],
+    atom_symbols: tuple[str, ...],
+) -> tuple[AtomCenterInteractionRecord, ...]:
+    center_by_id = {center.identifier: center for center in centers}
+    ring_atoms_by_metal: dict[int, list[frozenset[int]]] = {}
+    for interaction in interactions:
+        center = center_by_id.get(interaction.center_id)
+        if center is None or center.kind != "RING_CENTER":
+            continue
+        if not _is_metal_symbol(_atom_symbol(atom_symbols, interaction.atom)):
+            continue
+        ring_atoms_by_metal.setdefault(interaction.atom, []).append(frozenset(center.atoms))
+    if not ring_atoms_by_metal:
+        return interactions
+
+    filtered: list[AtomCenterInteractionRecord] = []
+    for interaction in interactions:
+        center = center_by_id.get(interaction.center_id)
+        if center is None:
+            filtered.append(interaction)
+            continue
+        if center.kind == "BOND_CENTER" and _is_metal_symbol(
+            _atom_symbol(atom_symbols, interaction.atom)
+        ):
+            bond_atoms = frozenset(center.atoms)
+            if any(
+                bond_atoms.issubset(ring_atoms)
+                for ring_atoms in ring_atoms_by_metal.get(interaction.atom, ())
+            ):
+                continue
+        filtered.append(interaction)
+    return tuple(
+        AtomCenterInteractionRecord(
+            identifier=f"I{index:03d}",
+            kind=interaction.kind,
+            atom=interaction.atom,
+            center_id=interaction.center_id,
+            score=interaction.score,
+            source=interaction.source,
+        )
+        for index, interaction in enumerate(filtered, start=1)
+    )
 
 
 def _atom_center_score(atom: int, center: InteractionCenterRecord, coords: np.ndarray) -> float:
@@ -473,6 +688,16 @@ def _atom_center_score(atom: int, center: InteractionCenterRecord, coords: np.nd
             return 0.0
         return max(0.0, 1.0 - spread / 0.08) * max(0.0, 1.0 - center_distance / 3.5)
     return 0.0
+
+
+def _atom_symbol(atom_symbols: tuple[str, ...], atom: int) -> str:
+    if atom < 1 or atom > len(atom_symbols):
+        raise FragmentContractError(f"invalid atom index {atom}")
+    return str(atom_symbols[atom - 1])
+
+
+def _is_metal_symbol(symbol: str) -> bool:
+    return symbol in METAL_SYMBOLS
 
 
 def _connected_components(

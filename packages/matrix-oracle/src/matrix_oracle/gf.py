@@ -5,7 +5,7 @@ from pathlib import Path
 
 from matrix_gf import GFPEDSection, read_gf_ped_section
 
-from .commands import OracleGuiCommand, gf_command
+from .commands import OracleGuiCommand, gf_command, gf_scaling_preview_command
 
 
 @dataclass(frozen=True)
@@ -95,6 +95,22 @@ class OracleGFController:
             subtract_uff_vdw=subtract_uff_vdw,
             nonbonded_14_scale=nonbonded_14_scale,
             write_section=write_section,
+        )
+
+    def scaling_preview_command(
+        self,
+        *,
+        scale_file: Path | str | None = None,
+        scale_records: tuple[str, ...] = (),
+        scale_class_records: tuple[str, ...] = (),
+    ) -> OracleGuiCommand:
+        if self.xyzin is None:
+            raise ValueError("no MATRIX xyzin project is loaded")
+        return gf_scaling_preview_command(
+            self.xyzin,
+            scale_file=scale_file,
+            scale_records=scale_records,
+            scale_class_records=scale_class_records,
         )
 
 

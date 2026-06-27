@@ -1,10 +1,10 @@
 # GIC Regression Corpus
 
-`tests/fixtures/test_molecules` is the imported ORACLE `test_molecules`
+`tests/fixtures/test_molecules` is the imported MATRIX `test_molecules`
 corpus. It contains demanding molecular inputs for GICForge, topology, ring,
 out-of-plane, Z-matrix and Gaussian-adapter regressions.
 
-The corpus is intentionally versioned because it is small enough for the ORACLE
+The corpus is intentionally versioned because it is small enough for the MATRIX
 repository and because GIC regressions need stable input files. Runtime caches
 and generated project outputs still belong outside git.
 
@@ -43,6 +43,74 @@ python -m matrix gicforge fortran-audit \
 ```
 
 The audit preprocesses each selected corpus molecule through LINK,
-builds the frozen ORACLE GIC/B matrix, runs the vendored Merlino Fortran77
+builds the frozen MATRIX GIC/B matrix, runs the vendored Merlino Fortran77
 GICForge harness, and compares final rank, row-space rank and Wilson-B row
 span. Add `--molecule name.inp` repeatedly to pin a smaller periodic audit set.
+
+Current required gate:
+
+- The default audit set is pyrrole, benzene, pyridine, pyrimidine, naphthalene,
+  phenanthrene, anthracene, pyrene, fluorene, azulene, norbornane, norbornene,
+  norbornadiene, norcamphor, spiro, acetylene, linear C4S, thujone, ribose,
+  cubane and cyclottane.
+- This gate must pass with matching final rank, matching row-space rank and
+  Wilson-B row-space residual below the audit tolerance. The finite
+  point-group projector must be active for every non-`C1`, non-linear molecule
+  in the gate.
+- Pyrrole is an explicit regression: point group `C2v`, rank 24, retained ring
+  coordinates, and symmetrized `A1RPck001`/`B2RPck001`.
+- Fused PAHs are explicit regressions: naphthalene, phenanthrene, anthracene,
+  pyrene and fluorene must retain protected ring `RDef`/`RPck` sources, keep
+  `BtFl` bridge coordinates when present, and export fused ring puckerings as
+  `RPck` rather than polar `QPck`/`PhiP` functionals.
+- Non-benzenoid and bridged rings are explicit regressions: azulene must keep a
+  `BtFl` bridge and point-group projector symmetry, while norbornane,
+  norbornene, norbornadiene and norcamphor must retain the shared-cycle `RDef`
+  and `RPck` source spaces without falling back in the Fortran harness.
+- Spiro rings are an explicit regression: `spiro.inp` must detect point group
+  `D2`, build the Merlino `Spir` inter-ring angle block around the shared atom,
+  retain all six `RPck` ring components, and close the point-group projector
+  without falling back to local SALCs.
+- Linear molecules are explicit regressions: `c2h2.inp` and `c4s.inp` must run
+  the legacy Merlino harness through the `ECKART` path so that Fortran sets its
+  linear-top flag and retains the physical `3N-5` rank with both components of
+  each linear bend.
+- Thujone is an explicit regression for a larger nonaromatic bridged aliphatic
+  molecule: `thujone.inp` must keep the Merlino-equivalent final rank 75 and
+  Wilson-B row space.
+- Ribose is an explicit regression for a flexible oxygenated sugar ring:
+  `ribose.inp` must keep the Merlino-equivalent final rank 51, preserve the
+  ring `RDef`/`RPck`/`QPck`/`PhiP` coordinate families, and match the Wilson-B
+  row space.
+- Cubane is an explicit high-symmetry regression: `cubane.inp` must detect
+  point group `Oh`, keep the Merlino-equivalent final rank 42, use the full
+  point-group projector, keep `BUTTERFLY` and `CYCLIC_BEND` as separate
+  homogeneous blocks, and preserve Wilson-B rank 42 after symmetrization.
+- Ferrocene is an explicit metal-center projector regression in the Python
+  corpus: eclipsed `ferrocene.inp` must detect `D5h`, staggered
+  `ferrocene_staggered.inp` must detect `D5d`, both must serialize 20 closed
+  finite operations, protect the two Fe-to-Cp-ring-center coordinates, keep the
+  full point-group projector active, and preserve Wilson-B rank 57.
+- Cyclottane is an explicit large noncondensed ring regression: `cyclottane.inp`
+  must detect point group `D2`, keep the Merlino-equivalent final rank 66, use
+  the full point-group projector, preserve five `RDef`/`RPck` components, and
+  export the expected polar `QPck`/`PhiP` ring-puckering functionals.
+
+Full-corpus status from the 127 imported `.inp` files is not yet a release
+gate. The current broad audit separates:
+
+- passing cases;
+- input/backend errors that must be fixed in LINK, topology or legacy harness
+  normalization before they can be used as GIC parity tests;
+- real GIC parity mismatches.
+
+Open GIC parity triage:
+
+- `biphenylene.inp`: nonredundant rank and B span match Merlino, but the D2h
+  point-group projector falls back because the generated RPck candidate space
+  is not closed under all D2h operations.
+- `9cyanophenantrene.inp` and `cyanopyridine.inp`: rank matches, but the
+  Python nonredundant space differs from Merlino because the ring-puckering /
+  polar `QPck/PhiP` selection is not yet Merlino-equivalent.
+- The remaining residual-only cases near the tolerance boundary must be
+  reviewed after the structural mismatches above are fixed.

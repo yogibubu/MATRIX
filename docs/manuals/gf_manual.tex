@@ -284,6 +284,23 @@ coordinate types.  Scaling factors must be non-negative.  Ambiguous or
 unmatched ordinary selectors remain fatal errors because silent scaling of the
 wrong coordinate would invalidate the PED interpretation.
 
+\noindent
+Before running GF, the resolved assignments can be inspected without reading an
+Hessian and without modifying the xyzin file:
+
+\begin{lstlisting}[style=oracle]
+python -m matrix gf \
+  --xyzin working/molecule.xyzin \
+  --scale-file working/pulay_scale.txt \
+  --scale-class "CH_stretches:0.970:R(1,6)|R(2,7)|R(3,8)" \
+  --scale-preview
+\end{lstlisting}
+
+\noindent
+The preview lists every scaling rule, its matched GICs, the detected coordinate
+family and the final factor assigned to each GIC after later rules override
+earlier ones.
+
 \section{Non-Bonded Hessian Subtraction and Local Models}
 
 Before the Cartesian Hessian is transformed to the GIC basis, GF/PED may

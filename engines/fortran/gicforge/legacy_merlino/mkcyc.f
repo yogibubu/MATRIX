@@ -730,7 +730,9 @@ C
 C builds ring coordinates for dihedral angles
 C for symmetry reasons the first dihedral is always: n123  
 C where n is the last atom in the ring
-C if all the atoms of the cycle join 3 cycles there are no free dihedrals
+C if all the atoms of the cycle join 3 cycles there are no free dihedrals.
+C MATRIX keeps the collective ring-puckering block anyway: the rule
+C suppresses free torsions, not protected ring coordinates.
       if(N3Cyc.ge.NAtC(ICyc)) then
        iall3c=0        
        do 10 ii=1,N3Cyc 
@@ -739,8 +741,7 @@ C if all the atoms of the cycle join 3 cycles there are no free dihedrals
    20   continue
    10  continue
        if(IAll3c.ge.NAtC(ICyc)) then
-        write(IOut,'('' No Free Dihedrals for Cycle'',I3)') ICyc
-        return
+        write(IOut,'('' Ring Puckering Kept for Cycle'',I3)') ICyc
        endif 
       endif
       NAtPrm=4

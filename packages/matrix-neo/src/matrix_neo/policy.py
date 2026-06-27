@@ -46,6 +46,13 @@ PRIMITIVE_FAMILY_POLICIES = (
         "CYCLIC_BEND",
     ),
     PrimitiveFamilyPolicy(
+        "SPIRO_BEND",
+        "A",
+        "Spir",
+        ORDINARY_REDUCTION_CLASS,
+        "SPIRO_BEND",
+    ),
+    PrimitiveFamilyPolicy(
         "LINEAR_BEND",
         "L",
         "LinB",

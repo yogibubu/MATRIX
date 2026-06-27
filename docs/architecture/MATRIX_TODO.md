@@ -42,10 +42,14 @@
   implementation should reuse existing GF/GIC force constants, QFF/DVR
   contracts and the shared diagonalizer instead of introducing private
   vibrational data structures.
-- Extend the implemented GF scaling-class frontend with optional dry-run
-  assignment previews and automatic class suggestions from `#SYNTHONS`.
-  MATRIX already supports class records in `--scale-file` and `--scale-class`;
-  future work should add richer chemical subtyping without porting `vibint`
+- Extend the implemented GF scaling-class frontend with automatic class
+  suggestions from `#SYNTHONS`. MATRIX already supports class records in
+  `--scale-file`, `--scale-class` and `--scale-preview`; future work should add
+  default classes for XH stretchings, XY stretchings, HXH/HXY/XYZ bendings,
+  out-of-plane coordinates, Q and phi ring coordinates and dihedrals. Store
+  method-specific factors in a small library when calibrated values are known;
+  otherwise require user-supplied factors. A finer optional split by synthon
+  descriptors can refine these default classes later. Do not port `vibint`
   Gaussian-log parsing or private GF reconstruction.
 - Add vibronic spectroscopy workflows, including electronic-transition,
   normal-mode and Franck-Condon/Herzberg-Teller data contracts, with plotting

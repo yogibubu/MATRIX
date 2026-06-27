@@ -8,9 +8,12 @@ import pytest
 from matrix_chem import preprocess_to_enriched_xyz, write_validation_section
 from matrix_gaussian import hessian_input_from_gaussian_fchk, lower_to_symmetric, read_gaussian_fchk
 from matrix_gf import (
+    format_gf_scaling_preview,
+    gf_scaling_preview_from_xyzin,
     gf_from_cartesian_hessian_and_gic_b_matrix,
     nonbonded_cartesian_hessian_correction,
     pulay_scaling_factors,
+    pulay_scaling_preview,
     read_gf_ped_section,
     run_xyzin_gf_report_from_fchk,
     solve_wilson_gf,
@@ -121,6 +124,60 @@ def test_pulay_scaling_classes_match_multiple_gics_and_reject_mixed_types(tmp_pa
             names=names,
             scale_class_records=("bad:0.9:R(|A(",),
         )
+
+
+def test_pulay_scaling_preview_reports_rules_and_final_assignments(tmp_path):
+    labels = ("GIC001 R(1,2)", "GIC002 R(1,3)", "GIC003 A(2,1,3)")
+    names = ("A1Str0001", "A1Str0002", "A1Bend0001")
+    scale_file = tmp_path / "scale.txt"
+    scale_file.write_text(
+        "default 1.0\n"
+        "class CH_stretches 0.95 R(1,2)|R(1,3)\n",
+        encoding="utf-8",
+    )
+
+    preview = pulay_scaling_preview(
+        3,
+        labels=labels,
+        names=names,
+        scale_path=scale_file,
+        scale_class_records=("bends:0.90:Bend",),
+    )
+    text = format_gf_scaling_preview(preview)
+
+    assert preview.changed_count == 3
+    assert [rule.name for rule in preview.rules] == ["default", "CH_stretches", "bends"]
+    assert preview.rules[1].matches == (1, 2)
+    assert preview.rules[1].family == "stretch"
+    assert [(item.identifier, item.factor, item.source) for item in preview.assignments] == [
+        ("GIC001", pytest.approx(0.95), "class CH_stretches"),
+        ("GIC002", pytest.approx(0.95), "class CH_stretches"),
+        ("GIC003", pytest.approx(0.90), "class bends"),
+    ]
+    assert "GF/PED Pulay scaling preview" in text
+    assert "class    CH_stretches" in text
+    assert "GIC003" in text
+
+
+def test_gf_scaling_preview_reads_frozen_xyzin_gics(tmp_path):
+    source = MOLECULES / "h2ocart.inp"
+    xyzin = tmp_path / "h2o.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    write_gicforge_build_sections(xyzin)
+
+    preview = gf_scaling_preview_from_xyzin(
+        xyzin,
+        scale_class_records=("stretches:0.97:Str",),
+    )
+    text = format_gf_scaling_preview(preview)
+
+    assert preview.xyzin_path == xyzin
+    assert preview.assignments
+    assert any(item.source == "class stretches" for item in preview.assignments)
+    assert any(item.factor == pytest.approx(0.97) for item in preview.assignments)
+    assert "Frozen xyzin:" in text
 
 
 def test_nonbonded_correction_excludes_12_13_and_scales_14_terms():

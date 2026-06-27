@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from matrix_core import section_content
@@ -12,6 +14,16 @@ from matrix_fragments import (
     write_interaction_center_section,
     write_fragment_plan_section,
 )
+
+
+def _test_molecule_path(name: str) -> Path:
+    return (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "test_molecules"
+        / "molecules"
+        / name
+    )
 
 
 def test_fragment_plan_requires_topology_and_synthons(tmp_path):
@@ -166,3 +178,25 @@ def test_interaction_centers_materialize_ring_center_atom_candidate(tmp_path):
     assert any("KIND=RING_CENTER" in line for line in section)
     assert any("ATOM=7" in line and "CENTER=" in line for line in section)
     assert read_back.centers[-1].kind == "RING_CENTER"
+
+
+def test_interaction_centers_for_ferrocene_keep_metal_out_of_ring_centers(tmp_path):
+    source = _test_molecule_path("ferrocene.inp")
+    xyzin = tmp_path / "ferrocene.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    definition = write_interaction_center_section(xyzin)
+
+    ring_centers = tuple(center for center in definition.centers if center.kind == "RING_CENTER")
+    ring_atom_sets = {frozenset(center.atoms) for center in ring_centers}
+    ring_center_ids = {center.identifier for center in ring_centers}
+
+    assert ring_atom_sets == {
+        frozenset((1, 3, 4, 5, 6)),
+        frozenset((7, 8, 9, 10, 11)),
+    }
+    assert all(2 not in center.atoms for center in ring_centers)
+    assert len(definition.interactions) == 2
+    assert all(interaction.kind == "ATOM_RING_CENTER" for interaction in definition.interactions)
+    assert all(interaction.atom == 2 for interaction in definition.interactions)
+    assert {interaction.center_id for interaction in definition.interactions} == ring_center_ids

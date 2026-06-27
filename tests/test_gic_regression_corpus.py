@@ -39,10 +39,10 @@ def test_gic_regression_corpus_inventory_classifies_files():
     summary = summarize_gic_corpus(CORPUS)
     inp_entries = discover_gic_corpus(CORPUS, suffixes=["inp"])
 
-    assert summary.total_files == 153
-    assert summary.suffix_counts[".inp"] == 126
-    assert summary.role_counts["legacy_gic_input"] == 126
-    assert len(inp_entries) == 126
+    assert summary.total_files == 155
+    assert summary.suffix_counts[".inp"] == 128
+    assert summary.role_counts["legacy_gic_input"] == 128
+    assert len(inp_entries) == 128
     assert {entry.role for entry in inp_entries} == {"legacy_gic_input"}
 
 
@@ -50,10 +50,10 @@ def test_gic_regression_corpus_geometry_audit_tracks_parser_budget():
     audit = audit_gic_corpus_geometry(CORPUS)
     failures = {entry.name for entry in audit.entries if not entry.passed}
 
-    assert audit.total_files == 129
+    assert audit.total_files == 131
     assert audit.passed_files >= 114
     assert audit.failed_files <= 15
-    assert audit.source_format_counts["gaussian_cartesian_input"] == 99
+    assert audit.source_format_counts["gaussian_cartesian_input"] == 101
     if rdkit_available():
         assert audit.source_format_counts["gaussian_zmatrix_input"] <= 15
     else:
@@ -61,7 +61,7 @@ def test_gic_regression_corpus_geometry_audit_tracks_parser_budget():
     if rdkit_available():
         assert "testvib.inp" in failures
     else:
-        assert audit.passed_files == 114
+        assert audit.passed_files == 116
         assert audit.failed_files == 15
         assert audit.error_counts == {"GeometryParseError": 1, "RDKitUnavailableError": 14}
         assert {"azulene.inp", "pyrrole_smile1.inp", "testvib.inp"} <= failures

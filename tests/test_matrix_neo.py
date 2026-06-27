@@ -13,7 +13,7 @@ from matrix_chem import (
     preprocess_to_enriched_xyz,
     write_validation_section,
 )
-from matrix_fragments import write_fragment_build_section
+from matrix_fragments import write_fragment_build_section, write_interaction_center_section
 from matrix_gaussian import read_gaussian_cartesian_input
 from matrix_neo import (
     FrozenGIC,
@@ -30,7 +30,6 @@ from matrix_neo import (
     special_symmetry_source_blocks,
     symmetrize_gic_definition,
     irrep_characters_for_operations,
-    irrep_sequence,
     total_symmetric_gic_names,
     write_gicforge_build_sections,
     write_gicforge_gaussian_input,
@@ -71,9 +70,53 @@ def _test_molecule_path(name: str) -> Path:
     )
 
 
+def _skip_if_smiles_requires_rdkit(path: Path) -> None:
+    header = "\n".join(path.read_text(encoding="utf-8").splitlines()[:3]).upper()
+    if "SMILES" in header:
+        pytest.importorskip("rdkit")
+
+
+def _symmetry_operation_records(
+    symmetry_section: list[str],
+) -> tuple[tuple[str, tuple[int, ...], np.ndarray], ...]:
+    records = []
+    for line in symmetry_section:
+        if " LABEL=" not in line or " PERMUTATION=" not in line or " MATRIX=" not in line:
+            continue
+        label = line.split(" LABEL=", 1)[1].split()[0]
+        permutation_text = line.split(" PERMUTATION=", 1)[1].split()[0]
+        matrix_text = line.split(" MATRIX=", 1)[1].split()[0]
+        permutation = tuple(int(item) for item in permutation_text.split(","))
+        matrix_values = [float(item) for item in matrix_text.split(",")]
+        records.append((label, permutation, np.asarray(matrix_values, dtype=float).reshape(3, 3)))
+    return tuple(records)
+
+
+def _assert_symmetry_operations_closed(symmetry_section: list[str]) -> None:
+    operations = _symmetry_operation_records(symmetry_section)
+    keys = {
+        (
+            permutation,
+            tuple(round(float(value), 8) for value in matrix.reshape(-1)),
+        )
+        for _label, permutation, matrix in operations
+    }
+    for _left_label, left_permutation, left_matrix in operations:
+        for _right_label, right_permutation, right_matrix in operations:
+            product_permutation = tuple(
+                right_permutation[atom - 1] for atom in left_permutation
+            )
+            product_matrix = left_matrix @ right_matrix
+            key = (
+                product_permutation,
+                tuple(round(float(value), 8) for value in product_matrix.reshape(-1)),
+            )
+            assert key in keys
+
+
 def _test_dihedral_value(coords: np.ndarray, atoms: tuple[int, int, int, int]) -> float:
-    i, j, k, l = (atom - 1 for atom in atoms)
-    p0, p1, p2, p3 = coords[i], coords[j], coords[k], coords[l]
+    i, j, k, ell = (atom - 1 for atom in atoms)
+    p0, p1, p2, p3 = coords[i], coords[j], coords[k], coords[ell]
     b0 = -(p1 - p0)
     b1 = p2 - p1
     b2 = p3 - p2
@@ -469,7 +512,7 @@ def test_gicforge_build_writes_frozen_gics_and_sycart(tmp_path):
     assert definition.rank == 3
     assert gic[0] == "SCHEMA oracle.xyz.gic.v1"
     assert "STATUS BUILT" in gic
-    assert "BACKEND oracle-native-primitive.v1" in gic
+    assert "BACKEND merlino-python-gicforge.v1" in gic
     assert "POINT_GROUP C2v" in gic
     assert "SYMMETRY_MODE POINT_GROUP_PROJECTOR" in gic
     assert "SYMMETRY_GROUP C2v" in gic
@@ -485,7 +528,7 @@ def test_gicforge_build_writes_frozen_gics_and_sycart(tmp_path):
         line.startswith(
             "GROUP 1 BLOCK=STRETCH FAMILY=STRETCH "
             "SIGNATURE=OPS=E,sigma_yz,sigma_xy,C2y^1 "
-            "SOURCES=Str0001,Str0002 OUTPUTS=A1Str001,B2Str001"
+            "SOURCES=Stre0001,Stre0002 OUTPUTS=A1Str001,B2Str001"
         )
         for line in gic
     )
@@ -524,7 +567,7 @@ def test_gicforge_build_writes_frozen_gics_and_sycart(tmp_path):
     assert "Total irrep: A1" in report_lines
     assert (
         "STRETCH OPS=E,sigma_yz,sigma_xy,C2y^1: "
-        "Str0001,Str0002 -> A1Str001,B2Str001"
+        "Stre0001,Stre0002 -> A1Str001,B2Str001"
     ) in report_lines
     assert sycart[0] == "SCHEMA oracle.xyz.sycart.v1"
     assert "STATUS BUILT" in sycart
@@ -787,17 +830,18 @@ def test_gicforge_ring_puckering_coefficients_match_merlino_six_ring():
 
 
 @pytest.mark.parametrize(
-    ("molecule", "expected_rank"),
+    ("molecule", "expected_rank", "expected_rpck_count"),
     [
-        ("naphtalene.inp", 48),
-        ("phenantrene.inp", 66),
-        ("pyrene.inp", 72),
+        ("naphtalene.inp", 48, 6),
+        ("phenantrene.inp", 66, 9),
+        ("pyrene.inp", 72, 8),
     ],
 )
 def test_gicforge_ring_puckering_numeric_corpus_fused(
     tmp_path,
     molecule,
     expected_rank,
+    expected_rpck_count,
 ):
     source = _test_molecule_path(molecule)
     xyzin = tmp_path / f"{molecule}.xyzin"
@@ -805,32 +849,29 @@ def test_gicforge_ring_puckering_numeric_corpus_fused(
     preprocess_to_enriched_xyz(source, xyzin)
     write_validation_section(xyzin)
     definition = write_gicforge_build_sections(xyzin)
-    coords = np.asarray(definition.reference_coordinates_angstrom, dtype=float)
-    rpck = [
-        primitive
-        for primitive in definition.primitives
-        if primitive.family == "RING_PUCKER_COMPONENT"
+    rpck_gics = [
+        gic
+        for gic in definition.gics
+        if gic.family == "RING_PUCKER_COMPONENT"
     ]
     gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
 
     assert definition.target_rank == expected_rank
     assert definition.rank == expected_rank
-    assert rpck
-    assert any(line.startswith("RPck") and "(Inactive)" in line for line in gaussian_lines)
-    assert any(line.startswith("QPck") for line in gaussian_lines)
-    assert any(line.startswith("PhiP") for line in gaussian_lines)
-    for primitive in rpck:
-        assert primitive.function == "RPCK"
-        assert primitive.refs
-        assert _primitive_value(primitive, coords) == pytest.approx(
-            _manual_rpck_value(primitive, coords),
-            abs=1.0e-10,
-        )
-        np.testing.assert_allclose(
-            _analytic_b_row(primitive, coords),
-            _finite_difference_b_row(primitive, coords),
-            rtol=2.0e-5,
-            atol=2.0e-5,
+    assert len(rpck_gics) == expected_rpck_count
+    if expected_rpck_count == 0:
+        assert not any(line.startswith("RPck") for line in gaussian_lines)
+        return
+    assert any(line.startswith("RPck") for line in gaussian_lines)
+    assert not any(line.startswith("QPck") for line in gaussian_lines)
+    assert not any(line.startswith("PhiP") for line in gaussian_lines)
+    primitive_by_id = {primitive.identifier: primitive for primitive in definition.primitives}
+    for gic in rpck_gics:
+        assert len(gic.coefficients) > 1
+        assert all(
+            primitive_by_id[primitive_id].family == "RING_PUCKER_COMPONENT"
+            and primitive_by_id[primitive_id].function == "D"
+            for primitive_id, _coefficient in gic.coefficients
         )
 
 
@@ -1272,6 +1313,38 @@ def test_gicforge_irrep_characters_cover_merlino_family_groups():
         abs=1.0e-12,
     )
 
+    d6h_labels = (
+        "E",
+        "i",
+        "sigma_yz",
+        "sigma_xz",
+        "sigma_xy",
+        "C2z^1",
+        "C2x^1",
+        "C2y^1",
+        "C3z^1",
+        "sigma_h*C3z^1",
+        "C3z^2",
+        "sigma_h*C3z^2",
+        "C6z^1",
+        "sigma_h*C6z^1",
+        "C6z^5",
+        "sigma_h*C6z^5",
+        "C2_xy_3_1",
+        "C2_xy_3_2",
+        "C2_xy_6_1",
+        "C2_xy_6_5",
+        "sigma_v_3_1",
+        "sigma_v_3_2",
+        "sigma_v_6_1",
+        "sigma_v_6_5",
+    )
+    d6h = dict(irrep_characters_for_operations(d6h_labels, "D6h"))
+    assert d6h["A1g"] == pytest.approx((1.0,) * 24)
+    assert d6h["E2g"][0] == pytest.approx(2.0)
+    assert d6h["E1u"][0] == pytest.approx(2.0)
+    _assert_character_rows_orthonormal(d6h, group_order=24)
+
     d2d_ops = _dnd_operations(2)
     d2d = dict(
         irrep_characters_for_operations(
@@ -1647,6 +1720,303 @@ def test_gicforge_point_group_projector_symmetrizes_ring_puckering_components():
         for line in gaussian_lines
     )
     assert any(line == "PhiP0002 = ATAN2(BRPck002,BRPck001)" for line in gaussian_lines)
+
+
+def test_gicforge_benzene_d6h_projector_symmetrizes_ring_puckering(tmp_path):
+    source = _test_molecule_path("benzene.inp")
+    xyzin = tmp_path / "benzene.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
+    gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
+    rpck = [gic for gic in definition.gics if gic.family == "RING_PUCKER_COMPONENT"]
+
+    assert definition.point_group == "D6h"
+    assert definition.symmetry_diagnostics is not None
+    assert definition.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert "POINT_GROUP D6h" in gic
+    assert "SYMMETRY_MODE POINT_GROUP_PROJECTOR" in gic
+    assert [gic.irrep for gic in rpck] == ["E2g", "E2g", "B2u"]
+    assert [gic.name for gic in rpck] == ["E2gRPck001", "E2gRPck002", "B2uRPck001"]
+    assert not any(name.startswith("A1gRPck") for name in total_symmetric_gic_names(definition))
+    assert any(line.startswith("E2gRPck001(Inactive)") for line in gaussian_lines)
+    assert "QPck0001 = SQRT(E2gRPck001*E2gRPck001+E2gRPck002*E2gRPck002)" in gaussian_lines
+    assert "PhiP0001 = ATAN2(E2gRPck002,E2gRPck001)" in gaussian_lines
+
+
+def test_gicforge_pyrrole_c2v_projector_keeps_ring_coordinates(tmp_path):
+    source = _test_molecule_path("pyrrole.inp")
+    xyzin = tmp_path / "pyrrole.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
+    gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
+    rpck = [gic for gic in definition.gics if gic.family == "RING_PUCKER_COMPONENT"]
+    cyclic_bends = [gic for gic in definition.gics if gic.family == "CYCLIC_BEND"]
+
+    assert definition.point_group == "C2v"
+    assert definition.target_rank == 24
+    assert definition.rank == 24
+    assert definition.symmetry_diagnostics is not None
+    assert definition.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert definition.symmetry_diagnostics.status == "APPLIED"
+    assert "POINT_GROUP C2v" in gic
+    assert "SYMMETRY_MODE POINT_GROUP_PROJECTOR" in gic
+    assert [gic.name for gic in rpck] == ["A1RPck001", "B2RPck001"]
+    assert [gic.irrep for gic in rpck] == ["A1", "B2"]
+    assert [gic.name for gic in cyclic_bends] == ["A1CyBe001", "B2CyBe001"]
+    assert [gic.irrep for gic in cyclic_bends] == ["A1", "B2"]
+    assert "A1RPck001" in total_symmetric_gic_names(definition)
+    assert "B2RPck001" not in total_symmetric_gic_names(definition)
+    assert any(line.startswith("A1RPck001(Inactive)") for line in gaussian_lines)
+    assert any(line.startswith("B2RPck001(Inactive)") for line in gaussian_lines)
+
+
+def test_gicforge_projector_handles_large_noncondensed_ring_puckering(tmp_path):
+    source = _test_molecule_path("cyclottane.inp")
+    xyzin = tmp_path / "cyclottane.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
+    matrix = build_gic_b_matrix_from_xyzin(xyzin)
+    rows = np.asarray(matrix.rows, dtype=float)
+    rpck = [gic for gic in definition.gics if gic.family == "RING_PUCKER_COMPONENT"]
+    cyclic_bends = [gic for gic in definition.gics if gic.family == "CYCLIC_BEND"]
+
+    assert definition.point_group == "D2"
+    assert definition.target_rank == 66
+    assert definition.rank == 66
+    assert definition.symmetry_diagnostics is not None
+    assert definition.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert definition.symmetry_diagnostics.status == "APPLIED"
+    assert np.linalg.matrix_rank(rows, tol=1.0e-8) == 66
+    assert len(rpck) == 5
+    assert len(cyclic_bends) == 5
+    assert any(line.startswith("QPck") for line in gaussian_lines)
+    assert any(line.startswith("PhiP") for line in gaussian_lines)
+    assert all(group.block == group.family for group in definition.symmetry_diagnostics.groups)
+
+
+@pytest.mark.parametrize(
+    (
+        "molecule",
+        "expected_group",
+        "expected_rank",
+        "expected_rpck_count",
+        "expected_symmetry_method",
+    ),
+    [
+        ("naphtalene.inp", "D2h", 48, 6, "POINT_GROUP_PROJECTOR"),
+        ("phenantrene.inp", "C2v", 66, 9, "POINT_GROUP_PROJECTOR"),
+        ("anthracene.inp", "D2h", 66, 9, "POINT_GROUP_PROJECTOR"),
+        ("pyrene.inp", "D2h", 72, 8, "POINT_GROUP_PROJECTOR"),
+        ("fluorene.inp", "C2v", 63, 8, "POINT_GROUP_PROJECTOR"),
+    ],
+)
+def test_gicforge_projector_handles_fused_ring_corpus_without_fallback(
+    tmp_path,
+    molecule,
+    expected_group,
+    expected_rank,
+    expected_rpck_count,
+    expected_symmetry_method,
+):
+    source = _test_molecule_path(molecule)
+    xyzin = tmp_path / f"{Path(molecule).stem}.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    rpck = [gic for gic in definition.gics if gic.family == "RING_PUCKER_COMPONENT"]
+
+    assert definition.point_group == expected_group
+    assert definition.target_rank == expected_rank
+    assert definition.rank == expected_rank
+    assert definition.symmetry_diagnostics is not None
+    assert definition.symmetry_diagnostics.method == expected_symmetry_method
+    assert definition.symmetry_diagnostics.status == "APPLIED"
+    assert len(rpck) == expected_rpck_count
+    assert all(gic.name.startswith(gic.irrep) for gic in rpck)
+    if expected_symmetry_method == "POINT_GROUP_PROJECTOR":
+        assert all(group.block == group.family for group in definition.symmetry_diagnostics.groups)
+
+
+@pytest.mark.parametrize(
+    (
+        "molecule",
+        "expected_group",
+        "expected_rank",
+        "expected_rpck_count",
+        "expected_btfl_count",
+        "expected_symmetry_method",
+    ),
+    [
+        ("azulene.inp", "C2v", 48, 6, 1, "POINT_GROUP_PROJECTOR"),
+        ("norbornane.inp", "C2v", 51, 3, 0, "POINT_GROUP_PROJECTOR"),
+        ("norbornene.inp", "Cs", 45, 3, 0, "POINT_GROUP_PROJECTOR"),
+        ("norbornadiene.inp", "C2v", 39, 3, 0, "POINT_GROUP_PROJECTOR"),
+        ("norcamphor.inp", "C1", 48, 3, 0, "LOCAL_BLOCK_SALC"),
+    ],
+)
+def test_gicforge_projector_handles_bridged_and_nonbenzenoid_ring_probe(
+    tmp_path,
+    molecule,
+    expected_group,
+    expected_rank,
+    expected_rpck_count,
+    expected_btfl_count,
+    expected_symmetry_method,
+):
+    source = _test_molecule_path(molecule)
+    _skip_if_smiles_requires_rdkit(source)
+    xyzin = tmp_path / f"{Path(molecule).stem}.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
+    rpck = [gic for gic in definition.gics if gic.family == "RING_PUCKER_COMPONENT"]
+    btfl = [gic for gic in definition.gics if gic.family == "BUTTERFLY"]
+
+    assert definition.point_group == expected_group
+    assert definition.target_rank == expected_rank
+    assert definition.rank == expected_rank
+    assert definition.symmetry_diagnostics is not None
+    assert definition.symmetry_diagnostics.method == expected_symmetry_method
+    assert definition.symmetry_diagnostics.status == "APPLIED"
+    assert len(rpck) == expected_rpck_count
+    assert len(btfl) == expected_btfl_count
+    assert not any(line.startswith("QPck") for line in gaussian_lines)
+    assert not any(line.startswith("PhiP") for line in gaussian_lines)
+    if expected_symmetry_method == "POINT_GROUP_PROJECTOR":
+        assert all(group.block == group.family for group in definition.symmetry_diagnostics.groups)
+
+
+def test_gicforge_projector_handles_spiro_ring_probe(tmp_path):
+    source = _test_molecule_path("spiro.inp")
+    xyzin = tmp_path / "spiro.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
+    spiro = [gic for gic in definition.gics if gic.family == "SPIRO_BEND"]
+    rpck = [gic for gic in definition.gics if gic.family == "RING_PUCKER_COMPONENT"]
+
+    assert definition.point_group == "D2"
+    assert definition.target_rank == 87
+    assert definition.rank == 87
+    assert definition.symmetry_diagnostics is not None
+    assert definition.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert definition.symmetry_diagnostics.status == "APPLIED"
+    assert len(spiro) == 3
+    assert len(rpck) == 6
+    assert all(gic.name.startswith(gic.irrep) for gic in spiro + rpck)
+    assert any("Spir" in line for line in gaussian_lines)
+    assert any(line.startswith("QPck") for line in gaussian_lines)
+    assert any(line.startswith("PhiP") for line in gaussian_lines)
+    assert all(group.block == group.family for group in definition.symmetry_diagnostics.groups)
+
+
+def test_gicforge_projector_handles_cubane_oh_without_rank_loss(tmp_path):
+    source = _test_molecule_path("cubane.inp")
+    xyzin = tmp_path / "cubane.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    matrix = build_gic_b_matrix_from_xyzin(xyzin)
+    rows = np.asarray(matrix.rows, dtype=float)
+
+    assert definition.point_group == "Oh"
+    assert definition.target_rank == 42
+    assert definition.rank == 42
+    assert definition.symmetry_diagnostics is not None
+    assert definition.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert definition.symmetry_diagnostics.status == "APPLIED"
+    assert np.linalg.matrix_rank(rows, tol=1.0e-8) == 42
+    families = {group.family for group in definition.symmetry_diagnostics.groups}
+    assert {"BUTTERFLY", "CYCLIC_BEND"}.issubset(families)
+
+
+def test_gicforge_ferrocene_uses_metal_ring_center_coordinates(tmp_path):
+    source = _test_molecule_path("ferrocene.inp")
+    xyzin = tmp_path / "ferrocene.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    centers = write_interaction_center_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    matrix = build_gic_b_matrix_from_xyzin(xyzin)
+    gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
+    symmetry_section = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "SYMMETRY")
+    rows = np.asarray(matrix.rows, dtype=float)
+
+    ring_center_ids = {
+        center.identifier for center in centers.centers if center.kind == "RING_CENTER"
+    }
+    center_atom_primitives = tuple(
+        primitive
+        for primitive in definition.primitives
+        if primitive.family == "CENTER_ATOM_DISTANCE"
+    )
+    center_atom_gics = tuple(
+        gic for gic in definition.gics if gic.family == "CENTER_ATOM_DISTANCE"
+    )
+
+    assert definition.point_group == "D5h"
+    assert any(line == "POINT_GROUP D5h" for line in symmetry_section)
+    assert sum(1 for line in symmetry_section if " LABEL=" in line and "PERMUTATION=" in line) == 20
+    _assert_symmetry_operations_closed(symmetry_section)
+    assert definition.target_rank == 57
+    assert definition.rank == 57
+    assert definition.symmetry_diagnostics is not None
+    assert definition.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert np.linalg.matrix_rank(rows, tol=1.0e-8) == 57
+    assert len(center_atom_primitives) == 2
+    assert len(center_atom_gics) == 2
+    assert {primitive.refs[0] for primitive in center_atom_primitives} == ring_center_ids
+    assert all(primitive.ref_atoms == (2,) for primitive in center_atom_primitives)
+    assert {gic.irrep for gic in center_atom_gics} == {"A1'", "A2''"}
+    assert all(gic.name.startswith(gic.irrep.replace("'", "p")) for gic in center_atom_gics)
+    assert any("(X(1)+X(3)+X(6)+X(5)+X(4))/5" in line for line in gaussian_lines)
+    assert any("(X(7)+X(8)+X(9)+X(10)+X(11))/5" in line for line in gaussian_lines)
+    assert any("X(2)" in line and "CnAt" in line for line in gaussian_lines)
+
+
+def test_gicforge_staggered_ferrocene_d5d_projector_closes_b_rank(tmp_path):
+    source = _test_molecule_path("ferrocene_staggered.inp")
+    xyzin = tmp_path / "ferrocene_staggered.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    centers = write_interaction_center_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    matrix = build_gic_b_matrix_from_xyzin(xyzin)
+    symmetry_section = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "SYMMETRY")
+    rows = np.asarray(matrix.rows, dtype=float)
+    ring_centers = tuple(center for center in centers.centers if center.kind == "RING_CENTER")
+    center_atom_gics = tuple(
+        gic for gic in definition.gics if gic.family == "CENTER_ATOM_DISTANCE"
+    )
+
+    assert definition.point_group == "D5d"
+    assert any(line == "POINT_GROUP D5d" for line in symmetry_section)
+    assert sum(1 for line in symmetry_section if " LABEL=" in line and "PERMUTATION=" in line) == 20
+    _assert_symmetry_operations_closed(symmetry_section)
+    assert definition.target_rank == 57
+    assert definition.rank == 57
+    assert definition.symmetry_diagnostics is not None
+    assert definition.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
+    assert np.linalg.matrix_rank(rows, tol=1.0e-8) == 57
+    assert [center.atoms for center in ring_centers] == [(1, 3, 6, 5, 4), (7, 8, 9, 10, 11)]
+    assert {gic.irrep for gic in center_atom_gics} == {"A1g", "A2u"}
 
 
 def test_gicforge_point_group_projector_handles_c3v_degenerate_irrep():

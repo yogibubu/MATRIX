@@ -179,7 +179,7 @@ def build_gicforge_python_model(
         atom_symbols=atoms,
         atomic_numbers=atomic_numbers,
         coordinates_angstrom=tuple(tuple(float(value) for value in row) for row in coords),
-        primitive_candidates=primitive_candidates,
+        primitive_candidates=candidates,
         coordinates=coordinates,
         target_rank=target,
         primitive_fallback=primitive_fallback,
@@ -399,6 +399,16 @@ def _fortran_like_primitive_blocks(
         elif len(neigh) > 1:
             if len(neigh) == 2 and atom_ring[center] != 0:
                 continue
+            if len(neigh) == 4 and _is_spiro_center(center, neigh, ring_counts):
+                bends.extend(
+                    _spiro_angle_coordinates(
+                        center,
+                        neigh,
+                        selected_rings=selected_rings,
+                        start=len(bends) + 1,
+                    )
+                )
+                continue
             if len(neigh) == 4 and not _has_linear_pair(center, neigh, coords, linear_threshold):
                 bends.extend(
                     _four_atom_angle_coordinates(
@@ -448,8 +458,6 @@ def _fortran_like_primitive_blocks(
                         )
 
     for ring in selected_rings:
-        if _all_atoms_in_three_selected_rings(ring, selected_rings):
-            continue
         if svd_local:
             bends.extend(
                 _cyclic_svd_coordinates(
@@ -467,19 +475,18 @@ def _fortran_like_primitive_blocks(
         _coef, primitive = bond.terms[0]
         center, right = primitive.atoms
         if tuple(sorted((center, right))) in bridge_bonds:
-            if ring_counts[center] < 3 and ring_counts[right] < 3:
-                butterfly = _butterfly_coordinate(
-                    center,
-                    right,
-                    neighbors=neighbors,
-                    atom_ring=atom_ring,
-                    selected_rings=selected_rings,
-                    coords=coords,
-                    linear_threshold=linear_threshold,
-                    index=len(torsions) + 1,
-                )
-                if butterfly is not None:
-                    torsions.append(butterfly)
+            butterfly = _butterfly_coordinate(
+                center,
+                right,
+                neighbors=neighbors,
+                atom_ring=atom_ring,
+                selected_rings=selected_rings,
+                coords=coords,
+                linear_threshold=linear_threshold,
+                index=len(torsions) + 1,
+            )
+            if butterfly is not None:
+                torsions.append(butterfly)
             continue
         if tuple(sorted((center, right))) in ring_bonds:
             continue
@@ -502,8 +509,6 @@ def _fortran_like_primitive_blocks(
             torsions.append(torsion)
 
     for ring in selected_rings:
-        if _all_atoms_in_three_selected_rings(ring, selected_rings):
-            continue
         if svd_local:
             torsions.extend(
                 _cyclic_svd_coordinates(
@@ -1556,6 +1561,70 @@ def _four_atom_equal_count(atoms: tuple[int, int, int, int], effective_atomic_nu
     return neq
 
 
+def _is_spiro_center(center: int, neighbors: list[int], ring_counts: list[int]) -> bool:
+    return (
+        len(neighbors) == 4
+        and ring_counts[center] == 2
+        and all(ring_counts[neighbor] == 1 for neighbor in neighbors)
+    )
+
+
+def _spiro_angle_coordinates(
+    center: int,
+    neigh: list[int],
+    *,
+    selected_rings: list[tuple[int, ...]],
+    start: int,
+) -> list[GICForgePythonCoordinate]:
+    first, second, third, fourth = _order_spiro_neighbors(center, tuple(neigh), selected_rings)
+    den = np.sqrt(2.0)
+    cross_angles = (
+        Primitive("angle", (first, center, third)),
+        Primitive("angle", (first, center, fourth)),
+        Primitive("angle", (second, center, third)),
+        Primitive("angle", (second, center, fourth)),
+    )
+    patterns = (
+        (1.0, 1.0, -1.0, -1.0),
+        (1.0, -1.0, -1.0, 1.0),
+        (1.0, -1.0, 1.0, -1.0),
+    )
+    return [
+        GICForgePythonCoordinate(
+            name=f"Spir{start + offset:04d}",
+            block="Spir",
+            type_index=16,
+            terms=tuple(
+                (coefficient / den, primitive)
+                for coefficient, primitive in zip(pattern, cross_angles)
+            ),
+        )
+        for offset, pattern in enumerate(patterns)
+    ]
+
+
+def _order_spiro_neighbors(
+    center: int,
+    neighbors: tuple[int, int, int, int],
+    selected_rings: list[tuple[int, ...]],
+) -> tuple[int, int, int, int]:
+    membership: dict[int, int] = {}
+    for ring_index, ring in enumerate(selected_rings, start=1):
+        if center not in ring:
+            continue
+        for atom in ring:
+            if atom != center:
+                membership.setdefault(atom, ring_index)
+
+    first, second, third, fourth = neighbors
+    first_ring = membership.get(first, 0)
+    if membership.get(second, -1) == first_ring:
+        return first, second, third, fourth
+    if membership.get(third, -1) == first_ring:
+        return first, third, second, fourth
+    return first, fourth, second, third
+
+
 def _w2xy2_coordinates(
     center: int,
     jat: int,
@@ -1959,6 +2028,8 @@ def _block_pruning_priority(coordinate: GICForgePythonCoordinate) -> int:
     if coordinate.dominant_kind == "bond":
         return 0
     if coordinate.block == "XAng":
+        return 1
+    if coordinate.block == "Spir":
         return 1
     if coordinate.dominant_kind == "linear_bend":
         return 2

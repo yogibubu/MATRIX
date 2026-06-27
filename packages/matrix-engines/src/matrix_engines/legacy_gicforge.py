@@ -61,6 +61,7 @@ class LegacyGICForgeRun:
     redundant_counts: tuple[int, int, int, int, int, int]
     final_counts: tuple[int, int, int, int, int, int]
     b_matrix_rows: tuple[tuple[float, ...], ...]
+    eckart_coordinates_angstrom: tuple[tuple[float, float, float], ...] | None = None
 
 
 def run_legacy_gicforge(
@@ -74,11 +75,14 @@ def run_legacy_gicforge(
     charge: int = 0,
     multiplicity: int = 1,
     repo_root: Path | None = None,
+    executable: Path | None = None,
 ) -> LegacyGICForgeRun:
     """Run the vendored Merlino GICForge executable on a normalized XYZ input."""
     target = Path(workdir)
     target.mkdir(parents=True, exist_ok=True)
-    executable = legacy_gicforge_executable(repo_root)
+    executable_path = (
+        Path(executable) if executable is not None else legacy_gicforge_executable(repo_root)
+    )
     _write_provin(
         target / "provin",
         keywords=keywords,
@@ -93,7 +97,7 @@ def run_legacy_gicforge(
         point_group=point_group,
     )
     subprocess.run(
-        [str(executable)],
+        [str(executable_path)],
         cwd=target,
         check=True,
         capture_output=True,
@@ -116,6 +120,7 @@ def read_legacy_gicforge_run(workdir: Path) -> LegacyGICForgeRun:
         redundant_counts=_parse_count_line(provout, "Redundant"),
         final_counts=_parse_count_line(provout, "Final Non Redund."),
         b_matrix_rows=_parse_legacy_b_matrix(bmatrix_path),
+        eckart_coordinates_angstrom=_parse_eckart_coordinates(provout),
     )
 
 
@@ -221,3 +226,37 @@ def _parse_legacy_b_matrix(path: Path) -> tuple[tuple[float, ...], ...]:
         column = int(column_text) - 1
         rows[row][column] = float(value_text.replace("D", "E"))
     return tuple(tuple(row) for row in rows)
+
+
+def _parse_eckart_coordinates(
+    provout: str,
+) -> tuple[tuple[float, float, float], ...] | None:
+    lines = provout.splitlines()
+    number = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[DEde][+-]?\d+)?"
+    row_pattern = re.compile(
+        rf"^\s*\d+\s+[A-Za-z]{{1,2}}\s+{number}\s+{number}\s+"
+        rf"({number})\s+({number})\s+({number})\s*$"
+    )
+    for index, line in enumerate(lines):
+        if "Cartesian Coords.in Eckart Orientation" not in line:
+            continue
+        coordinates: list[tuple[float, float, float]] = []
+        for raw in lines[index + 1 :]:
+            if not raw.strip():
+                if coordinates:
+                    return tuple(coordinates)
+                continue
+            match = row_pattern.match(raw)
+            if match is None:
+                if coordinates:
+                    return tuple(coordinates)
+                continue
+            coordinates.append(
+                tuple(
+                    float(value.replace("D", "E").replace("d", "E"))
+                    for value in match.groups()
+                )
+            )
+        if coordinates:
+            return tuple(coordinates)
+    return None

@@ -140,6 +140,57 @@ def symmetry_elements_from_geometry(
     inertia_tol=1.0e-3,
 ):
     coords = np.asarray(coords_oriented, dtype=float)
+    elements, atom_classes, permutations = _symmetry_elements_in_frame(
+        symbols,
+        coords,
+        tol=tol,
+        max_n=max_n,
+        tol_H=tol_H,
+        ignore_isotopes=ignore_isotopes,
+        auto_max_n=auto_max_n,
+        inertia_tol=inertia_tol,
+    )
+    nmax, axis = _highest_cn_axis([element[0] for element in elements])
+    if nmax >= 3 and axis in {"x", "y"}:
+        alignment = _axis_to_z_alignment(axis)
+        aligned_elements, aligned_classes, aligned_permutations = _symmetry_elements_in_frame(
+            symbols,
+            coords @ alignment,
+            tol=tol,
+            max_n=max_n,
+            tol_H=tol_H,
+            ignore_isotopes=ignore_isotopes,
+            auto_max_n=auto_max_n,
+            inertia_tol=inertia_tol,
+        )
+        aligned_nmax, _aligned_axis = _highest_cn_axis(
+            [element[0] for element in aligned_elements]
+        )
+        if aligned_nmax >= nmax and len(aligned_elements) >= len(elements):
+            elements = tuple(
+                (
+                    label,
+                    alignment @ np.asarray(rotation, dtype=float) @ alignment.T,
+                    max_deviation,
+                )
+                for label, rotation, max_deviation in aligned_elements
+            )
+            atom_classes = aligned_classes
+            permutations = aligned_permutations
+    return elements, atom_classes, permutations
+
+
+def _symmetry_elements_in_frame(
+    symbols,
+    coords: np.ndarray,
+    *,
+    tol=1.0e-3,
+    max_n=6,
+    tol_H=None,
+    ignore_isotopes=False,
+    auto_max_n=False,
+    inertia_tol=1.0e-3,
+):
     radii = np.linalg.norm(coords, axis=1)
     max_radius = float(np.max(radii)) if len(radii) else 1.0
     if max_radius <= 0.0:
@@ -186,15 +237,15 @@ def group_label(elements, linear=False):
     polyhedral = _polyhedral_group_label(elements)
     if polyhedral:
         return polyhedral
-    dnd_n = _dnd_group_order(labels)
-    if dnd_n:
-        return f"D{dnd_n}d"
     nmax, axis = _highest_cn_axis(labels)
     has_i = "i" in labels
     has_sigma = any(label.startswith("sigma") for label in labels)
     has_c2 = any(label.startswith("C2") for label in labels)
     if linear:
         return "Dinfh" if has_i else "Cinfv"
+    dnd_n = _dnd_group_order(labels, principal_order=nmax)
+    if dnd_n:
+        return f"D{dnd_n}d"
     if nmax >= 2:
         sigma_h = {"x": "sigma_yz", "y": "sigma_xz", "z": "sigma_xy"}.get(axis or "z")
         has_sigma_h = sigma_h in labels
@@ -374,14 +425,36 @@ def _is_coordinate_axis_c2(matrix: np.ndarray) -> bool:
     return bool(np.count_nonzero(np.abs(np.diag(rounded)) > 0.5) == 3)
 
 
-def _dnd_group_order(labels: list[str]) -> int | None:
+def _dnd_group_order(labels: list[str], *, principal_order: int) -> int | None:
     orders = []
     for label in labels:
         for pattern in (r"Dnd_C(\d+)z\^", r"Dnd_C2_xy_(\d+)_"):
             match = re.search(pattern, str(label))
             if match:
-                orders.append(int(match.group(1)) // 2)
+                order = int(match.group(1)) // 2
+                if order == principal_order:
+                    orders.append(order)
+        match = re.fullmatch(r"C2_xy_(\d+)_(\d+)", str(label))
+        if match:
+            operation_order, index = (int(item) for item in match.groups())
+            order = operation_order // 2
+            if operation_order == 2 * principal_order and index % 2 == 1:
+                orders.append(order)
+        match = re.fullmatch(r"sigma_h\*C(\d+)z\^(\d+)", str(label))
+        if match:
+            operation_order, power = (int(item) for item in match.groups())
+            order = operation_order // 2
+            if operation_order == 2 * principal_order and power % 2 == 1:
+                orders.append(order)
     return max(orders) if orders else None
+
+
+def _axis_to_z_alignment(axis: str) -> np.ndarray:
+    if axis == "x":
+        return np.array(((0.0, 0.0, 1.0), (0.0, 1.0, 0.0), (-1.0, 0.0, 0.0)))
+    if axis == "y":
+        return np.array(((1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, -1.0, 0.0)))
+    return np.eye(3)
 
 
 @lru_cache(maxsize=16)
@@ -419,6 +492,36 @@ def candidate_ops(max_n=6):
             normal = np.array((np.cos(theta), np.sin(theta), 0.0), dtype=float)
             normal /= np.linalg.norm(normal)
             ops.append((f"sigma_v_{n}_{k}", np.eye(3) - 2.0 * np.outer(normal, normal)))
+            if n % 2 == 1 and 2 * n > max_n:
+                shifted = theta + 0.5 * np.pi
+                shifted_normal = np.array((np.cos(shifted), np.sin(shifted), 0.0), dtype=float)
+                shifted_normal /= np.linalg.norm(shifted_normal)
+                ops.append(
+                    (
+                        f"sigma_v_{n}_{k + n}",
+                        np.eye(3) - 2.0 * np.outer(shifted_normal, shifted_normal),
+                    )
+                )
+    for n in range(3, max_n + 1):
+        order = 2 * n
+        sigma_h = np.diag((1.0, 1.0, -1.0))
+        for power in range(1, order, 2):
+            theta = 2.0 * np.pi * power / order
+            ops.append(
+                (
+                    f"sigma_h*C{order}z^{power}",
+                    sigma_h @ _rotation_matrix((0, 0, 1), theta),
+                )
+            )
+            ops.append(
+                (
+                    f"C2_xy_{order}_{power}",
+                    _rotation_matrix((np.cos(theta / 2.0), np.sin(theta / 2.0), 0), np.pi),
+                )
+            )
+            normal = np.array((np.cos(theta / 2.0), np.sin(theta / 2.0), 0.0), dtype=float)
+            normal /= np.linalg.norm(normal)
+            ops.append((f"sigma_v_{order}_{power}", np.eye(3) - 2.0 * np.outer(normal, normal)))
     ops.extend(_dnd_candidate_ops(max_n))
     ops.extend(_cubic_candidate_ops())
     ops.extend(_icosahedral_candidate_ops())

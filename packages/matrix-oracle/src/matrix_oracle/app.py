@@ -967,7 +967,10 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             scale_class_row.addWidget(QLabel("Scale classes"))
             self.gf_scale_class_records = QLineEdit()
             self.gf_scale_class_records.setPlaceholderText("CH:0.970:R(1,6)|R(2,7); class ...")
+            preview_scaling_button = QPushButton("Preview Scaling")
+            preview_scaling_button.clicked.connect(self.preview_gf_scaling)
             scale_class_row.addWidget(self.gf_scale_class_records, stretch=1)
+            scale_class_row.addWidget(preview_scaling_button)
             layout.addLayout(scale_class_row)
 
             options_row = QHBoxLayout()
@@ -1089,6 +1092,19 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             )
             self._start_command(command, command.label)
 
+        def preview_gf_scaling(self) -> None:
+            if not self._ensure_gf_ready_for_command("GF scaling preview"):
+                return
+            if not self._ensure_gf_gic_ready("GF scaling preview"):
+                return
+            self.gf_controller.set_xyzin(self.controller.xyzin)
+            command = self.gf_controller.scaling_preview_command(
+                scale_file=self._optional_path_text(self.gf_scale_file),
+                scale_records=self._scale_records(),
+                scale_class_records=self._scale_class_records(),
+            )
+            self._start_command(command, command.label)
+
         def _ensure_gf_ready_for_command(self, title: str) -> bool:
             if self.controller.xyzin is None:
                 QMessageBox.warning(self, title, "Open or preprocess a MATRIX xyzin first.")
@@ -1098,6 +1114,15 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 return False
             self.gf_controller.set_xyzin(self.controller.xyzin)
             return True
+
+        def _ensure_gf_gic_ready(self, title: str) -> bool:
+            if self.controller.xyzin is None:
+                return False
+            state = load_oracle_project_state(self.controller.xyzin)
+            if "GIC" in set(state.section_names):
+                return True
+            QMessageBox.warning(self, title, missing_sections_message(("GIC",)))
+            return False
 
         def _ensure_gf_inputs_ready(self, title: str) -> bool:
             if self.controller.xyzin is None:

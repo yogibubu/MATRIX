@@ -50,6 +50,39 @@ class GFScalingClass:
 
 
 @dataclass(frozen=True)
+class GFScalingRulePreview:
+    order: int
+    kind: str
+    name: str
+    factor: float
+    patterns: tuple[str, ...]
+    matches: tuple[int, ...]
+    family: str = ""
+
+
+@dataclass(frozen=True)
+class GFScalingAssignment:
+    index: int
+    identifier: str
+    name: str
+    family: str
+    factor: float
+    source: str
+    label: str
+
+
+@dataclass(frozen=True)
+class GFScalingPreview:
+    xyzin_path: Path | None
+    assignments: tuple[GFScalingAssignment, ...]
+    rules: tuple[GFScalingRulePreview, ...]
+
+    @property
+    def changed_count(self) -> int:
+        return sum(1 for item in self.assignments if abs(item.factor - 1.0) > 1.0e-12)
+
+
+@dataclass(frozen=True)
 class _ScalingEvent:
     kind: str
     selector: str = ""
@@ -317,13 +350,11 @@ def pulay_scaling_factors(
     scale_class_records: tuple[str, ...] = (),
 ) -> np.ndarray | None:
     """Build diagonal Pulay scaling factors from selector and class records."""
-    events: list[_ScalingEvent] = []
-    if scale_path is not None:
-        events.extend(_read_scaling_events(Path(scale_path)))
-    for record in scale_records:
-        events.append(_selector_event(*_parse_scaling_record(record)))
-    for record in scale_class_records:
-        events.append(_class_event(_parse_scaling_class_record(record)))
+    events = _collect_scaling_events(
+        scale_path=scale_path,
+        scale_records=scale_records,
+        scale_class_records=scale_class_records,
+    )
     if not events:
         return None
     factors = np.ones(n_gics, dtype=float)
@@ -341,6 +372,153 @@ def pulay_scaling_factors(
             continue
         raise ValueError(f"Unsupported Pulay scaling event: {event!r}")
     return factors
+
+
+def gf_scaling_preview_from_xyzin(
+    xyzin_path: Path,
+    *,
+    scale_path: Path | None = None,
+    scale_records: tuple[str, ...] = (),
+    scale_class_records: tuple[str, ...] = (),
+) -> GFScalingPreview:
+    """Return a dry-run Pulay scaling assignment preview for frozen xyzin GICs."""
+    xyzin = Path(xyzin_path)
+    definition = read_gic_definition_from_xyzin(xyzin)
+    names = tuple(gic.name for gic in definition.gics)
+    labels = tuple(_gic_display_label(gic.identifier, gic.gaussian_expression) for gic in definition.gics)
+    return pulay_scaling_preview(
+        len(definition.gics),
+        labels=labels,
+        names=names,
+        xyzin_path=xyzin,
+        scale_path=scale_path,
+        scale_records=scale_records,
+        scale_class_records=scale_class_records,
+    )
+
+
+def pulay_scaling_preview(
+    n_gics: int,
+    *,
+    labels: tuple[str, ...],
+    names: tuple[str, ...] = (),
+    xyzin_path: Path | None = None,
+    scale_path: Path | None = None,
+    scale_records: tuple[str, ...] = (),
+    scale_class_records: tuple[str, ...] = (),
+) -> GFScalingPreview:
+    """Resolve Pulay scaling records without running GF."""
+    events = _collect_scaling_events(
+        scale_path=scale_path,
+        scale_records=scale_records,
+        scale_class_records=scale_class_records,
+    )
+    factors = np.ones(n_gics, dtype=float)
+    sources = ["default" for _ in range(n_gics)]
+    padded_names = _padded_names(names, n_gics)
+    rule_previews: list[GFScalingRulePreview] = []
+    for order, event in enumerate(events, start=1):
+        if event.kind == "selector":
+            if event.factor < 0.0:
+                raise ValueError("Pulay scaling factors must be non-negative")
+            matches = _resolve_scaling_selector(event.selector, labels=labels, names=names)
+            source = f"selector {event.selector}"
+            for index in matches:
+                factors[index] = event.factor
+                sources[index] = source
+            rule_previews.append(
+                GFScalingRulePreview(
+                    order=order,
+                    kind="selector",
+                    name=event.selector,
+                    factor=event.factor,
+                    patterns=(event.selector,),
+                    matches=tuple(index + 1 for index in matches),
+                    family=_common_family(matches, labels=labels, names=padded_names),
+                )
+            )
+            continue
+        if event.kind == "class" and event.scaling_class is not None:
+            scaling_class = event.scaling_class
+            scaling_class.validate()
+            matches = _resolve_scaling_class(scaling_class, labels=labels, names=names)
+            source = f"class {scaling_class.name}"
+            for index in matches:
+                factors[index] = scaling_class.factor
+                sources[index] = source
+            rule_previews.append(
+                GFScalingRulePreview(
+                    order=order,
+                    kind="class",
+                    name=scaling_class.name,
+                    factor=scaling_class.factor,
+                    patterns=scaling_class.patterns,
+                    matches=tuple(index + 1 for index in matches),
+                    family=_common_family(matches, labels=labels, names=padded_names),
+                )
+            )
+            continue
+        raise ValueError(f"Unsupported Pulay scaling event: {event!r}")
+    assignments = tuple(
+        GFScalingAssignment(
+            index=index + 1,
+            identifier=f"GIC{index + 1:03d}",
+            name=padded_names[index] or f"GIC{index + 1:03d}",
+            family=_gic_coordinate_family(padded_names[index], labels[index]) or "unknown",
+            factor=float(factors[index]),
+            source=sources[index],
+            label=labels[index],
+        )
+        for index in range(n_gics)
+    )
+    return GFScalingPreview(None if xyzin_path is None else Path(xyzin_path), assignments, tuple(rule_previews))
+
+
+def format_gf_scaling_preview(preview: GFScalingPreview) -> str:
+    """Format a Pulay scaling dry-run preview for CLI/GUI logs."""
+    lines = ["GF/PED Pulay scaling preview"]
+    if preview.xyzin_path is not None:
+        lines.append(f"Frozen xyzin: {preview.xyzin_path}")
+    lines.append(f"GIC count: {len(preview.assignments)}")
+    lines.append(f"Changed factors: {preview.changed_count}")
+    lines.append("")
+    lines.append("Rules:")
+    if not preview.rules:
+        lines.append("  none; all factors remain 1.0")
+    for rule in preview.rules:
+        pattern_text = "|".join(rule.patterns)
+        family = rule.family or "mixed/unknown"
+        matches = ",".join(f"GIC{index:03d}" for index in rule.matches)
+        lines.append(
+            f"  {rule.order:02d} {rule.kind:8s} {rule.name:20s} "
+            f"factor={rule.factor:.8g} family={family:10s} "
+            f"matches={len(rule.matches):3d} [{matches}] patterns={pattern_text}"
+        )
+    lines.append("")
+    lines.append("Assignments:")
+    lines.append("  GIC     name             family     factor       source               label")
+    for item in preview.assignments:
+        lines.append(
+            f"  {item.identifier:7s} {item.name[:14]:14s} {item.family[:10]:10s} "
+            f"{item.factor:11.8g} {item.source[:20]:20s} {item.label}"
+        )
+    return "\n".join(lines)
+
+
+def _collect_scaling_events(
+    *,
+    scale_path: Path | None = None,
+    scale_records: tuple[str, ...] = (),
+    scale_class_records: tuple[str, ...] = (),
+) -> list[_ScalingEvent]:
+    events: list[_ScalingEvent] = []
+    if scale_path is not None:
+        events.extend(_read_scaling_events(Path(scale_path)))
+    for record in scale_records:
+        events.append(_selector_event(*_parse_scaling_record(record)))
+    for record in scale_class_records:
+        events.append(_class_event(_parse_scaling_class_record(record)))
+    return events
 
 
 def _read_scaling_records(path: Path) -> list[tuple[str, float]]:
@@ -527,6 +705,24 @@ def _gic_coordinate_family(name: str, label: str) -> str:
         return "oop"
     if re.search(r"\bl\s*\(", text) or "linear_bend" in text or "lin" in text:
         return "linear"
+    return ""
+
+
+def _common_family(
+    indices: tuple[int, ...],
+    *,
+    labels: tuple[str, ...],
+    names: tuple[str, ...],
+) -> str:
+    families = {
+        _gic_coordinate_family(names[index], labels[index])
+        for index in indices
+    }
+    known = {family for family in families if family}
+    if len(known) == 1:
+        return next(iter(known))
+    if len(known) > 1:
+        return "mixed"
     return ""
 
 
