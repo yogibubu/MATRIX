@@ -1855,6 +1855,14 @@ def _apply_point_group_projector(
             protect_special=use_global_b_selection,
         ),
     ):
+        block_coords = coords
+        if (
+            block_coords is None
+            and key[1] == "RING_PUCKER_COMPONENT"
+            and len(block_gics) == 2
+            and reference_coordinates_angstrom is not None
+        ):
+            block_coords = np.asarray(reference_coordinates_angstrom, dtype=float)
         projected = _project_gic_block(
             key,
             tuple(block_gics),
@@ -1863,7 +1871,7 @@ def _apply_point_group_projector(
             point_group=point_group,
             first_index=len(output) + 1,
             name_counters=name_counters,
-            reference_coordinates_angstrom=coords,
+            reference_coordinates_angstrom=block_coords,
             global_b_basis=global_b_basis,
         )
         if projected is None:
@@ -2262,6 +2270,28 @@ def _project_gic_block(
     )
     if any(vector is None for vector in source_vectors):
         return None
+    if (
+        family == "RING_PUCKER_COMPONENT"
+        and reference_coordinates_angstrom is not None
+        and len(gics) == 2
+        and len(source_vectors) == len(gics)
+    ):
+        projected_ring = _project_ring_pucker_source_block(
+            key,
+            gics,
+            block_primitives,
+            tuple(
+                np.asarray(vector, dtype=float) for vector in source_vectors if vector is not None
+            ),
+            operations=operations,
+            point_group=point_group,
+            first_index=first_index,
+            name_counters=name_counters,
+            reference_coordinates_angstrom=reference_coordinates_angstrom,
+            global_b_basis=global_b_basis,
+        )
+        if projected_ring is not None:
+            return projected_ring
 
     primitive_key_index = _primitive_projector_key_index(block_primitives)
     if primitive_key_index is None:
@@ -2359,6 +2389,169 @@ def _project_gic_block(
         ),
         tuple(b_basis),
     )
+
+
+def _project_ring_pucker_source_block(
+    key: tuple[str, str],
+    block_gics: tuple[FrozenGIC, ...],
+    block_primitives: tuple[GICPrimitive, ...],
+    source_vectors: tuple[np.ndarray, ...],
+    *,
+    operations: tuple[GICPointGroupOperation, ...],
+    point_group: str,
+    first_index: int,
+    name_counters: dict[tuple[str, str], int],
+    reference_coordinates_angstrom: np.ndarray,
+    global_b_basis: tuple[np.ndarray, ...],
+) -> tuple[tuple[FrozenGIC, ...], GICSymmetrizedGroup, tuple[np.ndarray, ...]] | None:
+    if not source_vectors:
+        return None
+    try:
+        source_b_rows = np.vstack(
+            [
+                _projected_vector_b_row(
+                    block_primitives,
+                    source_vector,
+                    coords=reference_coordinates_angstrom,
+                )
+                for source_vector in source_vectors
+            ]
+        )
+    except (FloatingPointError, ValueError):
+        return None
+    if np.linalg.matrix_rank(source_b_rows, tol=1.0e-8) < len(source_vectors):
+        return None
+    transforms = tuple(
+        _source_b_row_transform(
+            source_b_rows,
+            operation=operation,
+            natoms=len(reference_coordinates_angstrom),
+        )
+        for operation in operations
+    )
+    if any(transform is None for transform in transforms):
+        return None
+
+    projected_vectors: list[tuple[str, np.ndarray]] = []
+    source_basis: list[np.ndarray] = []
+    b_basis = list(global_b_basis)
+    operation_labels = tuple(operation.label for operation in operations)
+    operation_matrices = tuple(operation.rotation for operation in operations)
+    source_units = tuple(np.eye(len(source_vectors), dtype=float))
+    for irrep, characters in irrep_characters_for_operations(
+        operation_labels,
+        point_group,
+        operation_matrices=operation_matrices,
+    ):
+        if len(characters) != len(operations):
+            return None
+        if all(abs(character) <= 1.0e-14 for character in characters):
+            continue
+        for source_unit in source_units:
+            projected_source = _project_vector_for_irrep(
+                source_unit,
+                characters=characters,
+                transforms=transforms,
+            )
+            normalized_source = _normalized_coefficient_vector_or_none(projected_source)
+            if normalized_source is None:
+                continue
+            independent_source = _orthonormal_coefficient_residual_or_none(
+                source_basis,
+                normalized_source,
+            )
+            if independent_source is None:
+                continue
+            primitive_vector = np.zeros_like(source_vectors[0], dtype=float)
+            for source_coefficient, source_vector in zip(independent_source, source_vectors):
+                primitive_vector += float(source_coefficient) * source_vector
+            try:
+                b_row = _projected_vector_b_row(
+                    block_primitives,
+                    primitive_vector,
+                    coords=reference_coordinates_angstrom,
+                )
+            except (FloatingPointError, ValueError):
+                return None
+            normalized_b = _normalized_coefficient_vector_or_none(b_row)
+            if normalized_b is None:
+                continue
+            b_independent = _orthonormal_coefficient_residual_or_none(b_basis, normalized_b)
+            if b_independent is None:
+                continue
+            source_basis.append(independent_source)
+            b_basis.append(b_independent)
+            projected_vectors.append((irrep, primitive_vector))
+            if len(projected_vectors) == len(block_gics):
+                break
+        if len(projected_vectors) == len(block_gics):
+            break
+    if len(projected_vectors) != len(block_gics):
+        return None
+
+    _block, family = key
+    output: list[FrozenGIC] = []
+    for offset, (irrep, primitive_vector) in enumerate(projected_vectors):
+        normalized = _normalized_coefficient_vector_or_none(primitive_vector)
+        if normalized is None:
+            return None
+        coefficients = _coefficients_from_vector(block_primitives, normalized)
+        if not coefficients:
+            return None
+        output.append(
+            FrozenGIC(
+                identifier=f"GIC{first_index + offset:03d}",
+                name=_next_projected_name(family, irrep, name_counters),
+                family=family,
+                irrep=irrep,
+                primitive_id=coefficients[0][0],
+                gaussian_expression="LINEAR_COMBINATION",
+                coefficients=coefficients,
+            )
+        )
+    return (
+        tuple(output),
+        GICSymmetrizedGroup(
+            block=key[0],
+            family=family,
+            signature="BROWS_OPS=" + ",".join(operation_labels),
+            source_gics=tuple(gic.name for gic in block_gics),
+            output_gics=tuple(gic.name for gic in output),
+        ),
+        tuple(b_basis),
+    )
+
+
+def _source_b_row_transform(
+    source_b_rows: np.ndarray,
+    *,
+    operation: GICPointGroupOperation,
+    natoms: int,
+) -> np.ndarray | None:
+    cartesian = _cartesian_operation_matrix(operation, natoms=natoms)
+    matrix = np.zeros((source_b_rows.shape[0], source_b_rows.shape[0]), dtype=float)
+    for source_index, row in enumerate(source_b_rows):
+        transformed = row @ cartesian
+        values, *_ = np.linalg.lstsq(source_b_rows.T, transformed.T, rcond=1.0e-10)
+        residual = float(np.linalg.norm(values @ source_b_rows - transformed))
+        if residual > 1.0e-8:
+            return None
+        matrix[:, source_index] = values
+    return matrix
+
+
+def _cartesian_operation_matrix(operation: GICPointGroupOperation, *, natoms: int) -> np.ndarray:
+    rotation = np.asarray(operation.rotation, dtype=float)
+    matrix = np.zeros((3 * natoms, 3 * natoms), dtype=float)
+    for source_index, target_atom in enumerate(operation.permutation):
+        target_index = int(target_atom) - 1
+        if target_index < 0 or target_index >= natoms:
+            continue
+        matrix[
+            3 * source_index : 3 * source_index + 3,
+            3 * target_index : 3 * target_index + 3,
+        ] = rotation
+    return matrix
 
 
 def _projected_vector_b_row(

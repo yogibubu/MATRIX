@@ -71,8 +71,8 @@ def test_gf_can_solve_separated_symmetry_blocks():
     result = gf_from_cartesian_hessian_and_gic_b_matrix(
         np.asarray(
             [
-                [4.0, 1.0, 0.0],
-                [1.0, 9.0, 0.0],
+                [4.0, 0.0, 0.0],
+                [0.0, 9.0, 0.0],
                 [0.0, 0.0, 0.0],
             ],
             dtype=float,
@@ -89,6 +89,28 @@ def test_gf_can_solve_separated_symmetry_blocks():
     assert result.block_labels == ("A1", "B2")
     assert result.force_constants[0, 1] == 0.0
     assert result.frequencies_cm[0] < result.frequencies_cm[1]
+    assert np.allclose(result.ped.values, np.diag([100.0, 100.0]))
+    assert np.allclose(np.sum(result.ped.values, axis=0), 100.0)
+
+
+def test_gf_rejects_cross_irrep_couplings_when_symmetry_blocks_requested():
+    with pytest.raises(ValueError, match="not block diagonal"):
+        gf_from_cartesian_hessian_and_gic_b_matrix(
+            np.asarray(
+                [
+                    [4.0, 1.0, 0.0],
+                    [1.0, 9.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                dtype=float,
+            ),
+            np.asarray([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=float),
+            np.asarray([1.0], dtype=float),
+            gic_labels=("GIC001 R(1,2)", "GIC002 A(1,2,3)"),
+            gic_names=("A1Str001", "B2Bend001"),
+            gic_irreps=("A1", "B2"),
+            block_by_irrep=True,
+        )
 
 
 def test_pulay_scaling_classes_match_multiple_gics_and_reject_mixed_types(tmp_path):

@@ -25,10 +25,10 @@ The example is covered by
 `tests/test_matrix_gaussian_readallgic_examples.py`, so CI can check the
 Gaussian-side ReadAllGIC contract without launching Gaussian.
 
-Rebuild the MATRIX sections and run GF/PED with:
+Rebuild the MATRIX sections from the optimized Gaussian log and run GF/PED with:
 
 ```bash
-matrix link preprocess pyrrole.gjf pyrrole.xyzin --source-kind gaussian
+matrix link preprocess pyrrole.log pyrrole.xyzin --source-kind gaussian
 matrix validate pyrrole.xyzin
 matrix neo build pyrrole.xyzin --symmetrize
 matrix gaussian promote-log-hessian pyrrole.log pyrrole.xyzin
@@ -36,10 +36,10 @@ matrix gf --xyzin pyrrole.xyzin --symmetry-blocks
 ```
 
 The `.gjf` ReadAllGIC block is not imported as the MATRIX GIC definition.
-NEO/MATRIX rebuilds `#GIC` from the molecular topology and symmetry policy.
-The Gaussian log is used only as an external QM result: `promote-log-hessian`
-writes `#CARTESIAN_HESSIAN` and, when the printed table is present,
-`#NORMAL_MODES`.
+NEO/MATRIX rebuilds `#GIC` from the final optimized log geometry, molecular
+topology and symmetry policy. The Gaussian log is then also used as an external
+QM result: `promote-log-hessian` writes `#CARTESIAN_HESSIAN` and, when the
+printed table is present, `#NORMAL_MODES`.
 
 For Gaussian frequency jobs the printed normal coordinates are emitted in the
 Gaussian normal-coordinate frame, while the Cartesian Hessian is restored to
@@ -48,6 +48,13 @@ rotates the printed normal modes to that frame when the geometry fit is
 unambiguous. GF/PED reports both a geometry check and a frequency check against
 the source Gaussian frequencies; the GF frequencies reproduce the Gaussian
 frequencies within the rounding of the printed log matrix.
+
+If `--symmetry-blocks` is requested, GF/PED first verifies that the internal
+`F` and `G` matrices are block diagonal in the stored irrep labels. If
+off-block couplings are larger than numerical roundoff, GF/PED stops because
+correctly symmetrized coordinates cannot couple different irreps. The pyrrole
+fixture exercises the strict block solve and checks that every PED column is
+finite, non-negative, normalized to 100%, and confined to its symmetry block.
 
 Use `matrix gaussian promote-log-hessian --no-normal-modes pyrrole.log
 pyrrole.xyzin` when only the Cartesian Hessian section should be refreshed.

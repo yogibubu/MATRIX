@@ -275,9 +275,13 @@ def check_gaussian_readallgic_log(
 
 
 def read_gaussian_log_geometry(path: Path) -> MolecularGeometry:
-    """Read the last Gaussian orientation as the shared MATRIX geometry."""
+    """Read the final Gaussian log geometry as the shared MATRIX geometry."""
     target = Path(path)
-    geometry = summarize_gaussian_log(target).last_orientation
+    text = target.read_text(encoding="utf-8", errors="replace")
+    geometry = (
+        _parse_last_archive_geometry(text, source_path=target)
+        or summarize_gaussian_log(target).last_orientation
+    )
     if geometry is None:
         raise GeometryParseError("Gaussian log contains no readable orientation block")
     return geometry

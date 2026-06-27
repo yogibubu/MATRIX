@@ -2,11 +2,12 @@ from pathlib import Path
 
 import numpy as np
 
-from matrix_chem import preprocess_to_enriched_xyz, write_validation_section
+from matrix_chem import preprocess_to_enriched_xyz, read_enriched_xyz, write_validation_section
 from matrix_gaussian import (
     check_gaussian_readallgic_log,
     hessian_input_from_gaussian_log,
     promote_gaussian_log_hessian_to_xyzin,
+    read_gaussian_log_geometry,
     read_gaussian_log_cartesian_hessian,
     read_gaussian_log_normal_modes,
     summarize_gaussian_log,
@@ -81,34 +82,63 @@ def test_pyrrole_log_hessian_reconstructs_gaussian_frequencies() -> None:
     assert np.allclose(frequencies[6:], gaussian_frequencies, atol=0.4)
 
 
+def test_pyrrole_log_geometry_is_final_archive_geometry() -> None:
+    geometry = read_gaussian_log_geometry(PYRROLE / "pyrrole.log")
+    hessian_input = hessian_input_from_gaussian_log(PYRROLE / "pyrrole.log")
+
+    assert geometry.source_format == "gaussian_log_archive"
+    assert geometry.metadata["orientation"] == "archive_original_axes"
+    assert np.allclose(
+        geometry.coordinates_angstrom,
+        hessian_input.cartesian_coordinates_bohr * 0.52917721092,
+    )
+
+
 def test_pyrrole_gf_uses_log_hessian_and_symmetrized_gics(tmp_path: Path) -> None:
     xyzin = tmp_path / "pyrrole.xyzin"
-    preprocess_to_enriched_xyz(PYRROLE / "pyrrole.gjf", xyzin, source_kind="gaussian")
+    preprocess_to_enriched_xyz(PYRROLE / "pyrrole.log", xyzin, source_kind="gaussian")
     write_validation_section(xyzin)
     write_gicforge_build_sections(xyzin, symmetrize=True)
     promotion = promote_gaussian_log_hessian_to_xyzin(PYRROLE / "pyrrole.log", xyzin)
 
-    report = run_xyzin_gf_report_from_xyzin(xyzin)
+    report = run_xyzin_gf_report_from_xyzin(xyzin, block_by_irrep=True)
     gaussian_frequencies = np.asarray(
         summarize_gaussian_log(PYRROLE / "pyrrole.log").frequencies_cm
     )
     normal_modes = read_normal_modes_section(xyzin)
+    geometry = read_enriched_xyz(xyzin)
+    ped = report.result.ped.values
 
     assert promotion.wrote_cartesian_hessian is True
     assert promotion.wrote_normal_modes is True
+    assert geometry.source_format == "enriched_xyz"
     assert report.result.point_group == "C2v"
     assert report.result.symmetrized_gics is True
+    assert report.result.matrix_model == "FULL+IRREP_BLOCKS"
     assert report.result.gic_names[:3] == ("A1Str001", "A1Str002", "A1Str003")
     assert "A2RPck001" in report.result.gic_names
     assert "B1OuPl003" in report.result.gic_names
+    assert len(report.result.block_labels) == len(report.result.frequencies_cm)
     assert normal_modes.modes.shape == (24, 30)
     assert np.allclose(normal_modes.frequencies_cm, gaussian_frequencies)
     assert report.frequency_comparison is not None
     assert report.geometry_comparison is not None
     assert "Frequency check vs" in report.text
     assert "Geometry check:" in report.text
+    assert report.geometry_comparison.raw_max_angstrom < 1.0e-7
+    assert report.geometry_comparison.aligned_max_angstrom < 1.0e-7
     assert report.frequency_comparison.max_abs_delta_cm < 0.02
-    assert np.allclose(report.result.frequencies_cm, gaussian_frequencies, atol=0.02)
+    assert np.allclose(
+        np.sort(report.result.frequencies_cm),
+        np.sort(gaussian_frequencies),
+        atol=0.02,
+    )
+    assert np.all(ped >= -1.0e-12)
+    assert np.allclose(np.sum(ped, axis=0), 100.0, atol=1.0e-8)
+    gic_irreps = np.asarray(report.result.gic_irreps)
+    for mode, irrep in enumerate(report.result.block_labels):
+        off_block_ped = ped[gic_irreps != irrep, mode]
+        assert np.max(off_block_ped, initial=0.0) < 1.0e-8
 
 
 def test_pyrrole_log_normal_modes_parser_reads_gaussian_table() -> None:

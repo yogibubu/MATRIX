@@ -471,6 +471,9 @@ def _solve_internal_gf(
             force_constants,
             (),
         )
+    offblock = _offblock_coupling_diagnostic(force_constants, g_matrix, blocks)
+    if offblock is not None:
+        raise ValueError(offblock)
 
     f_block = np.zeros_like(force_constants, dtype=float)
     g_block = np.zeros_like(g_matrix, dtype=float)
@@ -505,6 +508,36 @@ def _solve_internal_gf(
         g_block,
         f_block,
         tuple(block_labels),
+    )
+
+
+def _offblock_coupling_diagnostic(
+    force_constants: np.ndarray,
+    g_matrix: np.ndarray,
+    blocks: tuple[tuple[str, tuple[int, ...]], ...],
+    *,
+    relative_tolerance: float = 1.0e-7,
+    absolute_tolerance: float = 1.0e-7,
+) -> str | None:
+    ncoord = force_constants.shape[0]
+    same_block = np.zeros((ncoord, ncoord), dtype=bool)
+    for _irrep, indices in blocks:
+        index = np.asarray(indices, dtype=int)
+        same_block[np.ix_(index, index)] = True
+    diagnostics: list[str] = []
+    for label, matrix in (("F", force_constants), ("G", g_matrix)):
+        values = np.asarray(matrix, dtype=float)
+        offblock = np.where(same_block, 0.0, values)
+        off_max = float(np.max(np.abs(offblock))) if offblock.size else 0.0
+        diag_max = float(np.max(np.abs(np.diag(values)))) if values.size else 0.0
+        scale = max(diag_max, 1.0)
+        if off_max > absolute_tolerance and off_max / scale > relative_tolerance:
+            diagnostics.append(f"{label}_offblock_max={off_max:.6g} rel={off_max / scale:.6g}")
+    if not diagnostics:
+        return None
+    return (
+        "Symmetry-block GF requested but F/G are not block diagonal "
+        f"within tolerance ({'; '.join(diagnostics)})."
     )
 
 
