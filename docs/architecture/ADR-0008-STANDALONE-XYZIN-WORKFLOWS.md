@@ -52,6 +52,10 @@ Examples:
 - DVR writes and reads `#DVR` request/manifest/output state. Gaussian scan logs
   remain adapter inputs for `oracle dvr prepare`, not private parsers inside
   downstream DVR clients.
+- TRINITY reads `#TRINITY` as its external energy/gradient geometry-optimization
+  request. The initial skeleton writes the section and run manifest with
+  `oracle trinity prepare`; the future optimizer loop must consume that section
+  directly and call the configured external engine at each step.
 
 ## Consequences
 
@@ -68,3 +72,6 @@ Examples:
 - DVR standalone orchestration stores discoverable run state in `#DVR`.
 - DVR post-run collection is owned by `oracle-dvr`; GUI code consumes the
   collected state and must not rediscover backend output files independently.
+- TRINITY standalone orchestration stores the optimizer request in `#TRINITY`,
+  including external engine command, coordinate model, active space, trust
+  region settings and expected trajectory/final-geometry outputs.

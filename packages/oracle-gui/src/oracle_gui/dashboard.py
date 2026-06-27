@@ -18,6 +18,7 @@ from .commands import (
     gicforge_report_command,
     rovib_summary_command,
     thermo_command,
+    trinity_status_command,
     validate_command,
     vpt2_vci_collect_command,
 )
@@ -140,6 +141,13 @@ def default_dashboard_action_templates() -> tuple[DashboardActionTemplate, ...]:
             "Collect DVR",
             dvr_collect_command,
             required_sections=("DVR",),
+        ),
+        DashboardActionTemplate(
+            "trinity_status",
+            "trinity",
+            "Summarize TRINITY",
+            trinity_status_command,
+            required_sections=("TRINITY",),
         ),
     )
 

@@ -33,6 +33,7 @@ plain XYZ
        oracle-rovib adds #ROTATIONAL, #VIBRATIONAL, #DELTABVIB, #CORIOLIS or #QCENT
        oracle-thermo adds #THERMO from BASIC/ROTATIONAL/VIBRATIONAL state
        oracle-morpheus adds #ISOTOPOLOGUES and #MORPHEUS
+       oracle-trinity adds #TRINITY for external-gradient geometry optimization
        oracle-vpt2-vci adds #VPT2_VCI from normalized anharmonic data
        oracle-dvr adds #DVR
 ```
@@ -95,6 +96,30 @@ rank, condition number, iteration count and warning count.
 Use `--no-write-section` for standalone benchmark or scratch runs that should
 leave the active container unchanged. GUI controllers consume this section
 rather than scanning the MORPHEUS output directory.
+
+## TRINITY Geometry Optimization State
+
+`#TRINITY` stores the request/state for geometry optimizations that call an
+external program at each step to obtain energy and gradient. TRINITY stands for
+Trust-Region Interface for Numerical Iterative Trajectories with external
+energY/gradients. The first implementation is intentionally a skeleton:
+`oracle trinity prepare molecule.xyzin --run-dir run --engine-command "..."`
+writes schema `oracle.xyz.trinity.v1`, a prepared run manifest and the
+persistent request.
+
+The section records:
+
+- external engine command and protocol;
+- coordinate model (`gic` or `cartesian`) and active space, with
+  `total_symmetric` as the default GIC active-space policy;
+- energy/gradient units;
+- max-step and trust-region tolerances;
+- expected trajectory, final-geometry and energy/gradient log paths.
+
+The future TRINITY runner must be autonomous: if `#TRINITY` is present, it reads
+that section and the shared sections it names, then writes outputs back into the
+same container. GUI controllers consume `#TRINITY` through `oracle-trinity` and
+must not duplicate optimizer input parsing.
 
 ## QM Tensor Sections
 

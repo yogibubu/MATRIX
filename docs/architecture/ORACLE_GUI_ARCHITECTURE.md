@@ -34,6 +34,7 @@ The project/workflow windows are:
 | GICForge | Build, symmetrize and diagnose GICs and B matrices | `#GIC`, `#SYCART` |
 | GF / PED | Harmonic force-field analysis from Hessian plus GICs | `#CARTESIAN_HESSIAN`, `#GF_PED` |
 | SEFit / MORPHEUS | Single-molecule and ensemble semiexperimental refinement | `#ISOTOPOLOGUES`, `#MORPHEUS` |
+| TRINITY Geometry Optimization | Prepare external energy/gradient geometry optimization requests | `#TRINITY` |
 | Rovib / Thermo Utilities | Rotational/vibrational summaries and thermochemistry utilities | `#ROTATIONAL`, `#VIBRATIONAL`, `#THERMO` |
 | Anharmonic: VPT2 / VCI / DVR | Run and collect anharmonic workflow state | `#QFF`, `#VPT2_VCI`, `#DVR` |
 | QM Jobs | Generate Gaussian inputs and normalize QM output sections | `#CARTESIAN_HESSIAN`, `#NORMAL_MODES`, `#QFF` |
@@ -79,6 +80,7 @@ Scientific behavior remains in the owning packages:
 - `oracle-gicforge` for GIC construction, symmetrization and B matrices;
 - `oracle-gf` for GF/PED;
 - `oracle-morpheus` for SEFit and MORPHEUS;
+- `oracle-trinity` for external energy/gradient geometry optimization state;
 - `oracle-rovib`, `oracle-thermo`, `oracle-vpt2-vci` and `oracle-dvr` for
   their corresponding sections.
 - spectrum drawing and publication export code should consume normalized
@@ -185,3 +187,19 @@ The SEFit tab uses `oracle_gui.sefit` and the `#MORPHEUS` section written by
 The tab must not run least-squares logic or parse MORPHEUS CSV reports itself.
 It launches `oracle semiexp`, then reloads `#MORPHEUS` through
 `oracle_morpheus.read_morpheus_section`.
+
+## TRINITY Tab
+
+The TRINITY tab uses `oracle_gui.trinity` and the `#TRINITY` section written by
+`oracle trinity prepare`. It provides:
+
+- external engine command entry;
+- run-directory selection;
+- coordinate model and active-space selection;
+- trust-region and convergence tolerance fields;
+- read-only tables for saved settings and expected output paths.
+
+The tab is currently a skeleton for the future optimizer branch. It must not
+implement geometry optimization or external energy/gradient parsing in Qt. It
+only prepares the autonomous `#TRINITY` request and then reloads it through
+`oracle_trinity.read_trinity_section`.

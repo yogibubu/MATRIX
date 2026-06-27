@@ -11,6 +11,7 @@ from oracle_dvr import DVRRequest, dvr_section_from_request, write_dvr_section
 from oracle_gf import GFGICRow, GFModeRow, GFPEDSection, write_gf_ped_section
 from oracle_gicforge import write_gicforge_build_sections
 from oracle_morpheus import MorpheusSection, write_morpheus_section
+from oracle_trinity import TrinitySection, write_trinity_section
 from oracle_gui import (
     DashboardActionTemplate,
     ORACLE_GUI_WINDOWS,
@@ -20,6 +21,7 @@ from oracle_gui import (
     OracleGuiCommand,
     OracleSEFitController,
     OracleStructureController,
+    OracleTrinityController,
     WorkflowStatus,
     all_known_sections,
     avogadro_command,
@@ -30,6 +32,7 @@ from oracle_gui import (
     default_gicforge_report_output,
     dvr_gui_state_lines,
     default_sefit_outdir,
+    default_trinity_run_dir,
     gaussian_promote_fchk_command,
     gaussian_promote_rovib_command,
     gf_command,
@@ -53,6 +56,9 @@ from oracle_gui import (
     load_sefit_gui_state,
     vpt2_vci_gui_state_lines,
     window_spec,
+    trinity_prepare_command,
+    trinity_gui_state_lines,
+    load_trinity_gui_state,
 )
 from oracle_vpt2_vci import vpt2_vci_section_from_run, write_vpt2_vci_section
 
@@ -626,6 +632,73 @@ def test_sefit_controller_builds_semiexp_command(tmp_path):
     assert command.argv[-2:] == ("--max-iter", "2")
 
 
+def test_trinity_gui_state_reports_missing_section_without_crashing(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
+
+    state = load_trinity_gui_state(xyzin)
+    lines = trinity_gui_state_lines(state)
+
+    assert state.exists
+    assert not state.ready
+    assert "missing #TRINITY section" in state.messages
+    assert "ready: 0" in lines
+
+
+def test_trinity_gui_state_reads_prepared_section(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    run_dir = tmp_path / "trinity"
+    xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
+    write_trinity_section(
+        xyzin,
+        TrinitySection(
+            source_path=xyzin,
+            run_dir=run_dir,
+            manifest_path=run_dir / "trinity_manifest.json",
+            engine_command="engine --gradient",
+            coordinate_model="gic",
+            active_space="total_symmetric",
+            max_steps=20,
+            trust_radius=0.25,
+            trajectory_path=run_dir / "trinity_trajectory.xyz",
+            final_geometry_path=run_dir / "trinity_final.xyz",
+            energy_gradient_log_path=run_dir / "trinity_energy_gradient.jsonl",
+        ),
+    )
+
+    state = load_trinity_gui_state(xyzin)
+    lines = trinity_gui_state_lines(state)
+
+    assert state.ready
+    assert state.summary.run_dir == run_dir
+    assert state.summary.engine_command == "engine --gradient"
+    assert ("Coordinate model", "gic") in state.settings.rows
+    assert ("Final geometry", str(run_dir / "trinity_final.xyz")) in state.outputs.rows
+    assert "active space: total_symmetric" in lines
+
+
+def test_trinity_controller_builds_prepare_command(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    controller = OracleTrinityController(xyzin)
+
+    command = controller.prepare_command(
+        run_dir=default_trinity_run_dir(xyzin),
+        engine_command="engine --gradient",
+        coordinate_model="cartesian",
+        active_space="cartesian",
+        max_steps=5,
+        trust_radius=0.1,
+    )
+
+    assert command.argv[:5] == (sys.executable, "-m", "oracle", "trinity", "prepare")
+    assert command.argv[5] == str(xyzin)
+    assert command.argv[command.argv.index("--run-dir") + 1] == str(default_trinity_run_dir(xyzin))
+    assert command.argv[command.argv.index("--engine-command") + 1] == "engine --gradient"
+    assert command.argv[command.argv.index("--coordinate-model") + 1] == "cartesian"
+    assert command.argv[command.argv.index("--active-space") + 1] == "cartesian"
+    assert command.produced_sections == ("TRINITY",)
+
+
 def test_gui_window_specs_cover_primary_oracle_workflows():
     keys = {spec.key for spec in ORACLE_GUI_WINDOWS}
 
@@ -636,6 +709,7 @@ def test_gui_window_specs_cover_primary_oracle_workflows():
         "gicforge",
         "gf",
         "sefit",
+        "trinity",
         "rovib_thermo",
         "anharmonic",
         "rotational_spectroscopy",
@@ -649,8 +723,10 @@ def test_gui_window_specs_cover_primary_oracle_workflows():
     assert "mode heat-map" in window_spec("vibrational_spectroscopy").publication_exports
     assert "Molden" in window_spec("electronic_spectroscopy").external_viewers
     assert "KINETICS" in window_spec("thermochemistry_kinetics").produced_sections
+    assert window_spec("trinity").produced_sections == ("TRINITY",)
     assert "GIC" in all_known_sections()
     assert "KINETICS" in all_known_sections()
+    assert "TRINITY" in all_known_sections()
 
 
 def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
@@ -686,6 +762,12 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
         nonbonded_14_scale=0.25,
     )
     sefit = semiexp_command(job, tmp_path / "semiexp", xyzin=xyzin, extra_args=("--max-iter", "2"))
+    trinity = trinity_prepare_command(
+        xyzin,
+        run_dir=tmp_path / "trinity",
+        engine_command="engine --gradient",
+        max_steps=3,
+    )
 
     assert preprocess.argv[1:4] == ("-m", "oracle", "babel")
     assert preprocess.argv[-2:] == ("--source-kind", "xyz")
@@ -713,3 +795,7 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
     assert sefit.argv[sefit.argv.index("--xyzin") + 1] == str(xyzin)
     assert sefit.argv[-2:] == ("--max-iter", "2")
     assert sefit.produced_sections == ("MORPHEUS",)
+    assert trinity.argv[3:6] == ("trinity", "prepare", str(xyzin))
+    assert trinity.argv[trinity.argv.index("--engine-command") + 1] == "engine --gradient"
+    assert trinity.argv[trinity.argv.index("--max-steps") + 1] == "3"
+    assert trinity.produced_sections == ("TRINITY",)

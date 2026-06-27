@@ -36,6 +36,13 @@ from .structure import (
     default_preprocess_output,
     load_structure_gui_state,
 )
+from .trinity import (
+    OracleTrinityController,
+    TrinityTable,
+    default_trinity_run_dir,
+    load_trinity_gui_state,
+    trinity_gui_state_lines,
+)
 from .workflows import ORACLE_GUI_WINDOWS
 
 
@@ -89,6 +96,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.gicforge_controller = OracleGICForgeController(xyzin)
             self.gf_controller = OracleGFController(xyzin)
             self.sefit_controller = OracleSEFitController(xyzin)
+            self.trinity_controller = OracleTrinityController(xyzin)
             self.process: QProcess | None = None
             self.current_actions: tuple[DashboardAction, ...] = ()
             self.pending_xyzin_after_run: Path | None = None
@@ -140,6 +148,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             tabs.addTab(gf_tab, "GF/PED")
             sefit_tab = self._build_sefit_tab()
             tabs.addTab(sefit_tab, "SEFit")
+            trinity_tab = self._build_trinity_tab()
+            tabs.addTab(trinity_tab, "TRINITY")
             layout.addWidget(tabs, stretch=2)
 
             self.details = QTextEdit()
@@ -167,6 +177,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.gicforge_controller.set_xyzin(Path(path))
                 self.gf_controller.set_xyzin(Path(path))
                 self.sefit_controller.set_xyzin(Path(path))
+                self.trinity_controller.set_xyzin(Path(path))
                 self.refresh()
 
         def refresh(self) -> None:
@@ -177,11 +188,13 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._clear_gicforge_tables()
             self._clear_gf_tables()
             self._clear_sefit_tables()
+            self._clear_trinity_tables()
             if self.controller.xyzin is None:
                 self.path_label.setText("No ORACLE project loaded")
                 self.gicforge_summary.setPlainText("No ORACLE project loaded")
                 self.gf_summary.setPlainText("No ORACLE project loaded")
                 self.sefit_summary.setPlainText("No ORACLE project loaded")
+                self.trinity_summary.setPlainText("No ORACLE project loaded")
                 self.details.setPlainText(
                     "\n".join(
                         f"{spec.title}: {spec.description}" for spec in ORACLE_GUI_WINDOWS
@@ -196,10 +209,12 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.gicforge_controller.set_xyzin(state.xyzin)
             self.gf_controller.set_xyzin(state.xyzin)
             self.sefit_controller.set_xyzin(state.xyzin)
+            self.trinity_controller.set_xyzin(state.xyzin)
             self.structure_output_path.setText(str(state.xyzin))
             self._set_default_gicforge_outputs(state.xyzin)
             self._set_default_gf_outputs(state.xyzin)
             self._set_default_sefit_outputs(state.xyzin)
+            self._set_default_trinity_outputs(state.xyzin)
             self.path_label.setText(str(state.xyzin))
             for workflow in state.workflows:
                 self.workflow_list.addItem(
@@ -233,6 +248,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._populate_gicforge_tables(state.xyzin)
             self._populate_gf_tables(state.xyzin)
             self._populate_sefit_tables(state.xyzin)
+            self._populate_trinity_tables(state.xyzin)
 
         def show_workflow_details(self, _item=None) -> None:
             if self.controller.xyzin is None:
@@ -351,6 +367,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.gicforge_controller.set_xyzin(self.pending_xyzin_after_run)
                 self.gf_controller.set_xyzin(self.pending_xyzin_after_run)
                 self.sefit_controller.set_xyzin(self.pending_xyzin_after_run)
+                self.trinity_controller.set_xyzin(self.pending_xyzin_after_run)
             self.pending_xyzin_after_run = None
             self.refresh()
 
@@ -1084,10 +1101,196 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 if table is not None:
                     table.setRowCount(0)
 
+        def _build_trinity_tab(self) -> QWidget:
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+
+            engine_row = QHBoxLayout()
+            engine_row.addWidget(QLabel("Engine"))
+            self.trinity_engine_command = QLineEdit()
+            self.trinity_engine_command.setPlaceholderText("external-qm --input step.xyz --gradient gradient.json")
+            engine_row.addWidget(self.trinity_engine_command, stretch=1)
+            layout.addLayout(engine_row)
+
+            out_row = QHBoxLayout()
+            out_row.addWidget(QLabel("Run dir"))
+            self.trinity_run_dir = QLineEdit()
+            out_browse = QPushButton("Browse")
+            out_browse.clicked.connect(self.browse_trinity_run_dir)
+            self.trinity_coordinate_model = QComboBox()
+            self.trinity_coordinate_model.addItems(("gic", "cartesian"))
+            self.trinity_active_space = QComboBox()
+            self.trinity_active_space.addItems(("total_symmetric", "all", "cartesian"))
+            out_row.addWidget(self.trinity_run_dir, stretch=1)
+            out_row.addWidget(out_browse)
+            out_row.addWidget(QLabel("Coordinates"))
+            out_row.addWidget(self.trinity_coordinate_model)
+            out_row.addWidget(QLabel("Active"))
+            out_row.addWidget(self.trinity_active_space)
+            layout.addLayout(out_row)
+
+            numeric_row = QHBoxLayout()
+            self.trinity_max_steps = QLineEdit("50")
+            self.trinity_trust_radius = QLineEdit("0.2")
+            self.trinity_gradient_tolerance = QLineEdit("1e-5")
+            self.trinity_step_tolerance = QLineEdit("1e-5")
+            self.trinity_energy_tolerance = QLineEdit("1e-8")
+            prepare_button = QPushButton("Prepare TRINITY")
+            prepare_button.clicked.connect(self.run_trinity_prepare)
+            numeric_row.addWidget(QLabel("Steps"))
+            numeric_row.addWidget(self.trinity_max_steps)
+            numeric_row.addWidget(QLabel("Trust"))
+            numeric_row.addWidget(self.trinity_trust_radius)
+            numeric_row.addWidget(QLabel("Grad tol"))
+            numeric_row.addWidget(self.trinity_gradient_tolerance)
+            numeric_row.addWidget(QLabel("Step tol"))
+            numeric_row.addWidget(self.trinity_step_tolerance)
+            numeric_row.addWidget(QLabel("Energy tol"))
+            numeric_row.addWidget(self.trinity_energy_tolerance)
+            numeric_row.addWidget(prepare_button)
+            layout.addLayout(numeric_row)
+
+            self.trinity_summary = QTextEdit()
+            self.trinity_summary.setReadOnly(True)
+            self.trinity_summary.setMaximumHeight(150)
+            layout.addWidget(self.trinity_summary)
+
+            self.trinity_table_tabs = QTabWidget()
+            self.trinity_settings_table = QTableWidget(0, 2)
+            self.trinity_output_table = QTableWidget(0, 2)
+            self.trinity_table_tabs.addTab(self.trinity_settings_table, "Settings")
+            self.trinity_table_tabs.addTab(self.trinity_output_table, "Outputs")
+            layout.addWidget(self.trinity_table_tabs, stretch=1)
+            return tab
+
+        def browse_trinity_run_dir(self) -> None:
+            path = QFileDialog.getExistingDirectory(
+                self,
+                "Select TRINITY run directory",
+                self.trinity_run_dir.text().strip() or str(Path.cwd()),
+            )
+            if path:
+                self.trinity_run_dir.setText(path)
+
+        def run_trinity_prepare(self) -> None:
+            if not self._ensure_trinity_ready_for_command("TRINITY"):
+                return
+            engine_command = self.trinity_engine_command.text().strip()
+            if not engine_command:
+                QMessageBox.warning(self, "TRINITY", "Enter an external engine command first.")
+                return
+            max_steps = self._required_positive_int_field(
+                self.trinity_max_steps,
+                "TRINITY",
+                "max steps",
+            )
+            if max_steps is None:
+                return
+            trust_radius = self._optional_float_field(
+                self.trinity_trust_radius,
+                "TRINITY",
+                "trust radius",
+                default=0.2,
+            )
+            if trust_radius is False:
+                return
+            gradient_tolerance = self._optional_float_field(
+                self.trinity_gradient_tolerance,
+                "TRINITY",
+                "gradient tolerance",
+                default=1.0e-5,
+            )
+            if gradient_tolerance is False:
+                return
+            step_tolerance = self._optional_float_field(
+                self.trinity_step_tolerance,
+                "TRINITY",
+                "step tolerance",
+                default=1.0e-5,
+            )
+            if step_tolerance is False:
+                return
+            energy_tolerance = self._optional_float_field(
+                self.trinity_energy_tolerance,
+                "TRINITY",
+                "energy tolerance",
+                default=1.0e-8,
+            )
+            if energy_tolerance is False:
+                return
+            self.trinity_controller.set_xyzin(self.controller.xyzin)
+            command = self.trinity_controller.prepare_command(
+                run_dir=self._trinity_run_dir(),
+                engine_command=engine_command,
+                coordinate_model=self.trinity_coordinate_model.currentText(),
+                active_space=self.trinity_active_space.currentText(),
+                max_steps=max_steps,
+                trust_radius=trust_radius,
+                gradient_tolerance=gradient_tolerance,
+                step_tolerance=step_tolerance,
+                energy_tolerance=energy_tolerance,
+            )
+            self._start_command(command, command.label)
+
+        def _ensure_trinity_ready_for_command(self, title: str) -> bool:
+            if self.controller.xyzin is None:
+                QMessageBox.warning(self, title, "Open or preprocess an ORACLE xyzin first.")
+                return False
+            if self.process is not None:
+                QMessageBox.information(self, "ORACLE", "A command is already running.")
+                return False
+            self.trinity_controller.set_xyzin(self.controller.xyzin)
+            return True
+
+        def _trinity_run_dir(self) -> Path:
+            if self.controller.xyzin is None:
+                raise ValueError("no ORACLE xyzin project is loaded")
+            text = self.trinity_run_dir.text().strip()
+            run_dir = Path(text) if text else default_trinity_run_dir(self.controller.xyzin)
+            self.trinity_run_dir.setText(str(run_dir))
+            return run_dir
+
+        def _required_positive_int_field(
+            self,
+            field: QLineEdit,
+            title: str,
+            label: str,
+        ) -> int | None:
+            text = field.text().strip()
+            try:
+                value = int(text)
+            except ValueError:
+                QMessageBox.warning(self, title, f"Invalid {label}: {text}")
+                return None
+            if value <= 0:
+                QMessageBox.warning(self, title, f"{label} must be positive.")
+                return None
+            return value
+
+        def _set_default_trinity_outputs(self, xyzin: Path) -> None:
+            self.trinity_run_dir.setText(str(default_trinity_run_dir(xyzin)))
+
+        def _populate_trinity_tables(self, xyzin: Path) -> None:
+            state = load_trinity_gui_state(xyzin)
+            self.trinity_summary.setPlainText("\n".join(trinity_gui_state_lines(state)))
+            self._fill_table(self.trinity_settings_table, state.settings)
+            self._fill_table(self.trinity_output_table, state.outputs)
+
+        def _clear_trinity_tables(self) -> None:
+            summary = getattr(self, "trinity_summary", None)
+            if summary is not None:
+                summary.clear()
+            for table in (
+                getattr(self, "trinity_settings_table", None),
+                getattr(self, "trinity_output_table", None),
+            ):
+                if table is not None:
+                    table.setRowCount(0)
+
         def _fill_table(
             self,
             widget: QTableWidget,
-            table: StructureTable | GICForgeTable | GFTable | SEFitTable,
+            table: StructureTable | GICForgeTable | GFTable | SEFitTable | TrinityTable,
         ) -> None:
             widget.setColumnCount(len(table.columns))
             widget.setHorizontalHeaderLabels(table.columns)

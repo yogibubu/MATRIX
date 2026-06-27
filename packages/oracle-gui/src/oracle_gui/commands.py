@@ -409,6 +409,58 @@ def semiexp_command(
     )
 
 
+def trinity_prepare_command(
+    xyzin: Path | str,
+    *,
+    run_dir: Path | str,
+    engine_command: str,
+    coordinate_model: str = "gic",
+    active_space: str = "total_symmetric",
+    max_steps: int = 50,
+    trust_radius: float = 0.2,
+    gradient_tolerance: float = 1.0e-5,
+    step_tolerance: float = 1.0e-5,
+    energy_tolerance: float = 1.0e-8,
+) -> OracleGuiCommand:
+    argv = [
+        *_oracle(),
+        "trinity",
+        "prepare",
+        str(Path(xyzin)),
+        "--run-dir",
+        str(Path(run_dir)),
+        "--engine-command",
+        engine_command,
+        "--coordinate-model",
+        coordinate_model,
+        "--active-space",
+        active_space,
+        "--max-steps",
+        str(int(max_steps)),
+        "--trust-radius",
+        str(trust_radius),
+        "--gradient-tolerance",
+        str(gradient_tolerance),
+        "--step-tolerance",
+        str(step_tolerance),
+        "--energy-tolerance",
+        str(energy_tolerance),
+    ]
+    return OracleGuiCommand(
+        "Prepare TRINITY",
+        tuple(argv),
+        produced_sections=("TRINITY",),
+    )
+
+
+def trinity_status_command(xyzin: Path | str) -> OracleGuiCommand:
+    return OracleGuiCommand(
+        "Summarize TRINITY",
+        (*_oracle(), "trinity", "status", str(Path(xyzin))),
+        required_sections=("TRINITY",),
+    )
+
+
 def semiexp_benchmark_command(
     *,
     snapshot: Path | str | None = None,

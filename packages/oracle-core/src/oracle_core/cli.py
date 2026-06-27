@@ -405,6 +405,28 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     semiexp_benchmark.add_argument("--no-refresh", action="store_true")
     semiexp_benchmark.add_argument("--update-snapshot", action="store_true")
 
+    trinity = sub.add_parser(
+        "trinity",
+        help="Prepare TRINITY external energy/gradient geometry optimization state",
+    )
+    trinity_sub = trinity.add_subparsers(dest="trinity_command")
+    trinity_prepare = trinity_sub.add_parser("prepare", help="Write a prepared #TRINITY section")
+    trinity_prepare.add_argument("xyzin", type=Path)
+    trinity_prepare.add_argument("--run-dir", type=Path, required=True)
+    trinity_prepare.add_argument("--engine-command", required=True)
+    trinity_prepare.add_argument("--coordinate-model", choices=("gic", "cartesian"), default="gic")
+    trinity_prepare.add_argument("--active-space", default="total_symmetric")
+    trinity_prepare.add_argument("--max-steps", type=int, default=50)
+    trinity_prepare.add_argument("--trust-radius", type=float, default=0.2)
+    trinity_prepare.add_argument("--gradient-tolerance", type=float, default=1.0e-5)
+    trinity_prepare.add_argument("--step-tolerance", type=float, default=1.0e-5)
+    trinity_prepare.add_argument("--energy-tolerance", type=float, default=1.0e-8)
+    trinity_prepare.add_argument("--energy-unit", default="hartree")
+    trinity_prepare.add_argument("--gradient-unit", default="hartree/bohr")
+    trinity_prepare.add_argument("--external-protocol", default="xyz-energy-gradient-v1")
+    trinity_status = trinity_sub.add_parser("status", help="Summarize #TRINITY state")
+    trinity_status.add_argument("xyzin", type=Path)
+
     reference_search = sub.add_parser(
         "multistructure-reference-search",
         help="Search the local semiexperimental geometry reference library",
@@ -1388,6 +1410,35 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
         print(f"planar_diagnostics: {len(snapshot.get('planar_pair_diagnostics', {}))}")
         for name, path in sorted(artifacts.items()):
             print(f"{name}: {path}")
+        return 0
+    if args.command == "trinity" and args.trinity_command == "prepare":
+        from oracle_trinity import prepare_trinity_section
+
+        section = prepare_trinity_section(
+            args.xyzin,
+            run_dir=args.run_dir,
+            engine_command=args.engine_command,
+            coordinate_model=args.coordinate_model,
+            active_space=args.active_space,
+            max_steps=args.max_steps,
+            trust_radius=args.trust_radius,
+            gradient_tolerance=args.gradient_tolerance,
+            step_tolerance=args.step_tolerance,
+            energy_tolerance=args.energy_tolerance,
+            energy_unit=args.energy_unit,
+            gradient_unit=args.gradient_unit,
+            external_protocol=args.external_protocol,
+        )
+        print(f"Updated #TRINITY: {args.xyzin}")
+        print(f"manifest: {section.manifest_path}")
+        print(f"run_dir: {section.run_dir}")
+        print(f"coordinate_model: {section.coordinate_model}")
+        print(f"engine_command: {section.engine_command}")
+        return 0
+    if args.command == "trinity" and args.trinity_command == "status":
+        from oracle_trinity import read_trinity_section, trinity_section_summary_lines
+
+        print("\n".join(trinity_section_summary_lines(read_trinity_section(args.xyzin))))
         return 0
     if args.command == "multistructure-reference-search":
         from oracle_morpheus import search_reference_library

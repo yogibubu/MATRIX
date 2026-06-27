@@ -210,6 +210,35 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
         ),
     ),
     WindowSpec(
+        key="trinity",
+        title="TRINITY Geometry Optimization",
+        description="Prepare external energy/gradient geometry optimizations from xyzin state.",
+        category="structure",
+        required_sections=("BASIC",),
+        produced_sections=("TRINITY",),
+        capabilities=(
+            "store a reusable optimization request in #TRINITY",
+            "call an external energy/gradient engine at each future optimization step",
+            "use GIC total-symmetric or Cartesian active spaces without reparsing tool inputs",
+            "track trajectory, final geometry and energy/gradient logs through the shared xyzin",
+        ),
+        actions=(
+            WorkflowActionSpec(
+                key="trinity_prepare",
+                label="Prepare TRINITY",
+                command="trinity prepare",
+                required_sections=("BASIC",),
+                produced_sections=("TRINITY",),
+            ),
+            WorkflowActionSpec(
+                key="trinity_status",
+                label="Summarize TRINITY",
+                command="trinity status",
+                required_sections=("TRINITY",),
+            ),
+        ),
+    ),
+    WindowSpec(
         key="rovib_thermo",
         title="Rovib / Thermo Utilities",
         description="Inspect rotational and vibrational sections and run thermochemistry utilities.",
