@@ -1,0 +1,93 @@
+name: MATRIX CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke-and-tests:
+    name: Smoke and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      MPLBACKEND: Agg
+      QT_QPA_PLATFORM: offscreen
+      MATRIX_AUTO_INSTALL_GUI_DEPS: "1"
+      MATRIX_VENV: ${{ github.workspace }}/.venv-ci
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran \
+            libegl1 \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            xvfb
+
+      - name: Bootstrap MATRIX environment
+        shell: bash
+        run: |
+          source scripts/matrix_env.sh
+          matrix-set
+          python -m pip --version
+          python -m pip list
+
+      - name: Smoke test CLI and imports
+        shell: bash
+        run: |
+          source scripts/matrix_env.sh
+          matrix-set
+          python -m matrix --help >/tmp/matrix-help.txt
+          python -m oracle --help >/tmp/oracle-help.txt
+          matrix-run --help >/tmp/matrix-run-help.txt
+          python - <<'PY'
+          import importlib
+
+          modules = (
+              "matrix_core",
+              "matrix_chem",
+              "matrix_link",
+              "matrix_neo",
+              "matrix_gf",
+              "matrix_gaussian",
+              "matrix_qm",
+              "matrix_rovib",
+              "matrix_thermo",
+              "matrix_dvr",
+              "matrix_vpt2_vci",
+              "matrix_morpheus",
+              "matrix_oracle",
+          )
+          for module in modules:
+              importlib.import_module(module)
+          importlib.import_module("matrix_oracle.app")
+          print(f"imported {len(modules)} MATRIX packages and ORACLE GUI")
+          PY
+
+      - name: Run pytest
+        shell: bash
+        run: |
+          source scripts/matrix_env.sh
+          matrix-set
+          python -m pytest -q

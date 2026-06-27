@@ -1,4 +1,4 @@
-# ORACLE Developer Workflow
+# MATRIX Developer Workflow
 
 Every new workflow should be added in this order:
 
@@ -32,3 +32,23 @@ Rules:
   regressions instead of inventing ad hoc molecule inputs.
 - Store new project outputs under `inputs/`, `runs/`, `outputs/`, `reports/`,
   `cache/` or `logs/`.
+
+## Continuous Integration
+
+The GitHub Actions workflow `.github/workflows/ci.yml` is the reference
+repository health check. It performs the same bootstrap expected from a fresh
+checkout:
+
+```bash
+source scripts/matrix_env.sh
+matrix-set
+python -m matrix --help
+python -m oracle --help
+matrix-run --help
+python -m pytest -q
+```
+
+The CI job enables `MATRIX_AUTO_INSTALL_GUI_DEPS=1`, `QT_QPA_PLATFORM=offscreen`
+and `MPLBACKEND=Agg`, installs `gfortran` and Qt headless system libraries, and
+therefore covers CLI imports, ORACLE GUI importability and the Fortran-backed
+regression tests when the vendored sources can be compiled.
