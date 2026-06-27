@@ -176,9 +176,7 @@ def gf_ped_section_lines(section: GFPEDSection) -> list[str]:
     if section.modes:
         for mode in section.modes:
             block = f" BLOCK={mode.block}" if mode.block else ""
-            lines.append(
-                f"{mode.index} FREQUENCY_CM-1={_format_float(mode.frequency_cm)}{block}"
-            )
+            lines.append(f"{mode.index} FREQUENCY_CM-1={_format_float(mode.frequency_cm)}{block}")
     else:
         lines.append("NONE")
 
@@ -186,13 +184,10 @@ def gf_ped_section_lines(section: GFPEDSection) -> list[str]:
     if section.gics:
         for gic in section.gics:
             scale = (
-                ""
-                if gic.scaling_factor is None
-                else f" SCALE={_format_float(gic.scaling_factor)}"
+                "" if gic.scaling_factor is None else f" SCALE={_format_float(gic.scaling_factor)}"
             )
             lines.append(
-                f"{gic.identifier} NAME={gic.name} IRREP={gic.irrep}{scale} "
-                f"LABEL={gic.label}"
+                f"{gic.identifier} NAME={gic.name} IRREP={gic.irrep}{scale} LABEL={gic.label}"
             )
     else:
         lines.append("NONE")
@@ -214,7 +209,9 @@ def parse_gf_ped_section(lines: Iterable[str]) -> GFPEDSection:
     schema = values.get("SCHEMA", ORACLE_XYZ_GF_PED_SCHEMA)
     if schema != ORACLE_XYZ_GF_PED_SCHEMA:
         raise ValueError(f"unsupported GF_PED schema: {schema}")
-    modes = tuple(_parse_mode_line(line) for line in _subsection(raw_lines, "MODES") if _data_line(line))
+    modes = tuple(
+        _parse_mode_line(line) for line in _subsection(raw_lines, "MODES") if _data_line(line)
+    )
     ped_by_gic = {
         identifier: values
         for identifier, values in (

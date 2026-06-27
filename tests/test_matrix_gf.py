@@ -101,9 +101,7 @@ def test_pulay_scaling_classes_match_multiple_gics_and_reject_mixed_types(tmp_pa
     names = ("A1Str0001", "A1Str0002", "A1Bend0001", "B2Tors0001")
     scale_file = tmp_path / "scale.txt"
     scale_file.write_text(
-        "default 1.0\n"
-        "class CH_stretches 0.95 R(1,2)|R(1,3)\n"
-        "class torsions:0.80:D(\n",
+        "default 1.0\nclass CH_stretches 0.95 R(1,2)|R(1,3)\nclass torsions:0.80:D(\n",
         encoding="utf-8",
     )
 
@@ -131,8 +129,7 @@ def test_pulay_scaling_preview_reports_rules_and_final_assignments(tmp_path):
     names = ("A1Str0001", "A1Str0002", "A1Bend0001")
     scale_file = tmp_path / "scale.txt"
     scale_file.write_text(
-        "default 1.0\n"
-        "class CH_stretches 0.95 R(1,2)|R(1,3)\n",
+        "default 1.0\nclass CH_stretches 0.95 R(1,2)|R(1,3)\n",
         encoding="utf-8",
     )
 

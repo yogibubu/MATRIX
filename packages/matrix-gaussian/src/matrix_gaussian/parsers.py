@@ -52,7 +52,9 @@ def read_gaussian_input(path: Path) -> MolecularGeometry:
 def read_gaussian_cartesian_input(path: Path) -> MolecularGeometry:
     target = Path(path)
     block = _read_gaussian_input_block(target)
-    if not _geometry_looks_cartesian(block.geometry_lines) and _route_requests_zmatrix(block.route_lines):
+    if not _geometry_looks_cartesian(block.geometry_lines) and _route_requests_zmatrix(
+        block.route_lines
+    ):
         return read_gaussian_zmatrix_input(target)
     return _geometry_from_cartesian_block(target, block)
 

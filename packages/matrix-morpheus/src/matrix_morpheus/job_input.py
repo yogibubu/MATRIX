@@ -53,7 +53,10 @@ class SemiexperimentalJobInput:
 def is_semiexperimental_job_file(path: Path) -> bool:
     target = Path(path)
     suffixes = [item.lower() for item in target.suffixes]
-    if suffixes[-2:] in ([".mse", ".toml"], [".semiexp", ".toml"]) or target.suffix.lower() == ".mfit":
+    if (
+        suffixes[-2:] in ([".mse", ".toml"], [".semiexp", ".toml"])
+        or target.suffix.lower() == ".mfit"
+    ):
         return True
     if target.suffix.lower() != ".toml":
         return False
@@ -88,7 +91,9 @@ def read_semiexperimental_job(path: Path) -> SemiexperimentalJobInput:
         observations_inline=observations_inline,
         backend=str(fit.get("backend", "python")),
         observable=str(fit.get("observable", DEFAULT_SEMIEXP_OBSERVABLE)),
-        rotational_components=str(fit.get("rotational_components", DEFAULT_SEMIEXP_ROTATIONAL_COMPONENTS)),
+        rotational_components=str(
+            fit.get("rotational_components", DEFAULT_SEMIEXP_ROTATIONAL_COMPONENTS)
+        ),
         coordinate_model=str(fit.get("coordinate_model", "gic")),
         max_iter=_optional_int(fit.get("max_iter")),
         step=float(fit.get("step", 1.0e-4)),
@@ -114,7 +119,9 @@ def _read_toml(path: Path) -> dict:
     return tomllib.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def _geometry_from_job_mapping(path: Path, data: dict, *, title: str) -> SemiexperimentalGeometryInput:
+def _geometry_from_job_mapping(
+    path: Path, data: dict, *, title: str
+) -> SemiexperimentalGeometryInput:
     geometry_value = data.get("geometry")
     if geometry_value is None:
         files = _mapping(data.get("files", {}), "files")
@@ -188,7 +195,11 @@ def _fixed_parameters_from_mapping(constraints: dict) -> tuple[str, ...]:
     automatic = []
     if bool(constraints.get("fix_hydrogen_parameters", False)):
         automatic.append(HYDROGEN_PARAMETER_CONSTRAINT)
-    for item in (*_modredundant_fixed_patterns(tuple(modredundant or ())), *(fixed_gic or ()), *automatic):
+    for item in (
+        *_modredundant_fixed_patterns(tuple(modredundant or ())),
+        *(fixed_gic or ()),
+        *automatic,
+    ):
         text = str(item).strip()
         if text and text not in seen:
             result.append(text)
@@ -202,7 +213,9 @@ def _constraint_items(*values: object) -> tuple[str, ...]:
         if not value:
             continue
         if isinstance(value, str):
-            items.extend(item.strip() for item in _split_top_level(value, separators=",;") if item.strip())
+            items.extend(
+                item.strip() for item in _split_top_level(value, separators=",;") if item.strip()
+            )
             continue
         try:
             iterator = iter(value)  # type: ignore[arg-type]

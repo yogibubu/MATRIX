@@ -91,7 +91,9 @@ class IsotopologueObservation:
 
     @property
     def corrected(self) -> RotationalConstants:
-        return CorrectedRotationalConstants(self.constants, self.correction, self.electronic_correction).equilibrium
+        return CorrectedRotationalConstants(
+            self.constants, self.correction, self.electronic_correction
+        ).equilibrium
 
 
 @dataclass(frozen=True)

@@ -57,7 +57,11 @@ class GICDefinition:
 
     def model(self) -> tuple[list[Primitive], np.ndarray, tuple[str, ...]]:
         """Return the legacy `(primitives, U, labels)` representation."""
-        return list(self.primitives), np.array(self.u_matrix, dtype=float, copy=True), tuple(self.labels)
+        return (
+            list(self.primitives),
+            np.array(self.u_matrix, dtype=float, copy=True),
+            tuple(self.labels),
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -69,7 +73,9 @@ class GICDefinition:
             "generation_workdir": self.generation_workdir,
             "atom_symbols": list(self.atom_symbols),
             "atomic_numbers": list(self.atomic_numbers),
-            "reference_coordinates_angstrom": [list(row) for row in self.reference_coordinates_angstrom],
+            "reference_coordinates_angstrom": [
+                list(row) for row in self.reference_coordinates_angstrom
+            ],
             "primitives": [_primitive_to_dict(primitive) for primitive in self.primitives],
             "u_matrix": np.asarray(self.u_matrix, dtype=float).tolist(),
             "labels": list(self.labels),
@@ -110,7 +116,8 @@ class GICDefinition:
             atom_symbols=atom_symbols,
             atomic_numbers=atomic_numbers,
             reference_coordinates_angstrom=tuple(
-                tuple(float(value) for value in row) for row in data.get("reference_coordinates_angstrom", ())
+                tuple(float(value) for value in row)
+                for row in data.get("reference_coordinates_angstrom", ())
             ),
             primitives=primitives,
             u_matrix=u_matrix,
@@ -123,7 +130,9 @@ class GICDefinition:
             gaussian_input=str(data.get("gaussian_input", "")),
             source=str(data.get("source", "gicforge")),
             generation_workdir=str(data.get("generation_workdir", "")),
-            provenance={str(key): str(value) for key, value in dict(data.get("provenance") or {}).items()},
+            provenance={
+                str(key): str(value) for key, value in dict(data.get("provenance") or {}).items()
+            },
         )
         validate_gic_definition(definition)
         return definition
@@ -132,7 +141,9 @@ class GICDefinition:
         validate_gic_definition(self)
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        target.write_text(
+            json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         return target
 
     @classmethod
@@ -164,7 +175,9 @@ class GICForgeComputation:
 class GICForge:
     """Public GICForge API for non-redundant GIC and SYCART generation."""
 
-    def __init__(self, *, executable: Path | None = None, runner: RunGICForge | None = None) -> None:
+    def __init__(
+        self, *, executable: Path | None = None, runner: RunGICForge | None = None
+    ) -> None:
         self.executable = executable
         self.runner = runner
 
@@ -205,8 +218,14 @@ class GICForge:
             extra_keywords=extra_keywords,
         )
         run_dir = Path(definition.generation_workdir)
-        files = {name: run_dir / name for name in _known_gicforge_outputs() if (run_dir / name).exists()}
-        sycart = _read_sycart_coordinates(run_dir / "sycart.xyz", tuple(definition.atom_symbols)) if (run_dir / "sycart.xyz").exists() else None
+        files = {
+            name: run_dir / name for name in _known_gicforge_outputs() if (run_dir / name).exists()
+        }
+        sycart = (
+            _read_sycart_coordinates(run_dir / "sycart.xyz", tuple(definition.atom_symbols))
+            if (run_dir / "sycart.xyz").exists()
+            else None
+        )
         manifest = run_dir / "gicforge_manifest.json"
         return GICForgeComputation(
             definition=definition,
@@ -308,7 +327,11 @@ def define_gics_from_cartesian(
     if not atoms:
         raise GICDefinitionError("GIC definition needs at least one atom")
     _validate_gicforge_input_topology(atoms, coords)
-    run_dir = Path(workdir) if workdir is not None else Path(tempfile.mkdtemp(prefix="matrix_gic_define_"))
+    run_dir = (
+        Path(workdir)
+        if workdir is not None
+        else Path(tempfile.mkdtemp(prefix="matrix_gic_define_"))
+    )
     run_dir.mkdir(parents=True, exist_ok=True)
     _write_gicforge_inputs(
         run_dir,
@@ -320,7 +343,9 @@ def define_gics_from_cartesian(
     )
     run = runner or run_gicforge
     if executable is not None and runner is None:
-        result = run_gicforge(run_dir, executable=executable, symmetrize=symmetrize, symmetry_backend=symmetry_backend)
+        result = run_gicforge(
+            run_dir, executable=executable, symmetrize=symmetrize, symmetry_backend=symmetry_backend
+        )
     elif runner is None:
         result = run_gicforge(run_dir, symmetrize=symmetrize, symmetry_backend=symmetry_backend)
     else:
@@ -351,7 +376,9 @@ def _validate_gicforge_input_topology(atoms: tuple[str, ...], coords: np.ndarray
             raise GICDefinitionError(f"Unknown element symbol {atom}")
         z_numbers.append(int(z))
     try:
-        _continuous, graph, _ringset, _synthons, _aromaticity = build_topology_objects(coords, np.asarray(z_numbers, dtype=int))
+        _continuous, graph, _ringset, _synthons, _aromaticity = build_topology_objects(
+            coords, np.asarray(z_numbers, dtype=int)
+        )
     except Exception as exc:
         raise GICDefinitionError(f"GICForge input topology validation failed: {exc}") from exc
     bonded = {tuple(sorted((int(i), int(j)))) for i, j in graph.bonds}
@@ -374,7 +401,9 @@ def _validate_gicforge_input_topology(atoms: tuple[str, ...], coords: np.ndarray
     if contacts:
         preview = ", ".join(contacts[:8])
         extra = f"; {len(contacts) - 8} additional H-H contacts" if len(contacts) > 8 else ""
-        raise GICDefinitionError(f"GICForge input topology validation failed: spurious nonbonded H-H contact {preview}{extra}")
+        raise GICDefinitionError(
+            f"GICForge input topology validation failed: spurious nonbonded H-H contact {preview}{extra}"
+        )
 
 
 def read_gic_definition_from_gauin(
@@ -415,7 +444,9 @@ def read_gic_definition_from_gauin(
             column[prim_index[primitive]] += coeff
         irrep = irreps_by_name.get(name, "UNK")
         label_index = len(labels) + 1
-        labels.append(f"GIC{label_index:03d} GICForge {name} irrep={irrep} {expression} {_gic_aliases(terms)}")
+        labels.append(
+            f"GIC{label_index:03d} GICForge {name} irrep={irrep} {expression} {_gic_aliases(terms)}"
+        )
         names.append(name)
         irreps.append(irrep)
         columns.append(column)
@@ -424,7 +455,9 @@ def read_gic_definition_from_gauin(
     definition = GICDefinition(
         atom_symbols=atoms,
         atomic_numbers=tuple(atomic_number(atom) for atom in atoms),
-        reference_coordinates_angstrom=tuple(tuple(float(value) for value in row) for row in coords),
+        reference_coordinates_angstrom=tuple(
+            tuple(float(value) for value in row) for row in coords
+        ),
         primitives=tuple(prims),
         u_matrix=np.column_stack(columns),
         labels=tuple(labels),
@@ -439,6 +472,7 @@ def read_gic_definition_from_gauin(
     )
     validate_gic_definition(definition)
     return definition
+
 
 def evaluate_gic_definition(
     definition: GICDefinition,
@@ -455,7 +489,9 @@ def evaluate_gic_definition(
     validate_gic_definition(definition)
     coords = _validated_coordinates(coordinates_angstrom, len(definition.atom_symbols))
     if atomic_numbers is not None and len(tuple(atomic_numbers)) != len(definition.atom_symbols):
-        raise GICDefinitionError("B-matrix evaluation atomic-number count differs from GIC definition atom count")
+        raise GICDefinitionError(
+            "B-matrix evaluation atomic-number count differs from GIC definition atom count"
+        )
     prims = list(definition.primitives)
     u_matrix = np.asarray(definition.u_matrix, dtype=float)
     primitive_values = eval_primitives(prims, coords)
@@ -517,7 +553,9 @@ def validate_gic_definition(definition: GICDefinition) -> None:
         raise GICDefinitionError("GIC definition names are not unique")
     for index, primitive in enumerate(definition.primitives, start=1):
         _validate_primitive(primitive, natoms, index)
-    if definition.symmetrized and any(not irrep.strip() or irrep == "UNK" for irrep in definition.irreps):
+    if definition.symmetrized and any(
+        not irrep.strip() or irrep == "UNK" for irrep in definition.irreps
+    ):
         raise GICDefinitionError("Symmetrized GIC definition contains missing/UNK irreps")
 
 
@@ -550,7 +588,9 @@ def read_gicforge_b_matrix(path: Path) -> np.ndarray:
         row = int(parts[0]) - 1
         col = int(parts[1]) - 1
         if row < 0 or row >= n_gic or col < 0 or col >= n_cart:
-            raise GICDefinitionError(f"Fortran B-matrix index outside declared shape in {target}: {raw!r}")
+            raise GICDefinitionError(
+                f"Fortran B-matrix index outside declared shape in {target}: {raw!r}"
+            )
         key = (row, col)
         if key in seen:
             raise GICDefinitionError(f"Duplicate Fortran B-matrix element in {target}: {raw!r}")
@@ -637,9 +677,15 @@ def run_gicforge_python_fortran_contract(
         executable=executable,
         symmetrize=True,
     )
-    totally_symmetric_count = sum(1 for irrep in sym_definition.irreps if irrep in {"A1", "A'", "Ag", "A"})
-    raw_signatures = tuple(_primitive_signature(primitive) for primitive in raw_definition.primitives)
-    sym_signatures = tuple(_primitive_signature(primitive) for primitive in sym_definition.primitives)
+    totally_symmetric_count = sum(
+        1 for irrep in sym_definition.irreps if irrep in {"A1", "A'", "Ag", "A"}
+    )
+    raw_signatures = tuple(
+        _primitive_signature(primitive) for primitive in raw_definition.primitives
+    )
+    sym_signatures = tuple(
+        _primitive_signature(primitive) for primitive in sym_definition.primitives
+    )
     raw_kind_counts = _definition_coordinate_kind_counts(raw_definition)
     sym_kind_counts = _definition_coordinate_kind_counts(sym_definition)
     errors: list[str] = []
@@ -669,7 +715,9 @@ def run_gicforge_python_fortran_contract(
     if sorted(raw_signatures) != sorted(sym_signatures):
         errors.append("Raw/sym primitive signature sets differ")
     if raw_kind_counts != sym_kind_counts:
-        errors.append(f"Raw/sym coordinate kind counts differ: {raw_kind_counts} != {sym_kind_counts}")
+        errors.append(
+            f"Raw/sym coordinate kind counts differ: {raw_kind_counts} != {sym_kind_counts}"
+        )
     if raw_comparison.python_shape[0] != len(raw_definition.labels):
         errors.append("Fortran B row count does not match raw GIC count")
     if raw_comparison.python_shape[1] != 3 * len(raw_definition.atom_symbols):
@@ -798,9 +846,7 @@ def _write_gicforge_inputs(
         base_keywords.insert(1, "SYCART")
     keywords = "# " + " ".join((*base_keywords, *extra_keywords))
     (workdir / "provin").write_text(
-        f"{keywords}\n\n"
-        "ORACLE GIC definition utility\n\n"
-        "0 1\n",
+        f"{keywords}\n\nORACLE GIC definition utility\n\n0 1\n",
         encoding="utf-8",
     )
     lines = [str(len(atoms)), ""]
@@ -847,7 +893,9 @@ def _read_sycart_coordinates(path: Path, atoms: tuple[str, ...]) -> np.ndarray:
 def _validated_coordinates(coordinates: np.ndarray, natoms: int) -> np.ndarray:
     coords = np.asarray(coordinates, dtype=float)
     if coords.shape != (natoms, 3):
-        raise GICDefinitionError(f"Expected coordinates with shape ({natoms}, 3), got {coords.shape}")
+        raise GICDefinitionError(
+            f"Expected coordinates with shape ({natoms}, 3), got {coords.shape}"
+        )
     return coords
 
 
@@ -957,14 +1005,18 @@ def _validate_primitive(primitive: Primitive, natoms: int, index: int) -> None:
     if expected is None:
         raise GICDefinitionError(f"Primitive {index} has unsupported kind {primitive.kind!r}")
     if len(primitive.atoms) != expected:
-        raise GICDefinitionError(f"Primitive {index} kind {primitive.kind!r} expects {expected} atoms")
+        raise GICDefinitionError(
+            f"Primitive {index} kind {primitive.kind!r} expects {expected} atoms"
+        )
     if any(atom < 0 or atom >= natoms for atom in primitive.atoms):
         raise GICDefinitionError(f"Primitive {index} contains atom index outside 0..{natoms - 1}")
     if primitive.kind == "linear_bend" and primitive.mode not in {-1, -2}:
         raise GICDefinitionError(f"Primitive {index} linear bend has invalid mode {primitive.mode}")
 
 
-def _gic_definition_provenance(run_dir: Path, result: GICForgeResult, gauin: Path) -> dict[str, str]:
+def _gic_definition_provenance(
+    run_dir: Path, result: GICForgeResult, gauin: Path
+) -> dict[str, str]:
     executable = getattr(result, "executable", None)
     manifest = getattr(result, "manifest", None)
     provenance: dict[str, str] = {
@@ -1062,4 +1114,6 @@ def _primitive_expression(primitive: Primitive) -> str:
         return f"U({atoms[0]:3d},{atoms[1]:3d},{atoms[2]:3d},{atoms[3]:3d})"
     if primitive.kind == "linear_bend":
         return f"L({atoms[0]:3d},{atoms[1]:3d},{atoms[2]:3d},  0,{primitive.mode:3d})"
-    raise GICDefinitionError(f"Unsupported primitive kind for Gaussian GIC output: {primitive.kind}")
+    raise GICDefinitionError(
+        f"Unsupported primitive kind for Gaussian GIC output: {primitive.kind}"
+    )

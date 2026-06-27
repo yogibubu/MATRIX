@@ -184,9 +184,7 @@ def _outputs_table(section: TrinitySection) -> TrinityTable:
         ("Final geometry", _path_text(section.final_geometry_path)),
         ("Energy/gradient log", _path_text(section.energy_gradient_log_path)),
     )
-    extra = tuple(
-        (f"Output {name}", str(path)) for name, path in sorted(section.outputs.items())
-    )
+    extra = tuple((f"Output {name}", str(path)) for name, path in sorted(section.outputs.items()))
     return TrinityTable("Outputs", ("Output", "Path"), (*rows, *extra))
 
 
@@ -220,4 +218,3 @@ def _format_float(value: float) -> str:
 
 def _path_text(path: Path | None) -> str:
     return "" if path is None else str(path)
-

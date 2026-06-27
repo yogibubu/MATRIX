@@ -75,7 +75,7 @@ def test_run_gaussian_job_uses_non_gui_backend(tmp_path):
     executable = tmp_path / "fake_gaussian.sh"
     executable.write_text(
         "#!/bin/sh\n"
-        "test -f \"$1\" || exit 9\n"
+        'test -f "$1" || exit 9\n'
         "printf 'Normal termination of Gaussian 16\\n' > gauin.log\n"
         "exit 0\n",
         encoding="utf-8",
@@ -102,9 +102,7 @@ def test_matrix_gaussian_owns_fchk_qff_adapter():
 def test_indexed_qff_text_reader_lives_in_matrix_gaussian(tmp_path):
     qff_file = tmp_path / "field.qff"
     qff_file.write_text(
-        "FREQ 1 100.0\n"
-        "CUBIC 1 1 1 -2.0\n"
-        "QUARTIC 1 1 1 1 4.0\n",
+        "FREQ 1 100.0\nCUBIC 1 1 1 -2.0\nQUARTIC 1 1 1 1 4.0\n",
         encoding="utf-8",
     )
 

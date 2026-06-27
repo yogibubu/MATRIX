@@ -252,10 +252,7 @@ def _parse_eckart_coordinates(
                     return tuple(coordinates)
                 continue
             coordinates.append(
-                tuple(
-                    float(value.replace("D", "E").replace("d", "E"))
-                    for value in match.groups()
-                )
+                tuple(float(value.replace("D", "E").replace("d", "E")) for value in match.groups())
             )
         if coordinates:
             return tuple(coordinates)

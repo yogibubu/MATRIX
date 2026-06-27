@@ -14,6 +14,7 @@
 #   - mix coordinate spaces
 # ============================================================
 
+
 def ring_valence_angles(ring):
     """
     Generate cyclic valence-angle primitives for a ring.
@@ -103,4 +104,3 @@ def ring_atom_pairs(ring):
     atoms = ring.atoms
     n = len(atoms)
     return [(atoms[i], atoms[(i + 1) % n]) for i in range(n)]
-

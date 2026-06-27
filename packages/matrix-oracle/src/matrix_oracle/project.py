@@ -35,7 +35,11 @@ class WorkflowState:
 
     @property
     def ready(self) -> bool:
-        return self.status in {WorkflowStatus.READY, WorkflowStatus.WARNING, WorkflowStatus.COMPLETE}
+        return self.status in {
+            WorkflowStatus.READY,
+            WorkflowStatus.WARNING,
+            WorkflowStatus.COMPLETE,
+        }
 
 
 @dataclass(frozen=True)
@@ -69,7 +73,9 @@ class OracleProjectState:
         raise KeyError(f"unknown ORACLE GUI workflow: {key}")
 
 
-def load_oracle_project_state(path: Path | str, *, require_fragments: bool = False) -> OracleProjectState:
+def load_oracle_project_state(
+    path: Path | str, *, require_fragments: bool = False
+) -> OracleProjectState:
     target = Path(path)
     if not target.exists():
         return OracleProjectState(

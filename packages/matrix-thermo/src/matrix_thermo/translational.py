@@ -25,10 +25,7 @@ def translational_thermo(structure: Structure, basic: BasicSection) -> ThermoCon
     mass_kg = float(structure.total_mass_isotope) * constants[Phy.TO_KG]
     pressure_pa = P_atm * 101325.0
 
-    lnQ = (
-        1.5 * log((2.0 * pi * mass_kg * kB * T) / (h * h))
-        + log(kB * T / pressure_pa)
-    )
+    lnQ = 1.5 * log((2.0 * pi * mass_kg * kB * T) / (h * h)) + log(kB * T / pressure_pa)
     U = 1.5 * R * T
     H = 2.5 * R * T
     Cv = 1.5 * R

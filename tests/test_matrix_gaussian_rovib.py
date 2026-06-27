@@ -4,7 +4,11 @@ from pathlib import Path
 
 import numpy as np
 
-from matrix_gaussian import compute_deltavib_from_alpha, parse_gaussian_rovib_log, promote_gaussian_rovib_to_xyzin
+from matrix_gaussian import (
+    compute_deltavib_from_alpha,
+    parse_gaussian_rovib_log,
+    promote_gaussian_rovib_to_xyzin,
+)
 from matrix_rovib import (
     DeltaBVibAlphaRow,
     read_deltabvib_section,

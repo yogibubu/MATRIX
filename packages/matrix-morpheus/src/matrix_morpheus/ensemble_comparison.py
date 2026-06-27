@@ -49,7 +49,9 @@ def run_ensemble_prior_comparison(
     (out / "ensemble_prior_comparison.csv").write_text(_comparison_csv(results), encoding="utf-8")
     (out / "ensemble_prior_comparison.json").write_text(_comparison_json(results), encoding="utf-8")
     run_ensemble_prior_scan(job_path, out / "prior_scan")
-    run_ensemble_leave_one_molecule_out(job_path, out / "leave_one_molecule_out", soft_prior_sigma=soft_prior_sigma)
+    run_ensemble_leave_one_molecule_out(
+        job_path, out / "leave_one_molecule_out", soft_prior_sigma=soft_prior_sigma
+    )
     return results
 
 
@@ -57,7 +59,17 @@ def run_ensemble_prior_scan(
     job_path: Path,
     outdir: Path,
     *,
-    sigmas: tuple[float, ...] = (1.0e-5, 3.0e-5, 1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2, 3.0e-2, 1.0e-1),
+    sigmas: tuple[float, ...] = (
+        1.0e-5,
+        3.0e-5,
+        1.0e-4,
+        3.0e-4,
+        1.0e-3,
+        3.0e-3,
+        1.0e-2,
+        3.0e-2,
+        1.0e-1,
+    ),
 ) -> list[dict[str, float]]:
     job = read_ensemble_job(Path(job_path))
     out = Path(outdir)
@@ -82,7 +94,9 @@ def run_ensemble_prior_scan(
             }
         )
     (out / "prior_sigma_scan.csv").write_text(_scan_csv(rows), encoding="utf-8")
-    (out / "prior_sigma_scan.json").write_text(json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (out / "prior_sigma_scan.json").write_text(
+        json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return rows
 
 
@@ -108,10 +122,10 @@ def run_ensemble_leave_one_molecule_out(
             {
                 "heldout": heldout.name,
                 "train_molecules": float(len(train)),
-                    "rank": float(result.rank),
-                    "accepted": float(result.acceptance.accepted),
-                    "acceptance_status": result.acceptance.status,
-                    "scaled_condition_number": float(result.condition_number),
+                "rank": float(result.rank),
+                "accepted": float(result.acceptance.accepted),
+                "acceptance_status": result.acceptance.status,
+                "scaled_condition_number": float(result.condition_number),
                 "weighted_rms_before": before,
                 "weighted_rms_predicted": after,
                 "delta_weighted_rms": after - before,
@@ -119,7 +133,9 @@ def run_ensemble_leave_one_molecule_out(
             }
         )
     (out / "leave_one_molecule_out.csv").write_text(_loo_csv(rows), encoding="utf-8")
-    (out / "leave_one_molecule_out.json").write_text(json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (out / "leave_one_molecule_out.json").write_text(
+        json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return rows
 
 
@@ -183,8 +199,12 @@ def run_ensemble_synthon_threshold_scan(
                 "error": "",
             }
         )
-    (out / "synthon_threshold_scan.csv").write_text(_synthon_threshold_scan_csv(rows), encoding="utf-8")
-    (out / "synthon_threshold_scan.json").write_text(json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (out / "synthon_threshold_scan.csv").write_text(
+        _synthon_threshold_scan_csv(rows), encoding="utf-8"
+    )
+    (out / "synthon_threshold_scan.json").write_text(
+        json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return rows
 
 
@@ -211,16 +231,28 @@ def write_ensemble_jpcl_artifacts(
     classes = _read_csv_dicts(analysis / "soft_prior" / "ensemble_class_corrections.csv")
 
     artifacts["model_scheme"] = _write(generated / "model_scheme.tex", _model_scheme_tex())
-    artifacts["prior_comparison"] = _write(generated / "anhydrides_prior_comparison.tex", _comparison_table_tex(comparison))
-    artifacts["classes_priors"] = _write(generated / "anhydrides_classes_priors.tex", _classes_table_tex(classes))
-    artifacts["class_support"] = _write(generated / "class_support_report.tex", _support_table_tex(support))
-    artifacts["condition_wrms_plot"] = _write(generated / "condition_wrms_plot.tex", _condition_wrms_plot_tex(comparison))
-    artifacts["prior_sigma_scan_plot"] = _write(generated / "prior_sigma_scan_plot.tex", _prior_scan_plot_tex(scan, "weighted_rms_after"))
+    artifacts["prior_comparison"] = _write(
+        generated / "anhydrides_prior_comparison.tex", _comparison_table_tex(comparison)
+    )
+    artifacts["classes_priors"] = _write(
+        generated / "anhydrides_classes_priors.tex", _classes_table_tex(classes)
+    )
+    artifacts["class_support"] = _write(
+        generated / "class_support_report.tex", _support_table_tex(support)
+    )
+    artifacts["condition_wrms_plot"] = _write(
+        generated / "condition_wrms_plot.tex", _condition_wrms_plot_tex(comparison)
+    )
+    artifacts["prior_sigma_scan_plot"] = _write(
+        generated / "prior_sigma_scan_plot.tex", _prior_scan_plot_tex(scan, "weighted_rms_after")
+    )
     artifacts["prior_sigma_condition_plot"] = _write(
         generated / "prior_sigma_condition_plot.tex",
         _prior_scan_plot_tex(scan, "scaled_condition_number", log_y=True),
     )
-    artifacts["leave_one_molecule_out"] = _write(generated / "leave_one_molecule_out.tex", _loo_table_tex(loo))
+    artifacts["leave_one_molecule_out"] = _write(
+        generated / "leave_one_molecule_out.tex", _loo_table_tex(loo)
+    )
     return artifacts
 
 
@@ -244,11 +276,15 @@ def suggest_ensemble_class_priors(
             sigma = torsion_sigma
         elif kind in {"out_of_plane", "oop", "u"}:
             sigma = oop_sigma
-        result.append(item if sigma is None else replace(item, prior_value=0.0, prior_sigma=float(sigma)))
+        result.append(
+            item if sigma is None else replace(item, prior_value=0.0, prior_sigma=float(sigma))
+        )
     return tuple(result)
 
 
-def _classes_without_priors(classes: tuple[EnsembleClassCorrection, ...]) -> tuple[EnsembleClassCorrection, ...]:
+def _classes_without_priors(
+    classes: tuple[EnsembleClassCorrection, ...],
+) -> tuple[EnsembleClassCorrection, ...]:
     return tuple(replace(item, prior_value=None, prior_sigma=None) for item in classes)
 
 
@@ -267,15 +303,31 @@ def _classes_with_soft_angular_priors(
 def _classes_with_angular_hard_constraints(
     classes: tuple[EnsembleClassCorrection, ...],
 ) -> tuple[EnsembleClassCorrection, ...]:
-    return tuple(replace(item, prior_value=None, prior_sigma=None) for item in classes if not _is_angular_class(item))
+    return tuple(
+        replace(item, prior_value=None, prior_sigma=None)
+        for item in classes
+        if not _is_angular_class(item)
+    )
 
 
 def _is_angular_class(item: EnsembleClassCorrection) -> bool:
-    return item.kind.strip().lower().replace("-", "_") in {"bend", "angle", "a", "torsion", "dihedral", "d", "out_of_plane", "oop", "u"}
+    return item.kind.strip().lower().replace("-", "_") in {
+        "bend",
+        "angle",
+        "a",
+        "torsion",
+        "dihedral",
+        "d",
+        "out_of_plane",
+        "oop",
+        "u",
+    }
 
 
 def _comparison_csv(results: dict[str, EnsembleClassCorrectionFit]) -> str:
-    lines = ["variant,n_classes,rank,acceptance_status,accepted,scaled_condition_number,weighted_rms_before,weighted_rms_after"]
+    lines = [
+        "variant,n_classes,rank,acceptance_status,accepted,scaled_condition_number,weighted_rms_before,weighted_rms_after"
+    ]
     for name, result in results.items():
         lines.append(
             f"{name},{len(result.classes)},{result.rank},{result.acceptance.status},{int(result.acceptance.accepted)},"
@@ -310,6 +362,7 @@ def _comparison_json(results: dict[str, EnsembleClassCorrectionFit]) -> str:
     }
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
+
 def _evaluate_fit_on_molecule(
     molecule: EnsembleMolecule,
     result: EnsembleClassCorrectionFit,
@@ -320,11 +373,15 @@ def _evaluate_fit_on_molecule(
     with TemporaryDirectory(prefix="matrix_ensemble_loo_") as tmp:
         block = _ensemble_molecule_design(molecule, result.classes, step=step, root=Path(tmp))
     after = block.residual - block.design @ solution
-    return _weighted_rms(block.residual, block.measurement.weights), _weighted_rms(after, block.measurement.weights)
+    return _weighted_rms(block.residual, block.measurement.weights), _weighted_rms(
+        after, block.measurement.weights
+    )
 
 
 def _scan_csv(rows: list[dict[str, float]]) -> str:
-    lines = ["prior_sigma,rank,acceptance_status,accepted,scaled_condition_number,weighted_rms_before,weighted_rms_after"]
+    lines = [
+        "prior_sigma,rank,acceptance_status,accepted,scaled_condition_number,weighted_rms_before,weighted_rms_after"
+    ]
     for row in rows:
         lines.append(
             f"{row['prior_sigma']:.12g},{int(row['rank'])},{row.get('acceptance_status', '')},"
@@ -512,14 +569,18 @@ def _condition_wrms_plot_tex(rows: list[dict[str, str]]) -> str:
 
 
 def _prior_scan_plot_tex(rows: list[dict[str, str]], field: str, *, log_y: bool = False) -> str:
-    ylabel = "Scaled condition number" if field == "scaled_condition_number" else "Weighted RMS after fit"
+    ylabel = (
+        "Scaled condition number"
+        if field == "scaled_condition_number"
+        else "Weighted RMS after fit"
+    )
     lines = [
         r"\begin{tikzpicture}",
         r"\begin{axis}[",
         r"  width=0.82\linewidth,",
         r"  height=5.2cm,",
         r"  xmode=log,",
-        *( [r"  ymode=log,"] if log_y else [] ),
+        *([r"  ymode=log,"] if log_y else []),
         r"  xlabel={Bend prior $\sigma$},",
         rf"  ylabel={{{ylabel}}},",
         r"  grid=both,",

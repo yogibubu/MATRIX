@@ -173,7 +173,9 @@ def promote_gaussian_fchk_to_xyzin(
     if write_cartesian_hessian:
         write_cartesian_hessian_section(
             target,
-            cartesian_hessian_section_from_hessian_input(data.to_hessian_input(), source="gaussian-fchk"),
+            cartesian_hessian_section_from_hessian_input(
+                data.to_hessian_input(), source="gaussian-fchk"
+            ),
         )
         wrote_hessian = True
     if write_normal_modes and data.normal_modes.size:
@@ -220,7 +222,9 @@ def promote_gaussian_fchk_to_xyzin(
             orbital_file_record_from_path(source, role="orbitals", source="gaussian-fchk"),
         ]
         if data.has_total_scf_density:
-            records.append(orbital_file_record_from_path(source, role="density", source="gaussian-fchk"))
+            records.append(
+                orbital_file_record_from_path(source, role="density", source="gaussian-fchk")
+            )
         merge_orbitals_section(target, tuple(records))
         wrote_orbitals_section = True
     return GaussianFCHKPromotion(
@@ -267,9 +271,7 @@ def read_indexed_qff_text(path: Path, frequencies_cm: np.ndarray | None = None):
             elif tag in {"QUARTIC", "C4"} and len(parts) >= 6:
                 key = tuple(sorted(int(value) - 1 for value in parts[1:5]))
                 quartic[key] = float(parts[5].replace("D", "E"))
-            elif len(parts) in {4, 5} and all(
-                token.lstrip("+-").isdigit() for token in parts[:-1]
-            ):
+            elif len(parts) in {4, 5} and all(token.lstrip("+-").isdigit() for token in parts[:-1]):
                 key = tuple(sorted(int(value) - 1 for value in parts[:-1]))
                 value = float(parts[-1].replace("D", "E"))
                 if len(key) == 3:
@@ -339,7 +341,9 @@ def _read_fchk_blocks(path: Path) -> dict[str, np.ndarray | int | float | str]:
         if kind == "I":
             blocks[label] = np.array([int(x) for x in raw[:nvalues]], dtype=int)
         elif kind == "R":
-            blocks[label] = np.array([float(x.replace("D", "E")) for x in raw[:nvalues]], dtype=float)
+            blocks[label] = np.array(
+                [float(x.replace("D", "E")) for x in raw[:nvalues]], dtype=float
+            )
         else:
             blocks[label] = " ".join(raw[:nvalues])
     return blocks

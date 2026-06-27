@@ -88,9 +88,7 @@ def symmetry_section_lines(symmetry: MolecularSymmetry, *, thresholds) -> list[s
         "[OPERATIONS]",
     ]
     for idx, operation in enumerate(symmetry.operations, start=1):
-        matrix = ",".join(
-            f"{value:.12g}" for row in operation.rotation for value in row
-        )
+        matrix = ",".join(f"{value:.12g}" for row in operation.rotation for value in row)
         permutation = ",".join(str(atom) for atom in operation.permutation)
         lines.append(
             f"{idx} LABEL={operation.label} "
@@ -163,9 +161,7 @@ def symmetry_elements_from_geometry(
             auto_max_n=auto_max_n,
             inertia_tol=inertia_tol,
         )
-        aligned_nmax, _aligned_axis = _highest_cn_axis(
-            [element[0] for element in aligned_elements]
-        )
+        aligned_nmax, _aligned_axis = _highest_cn_axis([element[0] for element in aligned_elements])
         if aligned_nmax >= nmax and len(aligned_elements) >= len(elements):
             elements = tuple(
                 (

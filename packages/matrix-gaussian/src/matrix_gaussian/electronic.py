@@ -113,8 +113,7 @@ def promote_gaussian_electronic_log_to_xyzin(
         merge_orbitals_section(
             target,
             tuple(
-                orbital_file_record_from_path(path, source="gaussian-log")
-                for path in orbital_files
+                orbital_file_record_from_path(path, source="gaussian-log") for path in orbital_files
             ),
         )
         wrote_orbitals = True

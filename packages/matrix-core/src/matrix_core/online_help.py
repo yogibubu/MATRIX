@@ -308,9 +308,7 @@ QUICKSTART: dict[str, tuple[str, ...]] = {
         'matrix gf --xyzin molecule.xyzin --scale-preview --scale-class "CH:0.970:R("',
     ),
     "morpheus": ("matrix semiexp --xyzin molecule.xyzin --job job.toml --outdir run",),
-    "trinity": (
-        "matrix trinity prepare molecule.xyzin --run-dir run --engine-command CMD",
-    ),
+    "trinity": ("matrix trinity prepare molecule.xyzin --run-dir run --engine-command CMD",),
     "rovib": (
         "matrix rovib summarize molecule.xyzin",
         "matrix rovib wmsrot-input molecule.xyzin --out wmsrot.inp",
@@ -390,8 +388,7 @@ def online_help_records(
     if tool:
         return (tool_help(tool, xyzin=xyzin),)
     return tuple(
-        tool_help(contract, xyzin=xyzin)
-        for contract in tool_contracts(include_gui=include_gui)
+        tool_help(contract, xyzin=xyzin) for contract in tool_contracts(include_gui=include_gui)
     )
 
 
@@ -500,9 +497,7 @@ def online_help_markdown(
                 else "missing " + _join_sections(readiness.missing_required_sections)
             )
             lines.append("")
-            lines.append(
-                f"Readiness for `{readiness.xyzin_path}`: {readiness_status}"
-            )
+            lines.append(f"Readiness for `{readiness.xyzin_path}`: {readiness_status}")
             if readiness.missing_required_sections:
                 lines.extend(
                     f"- {line}"

@@ -10,7 +10,12 @@ import numpy as np
 
 from matrix_chem.geometry_io import read_xyz_atoms_coords, write_xyz
 from matrix_chem.topology.pipeline import build_topology_objects
-from matrix_neo.survibfit.primitives import Primitive, build_primitives, eval_primitives, grad_primitive
+from matrix_neo.survibfit.primitives import (
+    Primitive,
+    build_primitives,
+    eval_primitives,
+    grad_primitive,
+)
 from matrix_neo.survibfit.synthon_similarity import compare_against_library
 
 from .fit import _atomic_number
@@ -60,10 +65,7 @@ class ReferenceLibrarySearchResult:
             "query_xyz": str(self.query_xyz),
             "library_root": str(self.library_root),
             "settings": self.settings,
-            "matches": [
-                {**asdict(match), "path": str(match.path)}
-                for match in self.matches
-            ],
+            "matches": [{**asdict(match), "path": str(match.path)} for match in self.matches],
             "skipped": list(self.skipped),
         }
 
@@ -72,7 +74,9 @@ class ReferenceLibrarySearchResult:
         out.mkdir(parents=True, exist_ok=True)
         json_path = out / "reference_matches.json"
         csv_path = out / "reference_matches.csv"
-        json_path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        json_path.write_text(
+            json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         write_reference_matches_csv(csv_path, self.matches)
         return {"reference_matches_json": json_path, "reference_matches_csv": csv_path}
 
@@ -201,7 +205,9 @@ def search_reference_library(
         path = Path(row["xyz"])
         ref = by_path.get(path.resolve())
         if ref is None:
-            ref = ReferenceGeometry(path.stem, path.stem.replace("_", " "), int(row["natoms"]), "", path)
+            ref = ReferenceGeometry(
+                path.stem, path.stem.replace("_", " "), int(row["natoms"]), "", path
+            )
         matches.append(
             ReferenceMatch(
                 rank=rank,
@@ -225,7 +231,10 @@ def search_reference_library(
         query_xyz=query,
         library_root=root,
         matches=tuple(matches),
-        skipped=tuple({"xyz": str(item.get("xyz", "")), "error": str(item.get("error", ""))} for item in report["skipped"]),
+        skipped=tuple(
+            {"xyz": str(item.get("xyz", "")), "error": str(item.get("error", ""))}
+            for item in report["skipped"]
+        ),
         settings={
             "top_k": int(top_k),
             "library_size": int(len(references)),
@@ -291,7 +300,9 @@ def build_reference_assisted_geometry(
     query = Path(query_xyz)
     atoms, coords, _comment = read_xyz_atoms_coords(query)
     atoms_tuple = tuple(str(atom) for atom in atoms)
-    apply = tuple(_normalize_primitive_kind(kind) for kind in apply_kinds if _normalize_primitive_kind(kind))
+    apply = tuple(
+        _normalize_primitive_kind(kind) for kind in apply_kinds if _normalize_primitive_kind(kind)
+    )
     if not apply:
         raise ValueError("apply_kinds did not contain any supported primitive kind")
 
@@ -305,7 +316,9 @@ def build_reference_assisted_geometry(
         include_ring_comparison=include_ring_comparison,
         ring_weight=ring_weight,
     )
-    reference_weights = {match.slug: max(float(match.similarity_combined), 1.0e-12) for match in ranking.matches}
+    reference_weights = {
+        match.slug: max(float(match.similarity_combined), 1.0e-12) for match in ranking.matches
+    }
     reference_descriptors = []
     for match in ranking.matches:
         try:
@@ -326,10 +339,14 @@ def build_reference_assisted_geometry(
     for descriptor in query_descriptors:
         candidates = []
         for candidate in index.get((descriptor.primitive.kind, descriptor.signature), []):
-            zeff_distance = _zeff_signature_distance(descriptor.zeff_signature, candidate.zeff_signature)
+            zeff_distance = _zeff_signature_distance(
+                descriptor.zeff_signature, candidate.zeff_signature
+            )
             if zeff_distance is None or zeff_distance > zeff_threshold:
                 continue
-            value_distance = abs(_primitive_delta(descriptor.primitive.kind, candidate.value, descriptor.value))
+            value_distance = abs(
+                _primitive_delta(descriptor.primitive.kind, candidate.value, descriptor.value)
+            )
             if value_distance > value_thresholds[descriptor.primitive.kind]:
                 continue
             weight = reference_weights.get(candidate.slug, 1.0) / (1.0 + zeff_distance)
@@ -337,12 +354,16 @@ def build_reference_assisted_geometry(
         candidates.sort(key=lambda item: (-item[0], item[1], item[2].slug))
         selected = candidates[:max_fragment_matches]
         if len(selected) < min_fragment_support:
-            unmatched.append(_unmatched_fragment_row(descriptor, "no supported fragment in reference library"))
+            unmatched.append(
+                _unmatched_fragment_row(descriptor, "no supported fragment in reference library")
+            )
             continue
         weights = np.array([item[0] for item in selected], dtype=float)
         values = np.array([item[2].value for item in selected], dtype=float)
         target = _weighted_fragment_target(descriptor.primitive.kind, values, weights)
-        mean_similarity = float(np.mean([reference_weights.get(item[2].slug, 0.0) for item in selected]))
+        mean_similarity = float(
+            np.mean([reference_weights.get(item[2].slug, 0.0) for item in selected])
+        )
         mean_zeff_distance = float(np.mean([item[1] for item in selected]))
         targets.append(
             FragmentTarget(
@@ -380,7 +401,9 @@ def build_reference_assisted_geometry(
         iterations=iterations,
         rms_target_residual_initial=initial_rms,
         rms_target_residual_final=final_rms,
-        max_cartesian_shift_angstrom=float(np.max(np.linalg.norm(assisted - coords, axis=1))) if len(coords) else 0.0,
+        max_cartesian_shift_angstrom=float(np.max(np.linalg.norm(assisted - coords, axis=1)))
+        if len(coords)
+        else 0.0,
         settings={
             "top_library_matches": int(top_library_matches),
             "max_fragment_matches": int(max_fragment_matches),
@@ -501,7 +524,9 @@ def write_unmatched_fragments_csv(path: Path, rows: tuple[dict[str, Any], ...]) 
     return target
 
 
-def write_multiclasses_fragment_summary_csv(path: Path, targets: tuple[FragmentTarget, ...]) -> Path:
+def write_multiclasses_fragment_summary_csv(
+    path: Path, targets: tuple[FragmentTarget, ...]
+) -> Path:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     groups = _cluster_fragment_targets_for_classes(targets)
@@ -602,7 +627,9 @@ class _PrimitiveDescriptor:
 def _primitive_descriptors(path: Path, *, slug: str) -> tuple[_PrimitiveDescriptor, ...]:
     atoms, coords, _comment = read_xyz_atoms_coords(Path(path))
     z_numbers = np.array([_atomic_number(atom) for atom in atoms], dtype=int)
-    _continuous, graph, _ringset, synthons, _aromaticity = build_topology_objects(np.asarray(coords, dtype=float), z_numbers)
+    _continuous, graph, _ringset, synthons, _aromaticity = build_topology_objects(
+        np.asarray(coords, dtype=float), z_numbers
+    )
     primitives = build_primitives(graph, np.asarray(coords, dtype=float))
     values = eval_primitives(primitives, np.asarray(coords, dtype=float))
     zeff = tuple(float(synthons.Zeff(i)) for i in range(len(atoms)))
@@ -627,8 +654,12 @@ def _primitive_descriptors(path: Path, *, slug: str) -> tuple[_PrimitiveDescript
     return tuple(rows)
 
 
-def _primitive_signature(kind: str, indices_zero_based: tuple[int, ...], atoms: tuple[str, ...]) -> tuple[str, ...]:
-    symbols = tuple(_normalize_symbol(atoms[index]) for index in indices_zero_based if 0 <= index < len(atoms))
+def _primitive_signature(
+    kind: str, indices_zero_based: tuple[int, ...], atoms: tuple[str, ...]
+) -> tuple[str, ...]:
+    symbols = tuple(
+        _normalize_symbol(atoms[index]) for index in indices_zero_based if 0 <= index < len(atoms)
+    )
     if len(symbols) != len(indices_zero_based):
         return ()
     if kind == "angle" and len(symbols) == 3:
@@ -643,7 +674,9 @@ def _primitive_signature(kind: str, indices_zero_based: tuple[int, ...], atoms: 
     return symbols
 
 
-def _primitive_zeff_signature(kind: str, indices_zero_based: tuple[int, ...], zeff: tuple[float, ...]) -> tuple[float, ...]:
+def _primitive_zeff_signature(
+    kind: str, indices_zero_based: tuple[int, ...], zeff: tuple[float, ...]
+) -> tuple[float, ...]:
     values = tuple(float(zeff[index]) for index in indices_zero_based if 0 <= index < len(zeff))
     if len(values) != len(indices_zero_based):
         return ()
@@ -691,27 +724,46 @@ def _optimize_fragment_targets(
         current = np.asarray(coords, dtype=float).copy()
         return current, 0, 0.0, 0.0
     by_index = {target.query_index: target for target in targets}
-    selected_descriptors = [descriptor for descriptor in descriptors if descriptor.index in by_index]
+    selected_descriptors = [
+        descriptor for descriptor in descriptors if descriptor.index in by_index
+    ]
     selected = [descriptor.primitive for descriptor in selected_descriptors]
-    target_values = np.array([by_index[descriptor.index].target_value for descriptor in selected_descriptors], dtype=float)
-    weights = np.array([max(by_index[descriptor.index].mean_similarity, 1.0e-3) for descriptor in selected_descriptors], dtype=float)
+    target_values = np.array(
+        [by_index[descriptor.index].target_value for descriptor in selected_descriptors],
+        dtype=float,
+    )
+    weights = np.array(
+        [
+            max(by_index[descriptor.index].mean_similarity, 1.0e-3)
+            for descriptor in selected_descriptors
+        ],
+        dtype=float,
+    )
     current = np.asarray(coords, dtype=float).copy()
     initial_rms = _target_rms(selected, target_values, weights, current)
     final_rms = initial_rms
     sqrt_tether = np.sqrt(float(tether_weight))
     for iteration in range(1, max(0, int(max_iterations)) + 1):
         values = eval_primitives(selected, current)
-        residual = np.array([
-            _primitive_delta(primitive.kind, values[i], target_values[i])
-            for i, primitive in enumerate(selected)
-        ])
+        residual = np.array(
+            [
+                _primitive_delta(primitive.kind, values[i], target_values[i])
+                for i, primitive in enumerate(selected)
+            ]
+        )
         bmat = np.vstack([grad_primitive(primitive, current).reshape(-1) for primitive in selected])
         sqrt_w = np.sqrt(weights)
         lhs = bmat * sqrt_w[:, None]
         rhs = -residual * sqrt_w
         if tether_weight > 0.0:
             lhs = np.vstack([lhs, sqrt_tether * np.eye(current.size)])
-            rhs = np.concatenate([rhs, sqrt_tether * (np.asarray(coords, dtype=float).reshape(-1) - current.reshape(-1))])
+            rhs = np.concatenate(
+                [
+                    rhs,
+                    sqrt_tether
+                    * (np.asarray(coords, dtype=float).reshape(-1) - current.reshape(-1)),
+                ]
+            )
         step, *_ = np.linalg.lstsq(lhs, rhs, rcond=1.0e-10)
         step = step.reshape(current.shape)
         max_atom_step = float(np.max(np.linalg.norm(step, axis=1))) if len(step) else 0.0
@@ -724,12 +776,16 @@ def _optimize_fragment_targets(
     return current, int(max_iterations), initial_rms, final_rms
 
 
-def _target_rms(primitives: list[Primitive], targets: np.ndarray, weights: np.ndarray, coords: np.ndarray) -> float:
+def _target_rms(
+    primitives: list[Primitive], targets: np.ndarray, weights: np.ndarray, coords: np.ndarray
+) -> float:
     values = eval_primitives(primitives, coords)
-    residual = np.array([
-        _primitive_delta(primitive.kind, values[i], targets[i])
-        for i, primitive in enumerate(primitives)
-    ])
+    residual = np.array(
+        [
+            _primitive_delta(primitive.kind, values[i], targets[i])
+            for i, primitive in enumerate(primitives)
+        ]
+    )
     return float(np.sqrt(np.average(residual * residual, weights=weights)))
 
 
@@ -787,7 +843,9 @@ def _class_value_cluster_threshold(kind: str) -> float:
     return float("inf")
 
 
-def _class_value_cluster_label(kind: str, items: list[FragmentTarget], cluster_index: int, nclusters: int) -> str:
+def _class_value_cluster_label(
+    kind: str, items: list[FragmentTarget], cluster_index: int, nclusters: int
+) -> str:
     if nclusters <= 1:
         return "all"
     center = float(np.mean([item.initial_value for item in items]))

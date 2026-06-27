@@ -18,6 +18,7 @@ from .continuous_graph import (
 # Utility
 # ============================================================
 
+
 def angle_between(v1, v2):
     num = np.dot(v1, v2)
     den = np.linalg.norm(v1) * np.linalg.norm(v2)
@@ -28,11 +29,11 @@ def angle_between(v1, v2):
 
 
 def hermite_c1(t, y0, y1, m0, m1):
-    h00 = 2.0*t**3 - 3.0*t**2 + 1.0
-    h10 = t**3 - 2.0*t**2 + t
-    h01 = -2.0*t**3 + 3.0*t**2
+    h00 = 2.0 * t**3 - 3.0 * t**2 + 1.0
+    h10 = t**3 - 2.0 * t**2 + t
+    h01 = -2.0 * t**3 + 3.0 * t**2
     h11 = t**3 - t**2
-    return h00*y0 + h10*m0 + h01*y1 + h11*m1
+    return h00 * y0 + h10 * m0 + h01 * y1 + h11 * m1
 
 
 def _hermite_slope(table, keys, D):
@@ -54,7 +55,9 @@ def _hermite_slope(table, keys, D):
         right = upper
     else:
         right = min(k for k in keys if k > upper and k in table)
-    return 0.5 * (table[upper] - table[lower]) if right == left else 0.5 * (table[right] - table[left])
+    return (
+        0.5 * (table[upper] - table[lower]) if right == left else 0.5 * (table[right] - table[left])
+    )
 
 
 def principal_n(Z):
@@ -77,13 +80,13 @@ def nval_main_group(Z):
     if Z == 1:
         return 1
     if 3 <= Z <= 10:
-        return {3:1,4:2,5:3,6:4,7:5,8:6,9:7,10:8}[Z]
+        return {3: 1, 4: 2, 5: 3, 6: 4, 7: 5, 8: 6, 9: 7, 10: 8}[Z]
     if 11 <= Z <= 18:
-        return {11:1,12:2,13:3,14:4,15:5,16:6,17:7,18:8}[Z]
+        return {11: 1, 12: 2, 13: 3, 14: 4, 15: 5, 16: 6, 17: 7, 18: 8}[Z]
     if 31 <= Z <= 36:
-        return {31:3,32:4,33:5,34:6,35:7,36:8}[Z]
+        return {31: 3, 32: 4, 33: 5, 34: 6, 35: 7, 36: 8}[Z]
     if 49 <= Z <= 54:
-        return {49:3,50:4,51:5,52:6,53:7,54:8}[Z]
+        return {49: 3, 50: 4, 51: 5, 52: 6, 53: 7, 54: 8}[Z]
     return 0
 
 
@@ -91,8 +94,8 @@ def nval_main_group(Z):
 # Atomic Synthons
 # ============================================================
 
-class AtomicSynthons:
 
+class AtomicSynthons:
     def __init__(self, Z, coords, neighbors):
         self.Z = Z
         self.coords = coords
@@ -108,9 +111,7 @@ class AtomicSynthons:
     # --------------------------------------------------------
 
     def cna(self, i):
-        return continuous_coordination_number(
-            i, self.Z, self.coords, self._all_neighbors
-        )
+        return continuous_coordination_number(i, self.Z, self.coords, self._all_neighbors)
 
     # --------------------------------------------------------
     # Effective covalent radius
@@ -152,9 +153,7 @@ class AtomicSynthons:
             key = (i, j) if i < j else (j, i)
             if key in ext:
                 return float(ext[key])
-        return continuous_bond_order(
-            i, j, self.Z, self.coords, self._all_neighbors
-        )
+        return continuous_bond_order(i, j, self.Z, self.coords, self._all_neighbors)
 
     def bond_order_desc(self, i, j):
         return max(self.bond_order(i, j), BO_MIN_DESC)
@@ -198,8 +197,7 @@ class AtomicSynthons:
     def theta_ref(self, N):
         if self._theta_bar is None:
             self._theta_bar = {
-                int(k): REF_ANGLE_SUM[k] / (k*(k-1)/2)
-                for k in REF_ANGLE_SUM if k >= 2
+                int(k): REF_ANGLE_SUM[k] / (k * (k - 1) / 2) for k in REF_ANGLE_SUM if k >= 2
             }
 
         keys = sorted(self._theta_bar.keys())
@@ -255,6 +253,7 @@ class AtomicSynthons:
         if ext and i in ext:
             return float(ext[i])
         from .electronegativity import electronegativity
+
         Zi = int(self.Z[i])
         chi_i = electronegativity(Zi)
         ni = principal_n(Zi)
@@ -270,6 +269,7 @@ class AtomicSynthons:
 
     def polarizability(self, i):
         from .polarizability import polarizability
+
         Zi = int(self.Z[i])
         ai = polarizability(Zi)
         ni = principal_n(Zi)
@@ -341,7 +341,7 @@ class AtomicSynthons:
             self.strain(i),
         ]
         norm = [math.erf(v / EAN_SIGMA) for v in vals]
-        r = math.sqrt(sum(v*v for v in norm))
+        r = math.sqrt(sum(v * v for v in norm))
         return r / (1.0 + r)
 
     def Zeff(self, i):

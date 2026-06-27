@@ -110,7 +110,16 @@ def _empty_tables() -> tuple[StructureTable, StructureTable, StructureTable, Str
         StructureTable("Rings", ("Ring", "Size", "Atoms"), ()),
         StructureTable(
             "Synthons",
-            ("Atom", "Element", "Zeff", "Charge", "Covalency", "Delocalization", "Strain", "Signature"),
+            (
+                "Atom",
+                "Element",
+                "Zeff",
+                "Charge",
+                "Covalency",
+                "Delocalization",
+                "Strain",
+                "Signature",
+            ),
             (),
         ),
         StructureTable("Fragments", ("ID", "Label", "Size", "Atoms", "Center"), ()),

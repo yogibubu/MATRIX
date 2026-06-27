@@ -43,7 +43,9 @@ def read_geometry_input(path: Path) -> SemiexperimentalGeometryInput:
             )
     if suffix == ".xyz":
         atoms, coords, comment = read_xyz_atoms_coords(target)
-        return SemiexperimentalGeometryInput(tuple(atoms), np.asarray(coords, dtype=float), comment, (), "xyz")
+        return SemiexperimentalGeometryInput(
+            tuple(atoms), np.asarray(coords, dtype=float), comment, (), "xyz"
+        )
     if suffix in {".com", ".gjf"}:
         return read_gaussian_cartesian_input(target)
     if suffix == ".mfit" or target.name.lower().endswith((".mse.toml", ".semiexp.toml")):
@@ -79,7 +81,9 @@ def read_gaussian_cartesian_input(path: Path) -> SemiexperimentalGeometryInput:
     title = " ".join(line.strip() for line in lines[title_start:idx] if line.strip())
     idx = _next_nonblank(lines, idx)
     if idx >= len(lines) or not _is_charge_multiplicity(lines[idx]):
-        raise ValueError("Gaussian input needs a charge/multiplicity line before Cartesian coordinates")
+        raise ValueError(
+            "Gaussian input needs a charge/multiplicity line before Cartesian coordinates"
+        )
     idx += 1
 
     atoms: list[str] = []

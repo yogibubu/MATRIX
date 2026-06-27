@@ -101,7 +101,9 @@ def load_paper_benchmark_snapshot(path: Path | None = None) -> dict[str, Any]:
     return data
 
 
-def validate_paper_benchmark_snapshot(snapshot: dict[str, Any], *, source: Path | None = None) -> None:
+def validate_paper_benchmark_snapshot(
+    snapshot: dict[str, Any], *, source: Path | None = None
+) -> None:
     label = str(source) if source is not None else "snapshot"
     if snapshot.get("schema") != PAPER_BENCHMARK_SCHEMA:
         raise SnapshotValidationError(f"{label}: unsupported schema {snapshot.get('schema')!r}")
@@ -116,7 +118,9 @@ def validate_paper_benchmark_snapshot(snapshot: dict[str, Any], *, source: Path 
     if not isinstance(planar, dict):
         raise SnapshotValidationError(f"{label}: planar_pair_diagnostics must be an object")
     if set(planar) != {"nitrobenzene", "azulene"}:
-        raise SnapshotValidationError(f"{label}: planar diagnostics must cover nitrobenzene and azulene")
+        raise SnapshotValidationError(
+            f"{label}: planar diagnostics must cover nitrobenzene and azulene"
+        )
     for system, diagnostics in planar.items():
         _validate_planar_diagnostics(system, diagnostics, label)
 
@@ -163,7 +167,9 @@ def write_snapshot(snapshot: dict[str, Any], path: Path | None = None) -> Path:
     return target
 
 
-def write_paper_benchmark_artifacts(snapshot: dict[str, Any], outdir: Path | None = None) -> dict[str, Path]:
+def write_paper_benchmark_artifacts(
+    snapshot: dict[str, Any], outdir: Path | None = None
+) -> dict[str, Path]:
     validate_paper_benchmark_snapshot(snapshot)
     target_dir = _resolve_repo_path(outdir or DEFAULT_OUTPUT_DIR)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -202,8 +208,12 @@ def _refresh_case_from_run_dir(case: dict[str, Any], run_dir: Path) -> None:
     diagnostics = _read_key_value_csv(run_dir / "semiexp_diagnostics.csv")
     manifest = _read_json(run_dir / "semiexp_manifest.json")
     parameters = manifest.get("parameters", {}) if isinstance(manifest, dict) else {}
-    case["coordinate_model"] = str(diagnostics.get("coordinate_model", case.get("coordinate_model", "gic")))
-    components = _parse_components(diagnostics.get("components")) or tuple(case.get("components", ()))
+    case["coordinate_model"] = str(
+        diagnostics.get("coordinate_model", case.get("coordinate_model", "gic"))
+    )
+    components = _parse_components(diagnostics.get("components")) or tuple(
+        case.get("components", ())
+    )
     if components:
         case["components"] = list(components)
         case["rotational_pair"] = _components_to_pair(components)
@@ -226,7 +236,9 @@ def _refresh_case_from_run_dir(case: dict[str, Any], run_dir: Path) -> None:
     if "n_isotopologues" in parameters:
         case["isotopologues"] = int(parameters["n_isotopologues"])
     if "fixed_parameters" in parameters:
-        case["primitive_constraints"] = len(_unique_primitive_constraints(parameters["fixed_parameters"]))
+        case["primitive_constraints"] = len(
+            _unique_primitive_constraints(parameters["fixed_parameters"])
+        )
     if "stationary_point" in parameters:
         case["stationary_point"] = str(parameters["stationary_point"])
     n_constants, rms, max_abs = _rotational_stats(run_dir / "semiexp_rotational_constants.csv")
@@ -443,17 +455,27 @@ def _validate_case(name: str, case: Any, label: str) -> None:
     _require_fields(case, _CASE_REQUIRED_FIELDS, f"{label}: case {name}")
     _validate_relative_run_dir(case["run_dir"], f"{label}: case {name}.run_dir")
     if case["coordinate_model"] not in MODEL_LABELS:
-        raise SnapshotValidationError(f"{label}: case {name} has unknown coordinate_model {case['coordinate_model']!r}")
+        raise SnapshotValidationError(
+            f"{label}: case {name} has unknown coordinate_model {case['coordinate_model']!r}"
+        )
     if case["rotational_pair"] not in {"ABC", *PAIR_ORDER}:
-        raise SnapshotValidationError(f"{label}: case {name} has invalid rotational_pair {case['rotational_pair']!r}")
+        raise SnapshotValidationError(
+            f"{label}: case {name} has invalid rotational_pair {case['rotational_pair']!r}"
+        )
     if tuple(case["components"]) != _pair_to_components(case["rotational_pair"]):
-        raise SnapshotValidationError(f"{label}: case {name} components do not match rotational_pair")
+        raise SnapshotValidationError(
+            f"{label}: case {name} components do not match rotational_pair"
+        )
     if case["reported_constants"] != case["isotopologues"] * 3:
-        raise SnapshotValidationError(f"{label}: case {name} reported_constants must equal 3*isotopologues")
+        raise SnapshotValidationError(
+            f"{label}: case {name} reported_constants must equal 3*isotopologues"
+        )
     if case["rank"] > case["effective_parameters"]:
         raise SnapshotValidationError(f"{label}: case {name} rank exceeds effective_parameters")
     if case["totally_symmetric_gics"] > case["final_gics"]:
-        raise SnapshotValidationError(f"{label}: case {name} active GIC count exceeds final GIC count")
+        raise SnapshotValidationError(
+            f"{label}: case {name} active GIC count exceeds final GIC count"
+        )
     for key in (
         "isotopologues",
         "reported_constants",
@@ -467,7 +489,12 @@ def _validate_case(name: str, case: Any, label: str) -> None:
     ):
         if case[key] < 0:
             raise SnapshotValidationError(f"{label}: case {name}.{key} must be non-negative")
-    for key in ("condition_number", "rotational_rms_MHz", "rotational_max_MHz", "minimum_hessian_eigenvalue"):
+    for key in (
+        "condition_number",
+        "rotational_rms_MHz",
+        "rotational_max_MHz",
+        "minimum_hessian_eigenvalue",
+    ):
         _validate_finite_nonnegative(case[key], f"{label}: case {name}.{key}")
     if case["rotational_max_MHz"] < case["rotational_rms_MHz"]:
         raise SnapshotValidationError(f"{label}: case {name} max residual is smaller than RMS")
@@ -478,10 +505,14 @@ def _validate_planar_diagnostics(system: str, diagnostics: Any, label: str) -> N
         raise SnapshotValidationError(f"{label}: planar diagnostics for {system} must be an object")
     selected = diagnostics.get("selected")
     if selected not in PAIR_ORDER:
-        raise SnapshotValidationError(f"{label}: planar diagnostics for {system} has invalid selected pair")
+        raise SnapshotValidationError(
+            f"{label}: planar diagnostics for {system} has invalid selected pair"
+        )
     pairs = diagnostics.get("pairs")
     if not isinstance(pairs, dict) or tuple(pairs) != PAIR_ORDER:
-        raise SnapshotValidationError(f"{label}: planar diagnostics for {system} must contain ordered AB/AC/BC pairs")
+        raise SnapshotValidationError(
+            f"{label}: planar diagnostics for {system} must contain ordered AB/AC/BC pairs"
+        )
     for pair in PAIR_ORDER:
         pair_data = pairs[pair]
         _require_fields(pair_data, _PAIR_REQUIRED_FIELDS, f"{label}: planar {system}.{pair}")
@@ -489,11 +520,15 @@ def _validate_planar_diagnostics(system: str, diagnostics: Any, label: str) -> N
         for key in ("rank", "condition_number", "rotational_rms_MHz", "rotational_max_MHz"):
             _validate_finite_nonnegative(pair_data[key], f"{label}: planar {system}.{pair}.{key}")
         if pair_data["rotational_max_MHz"] < pair_data["rotational_rms_MHz"]:
-            raise SnapshotValidationError(f"{label}: planar {system}.{pair} max residual is smaller than RMS")
+            raise SnapshotValidationError(
+                f"{label}: planar {system}.{pair} max residual is smaller than RMS"
+            )
     selected_rms = pairs[selected]["rotational_rms_MHz"]
     best_rms = min(pair["rotational_rms_MHz"] for pair in pairs.values())
     if not math.isclose(selected_rms, best_rms, rel_tol=1.0e-12, abs_tol=1.0e-12):
-        raise SnapshotValidationError(f"{label}: planar {system} selected pair is not the lowest-RMS pair")
+        raise SnapshotValidationError(
+            f"{label}: planar {system} selected pair is not the lowest-RMS pair"
+        )
 
 
 def _require_fields(data: Any, fields: dict[str, Any], label: str) -> None:

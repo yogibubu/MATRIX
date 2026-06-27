@@ -55,7 +55,8 @@ def test_prepare_semiexp_xyzin_supports_custom_path(tmp_path):
     xyzin = tmp_path / "water_container"
     result = prepare_semiexperimental_xyzin(
         root / "packages/matrix-morpheus/examples/semiexp/water/parent.xyz",
-        observations_source=root / "packages/matrix-morpheus/examples/semiexp/water/isotopologues.toml",
+        observations_source=root
+        / "packages/matrix-morpheus/examples/semiexp/water/isotopologues.toml",
         xyzin_path=xyzin,
     )
 

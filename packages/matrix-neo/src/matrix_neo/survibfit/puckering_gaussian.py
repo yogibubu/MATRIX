@@ -105,7 +105,9 @@ def prelog_canonical_ring_indices(
     ring_set = set(indices)
 
     def candidate_key(candidate: list[int]) -> tuple[tuple[float, ...], ...]:
-        return tuple(_ring_atom_priority(atom, ring_set, atomic_numbers, adjacency) for atom in candidate)
+        return tuple(
+            _ring_atom_priority(atom, ring_set, atomic_numbers, adjacency) for atom in candidate
+        )
 
     candidates: list[list[int]] = []
     for start in range(n):
@@ -132,7 +134,10 @@ def ring_endocyclic_torsions(
     ring = coords[ring_indices]
     size = len(ring_indices)
     return np.array(
-        [dihedral(ring[i], ring[(i + 1) % size], ring[(i + 2) % size], ring[(i + 3) % size]) for i in range(size)],
+        [
+            dihedral(ring[i], ring[(i + 1) % size], ring[(i + 2) % size], ring[(i + 3) % size])
+            for i in range(size)
+        ],
         dtype=float,
     )
 
@@ -198,7 +203,9 @@ def ring_state(
     if not modes:
         raise ValueError("No paired puckering modes available for this ring")
     first = modes[0]
-    return PuckeringState(qc=first.qc, qs=first.qs, q=first.q, phi_deg=first.phi_deg, modes=tuple(modes))
+    return PuckeringState(
+        qc=first.qc, qs=first.qs, q=first.q, phi_deg=first.phi_deg, modes=tuple(modes)
+    )
 
 
 def five_ring_state(coords: np.ndarray, ring_indices: list[int]) -> PuckeringState:
@@ -236,7 +243,9 @@ def puckering_state(
     return ring_state(coords, ring_indices, atomic_numbers, adjacency)
 
 
-def phase_constraint_coefficients(phi_deg: float, ring_size: int = 5, harmonic: int = 2) -> np.ndarray:
+def phase_constraint_coefficients(
+    phi_deg: float, ring_size: int = 5, harmonic: int = 2
+) -> np.ndarray:
     phi = math.radians(phi_deg)
     qc_coeff, qs_coeff = ring_component_coefficients(ring_size, harmonic)
     return -math.sin(phi) * qc_coeff + math.cos(phi) * qs_coeff
@@ -334,7 +343,9 @@ def ring_functional_target_gic(
 ) -> tuple[list[str], float]:
     ring_indices = canonical_ring_indices(ring_indices, atomic_numbers, adjacency)
     if len(ring_indices) == 4:
-        return four_ring_target_gic(ring_indices, target_phi_deg, current_phi_deg, atomic_numbers, adjacency)
+        return four_ring_target_gic(
+            ring_indices, target_phi_deg, current_phi_deg, atomic_numbers, adjacency
+        )
     component_lines, modes = ring_puckering_component_lines(ring_indices, atomic_numbers, adjacency)
     step_deg = angular_step_to_target(target_phi_deg, current_phi_deg)
     step_rad = math.radians(step_deg)
@@ -548,7 +559,9 @@ def write_gaussian_scan_from_xyz(
     if ring_text:
         raw_ring_indices = [int(item.strip()) - 1 for item in ring_text.split(",") if item.strip()]
         if len(raw_ring_indices) < 4:
-            raise ValueError("--ring must contain at least 4 comma-separated one-based atom indices")
+            raise ValueError(
+                "--ring must contain at least 4 comma-separated one-based atom indices"
+            )
         if min(raw_ring_indices) < 0 or max(raw_ring_indices) >= len(atoms):
             raise ValueError("--ring contains an atom index outside the molecular geometry")
         if len(set(raw_ring_indices)) != len(raw_ring_indices):

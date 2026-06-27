@@ -133,11 +133,7 @@ def _bdpcs3_delta_bv(z1: int, z2: int, bond_order: float, delta_bcv: float) -> f
     is_c2 = _is_carbon(z2)
     is_s1 = _is_sulfur(z1)
     is_s2 = _is_sulfur(z2)
-    indicator_special = (
-        (is_s1 and is_c2)
-        or (is_s2 and is_c1)
-        or (is_c1 and is_c2)
-    )
+    indicator_special = (is_s1 and is_c2) or (is_s2 and is_c1) or (is_c1 and is_c2)
     indicator_cf = (is_c1 and _is_fluorine(z2)) or (is_c2 and _is_fluorine(z1))
     bo_term = np.sqrt(abs(bond_order - 2.0)) - 1.0
     delta = 0.0
@@ -229,7 +225,7 @@ def _bdpcs3_delocalization_cc_cs(z1: int, z2: int, r_ang: float, delta_cv: float
     sigma = max(1.0e-6, min(d1, d2) / 1.5) if min(d1, d2) > 0.0 else 0.05
 
     # Compensate CV exactly at r_double.
-    return -delta_cv * math.exp(-((r_ang - r_double) / sigma) ** 2)
+    return -delta_cv * math.exp(-(((r_ang - r_double) / sigma) ** 2))
 
 
 def topology_bond_order_for_pair(i: int, j: int, Z, coords_ang, cache=None) -> float:
@@ -311,9 +307,7 @@ def detect_hydrogen_bonds(
         if Zarr[h] != 1:
             continue
         donors = [
-            a
-            for a in adjacency[h]
-            if int(Zarr[a]) in _BDPCS3_PARAMETERS.hbond.donor_atomic_numbers
+            a for a in adjacency[h] if int(Zarr[a]) in _BDPCS3_PARAMETERS.hbond.donor_atomic_numbers
         ]
         if len(donors) != 1:
             continue
@@ -378,9 +372,7 @@ def bdpcs3_metric_weights(
         if kind == "bond":
             pair = tuple(sorted((int(prim.atoms[0]), int(prim.atoms[1]))))
             weights[idx] = (
-                BDPCS3_WEIGHT_HBOND
-                if pair in hbond_pairs_norm
-                else BDPCS3_WEIGHT_STRETCH
+                BDPCS3_WEIGHT_HBOND if pair in hbond_pairs_norm else BDPCS3_WEIGHT_STRETCH
             )
         elif kind in {"angle", "linear_bend", "out_of_plane"}:
             weights[idx] = BDPCS3_WEIGHT_ANGLE
@@ -395,8 +387,7 @@ def bdpcs3_metric_weights(
                 weights[idx] = min(
                     BDPCS3_WEIGHT_ANGLE,
                     BDPCS3_WEIGHT_TORSION_MIN
-                    + (float(bo) - 1.0)
-                    * (BDPCS3_WEIGHT_ANGLE - BDPCS3_WEIGHT_TORSION_MIN),
+                    + (float(bo) - 1.0) * (BDPCS3_WEIGHT_ANGLE - BDPCS3_WEIGHT_TORSION_MIN),
                 )
         elif kind in {"frag_trans", "frag_rot"}:
             weights[idx] = BDPCS3_WEIGHT_FRAGMENT
@@ -412,9 +403,7 @@ def bdpcs3_delta_and_order_updated(
     val0 = _bdpcs3_updated_rcov_ct(z1, z2)
     bo_geom = 0.0 if val0 <= 0.0 else np.exp((val0 - r_ang) / 0.30)
     bond_order = (
-        max(float(bond_order_override), bo_geom)
-        if bond_order_override is not None
-        else bo_geom
+        max(float(bond_order_override), bo_geom) if bond_order_override is not None else bo_geom
     )
 
     ni = min(_principal_quantum(z1), 3)
@@ -471,9 +460,7 @@ def bdpcs3_delta_and_order(
     val0 = rcov_ct(z1, z2)
     bo_geom = np.exp((val0 - r_ang) / 0.30)
     bond_order = (
-        max(float(bond_order_override), bo_geom)
-        if bond_order_override is not None
-        else bo_geom
+        max(float(bond_order_override), bo_geom) if bond_order_override is not None else bo_geom
     )
 
     delta_bcv = _bdpcs3_delta_bcv(z1, z2, val0)
@@ -491,9 +478,7 @@ def bdpcs3_delta_and_order(
     return delta_r, bond_order
 
 
-def bdpcs3_correct_length(
-    z1: int, z2: int, r_ang: float, version: str = "updated"
-) -> float:
+def bdpcs3_correct_length(z1: int, z2: int, r_ang: float, version: str = "updated") -> float:
     dlt_r, _ = bdpcs3_function(version)(z1, z2, r_ang)
     return r_ang + dlt_r
 
@@ -572,9 +557,11 @@ def _align_to_principal_axes(coords, masses):
         xi, yi, zi = coords_centered[i]
         mi = masses[i]
         I += mi * np.array(
-            [[yi**2 + zi**2, -xi * yi, -xi * zi],
-             [-xi * yi, xi**2 + zi**2, -yi * zi],
-             [-xi * zi, -yi * zi, xi**2 + yi**2]]
+            [
+                [yi**2 + zi**2, -xi * yi, -xi * zi],
+                [-xi * yi, xi**2 + zi**2, -yi * zi],
+                [-xi * zi, -yi * zi, xi**2 + yi**2],
+            ]
         )
     eigvals, eigvecs = np.linalg.eigh(I)
     if np.linalg.det(eigvecs) < 0:
@@ -595,9 +582,11 @@ def rotational_constants(coords_au, masses_au):
         xi, yi, zi = x[i]
         mi = m[i]
         I += mi * np.array(
-            [[yi**2 + zi**2, -xi*yi, -xi*zi],
-             [-xi*yi, xi**2 + zi**2, -yi*zi],
-             [-xi*zi, -yi*zi, xi**2 + yi**2]]
+            [
+                [yi**2 + zi**2, -xi * yi, -xi * zi],
+                [-xi * yi, xi**2 + zi**2, -yi * zi],
+                [-xi * zi, -yi * zi, xi**2 + yi**2],
+            ]
         )
 
     evals = np.linalg.eigvalsh(I)
@@ -796,19 +785,41 @@ def main():
     ap.add_argument("--out", required=False)
     ap.add_argument("--xyz-units", choices=["ang", "au"], default=None)
     ap.add_argument("--out-units", choices=["ang", "au"], default=None)
-    ap.add_argument("--bond", action="append", nargs=3, metavar=("I", "J", "R"),
-                    help="Set bond length between atoms I J to R (units per --xyz-units).")
-    ap.add_argument("--rule", choices=["bdpcs3"], default=None,
-                    help="Apply automatic bond-length rule to all detected bonds.")
-    ap.add_argument("--bdpcs3-fit", action="store_true",
-                    help="Apply fitted per-pair BDPCS3 scale factors if present.")
-    ap.add_argument("--bdpcs3-version", choices=BDPCS3_VERSIONS, default="updated",
-                    help="Select BDPCS3 formulation when --rule bdpcs3 is enabled.")
-    ap.add_argument("--isotopes", default=None,
-                    help="Isotope map: i:A (1-based atom index). Example: 1:2,3:13")
-    ap.add_argument("--report", action="store_true", help="Print bond report and rotational constants.")
-    ap.add_argument("--average-masses", action="store_true",
-                    help="Use FilAMS average atomic masses instead of principal isotopes.")
+    ap.add_argument(
+        "--bond",
+        action="append",
+        nargs=3,
+        metavar=("I", "J", "R"),
+        help="Set bond length between atoms I J to R (units per --xyz-units).",
+    )
+    ap.add_argument(
+        "--rule",
+        choices=["bdpcs3"],
+        default=None,
+        help="Apply automatic bond-length rule to all detected bonds.",
+    )
+    ap.add_argument(
+        "--bdpcs3-fit",
+        action="store_true",
+        help="Apply fitted per-pair BDPCS3 scale factors if present.",
+    )
+    ap.add_argument(
+        "--bdpcs3-version",
+        choices=BDPCS3_VERSIONS,
+        default="updated",
+        help="Select BDPCS3 formulation when --rule bdpcs3 is enabled.",
+    )
+    ap.add_argument(
+        "--isotopes", default=None, help="Isotope map: i:A (1-based atom index). Example: 1:2,3:13"
+    )
+    ap.add_argument(
+        "--report", action="store_true", help="Print bond report and rotational constants."
+    )
+    ap.add_argument(
+        "--average-masses",
+        action="store_true",
+        help="Use FilAMS average atomic masses instead of principal isotopes.",
+    )
     ap.add_argument("--max-iter", type=int, default=50)
     ap.add_argument("--tol", type=float, default=1e-8)
     args = ap.parse_args()
@@ -886,27 +897,19 @@ def main():
                 continue
             i, j = p.atoms
             r_ang = s[idx] * BOHR_TO_ANG
-            bndord_topo = topology_bond_order_for_pair(
-                i, j, Z, coords_ang_for_bo, cache=bo_cache
-            )
-            dlt_r, bndord = bdpcs3_fn(
-                int(Z[i]), int(Z[j]), r_ang, bond_order_override=bndord_topo
-            )
+            bndord_topo = topology_bond_order_for_pair(i, j, Z, coords_ang_for_bo, cache=bo_cache)
+            dlt_r, bndord = bdpcs3_fn(int(Z[i]), int(Z[j]), r_ang, bond_order_override=bndord_topo)
             r_corr = r_ang + dlt_r
             report_rows.append((i + 1, j + 1, r_ang, r_corr, bndord))
             s[idx] = r_corr * ANG_TO_BOHR
         for idx, hb in zip(hbond_indices, hbonds):
             r_ang = s[idx] * BOHR_TO_ANG
-            dlt_r = bdpcs3_hbond_delta(
-                int(Z[hb.donor]), int(Z[hb.acceptor]), r_ang, hb.angle_deg
-            )
+            dlt_r = bdpcs3_hbond_delta(int(Z[hb.donor]), int(Z[hb.acceptor]), r_ang, hb.angle_deg)
             s[idx] = (r_ang + dlt_r) * ANG_TO_BOHR
-            report_rows.append(
-                (hb.hydrogen + 1, hb.acceptor + 1, r_ang, r_ang + dlt_r, 0.0)
-            )
+            report_rows.append((hb.hydrogen + 1, hb.acceptor + 1, r_ang, r_ang + dlt_r, 0.0))
 
     if args.bond:
-        for (i_str, j_str, r_str) in args.bond:
+        for i_str, j_str, r_str in args.bond:
             i = int(i_str) - 1
             j = int(j_str) - 1
             r = float(r_str)
@@ -914,7 +917,7 @@ def main():
                 r *= ANG_TO_BOHR
             idx = bond_index_by_pair.get(tuple(sorted((i, j))))
             if idx is None:
-                raise SystemExit(f"Bond primitive not found for {i+1}-{j+1}")
+                raise SystemExit(f"Bond primitive not found for {i + 1}-{j + 1}")
             r_old = s[idx] * BOHR_TO_ANG
             s[idx] = r
             r_new = r * BOHR_TO_ANG
@@ -963,12 +966,12 @@ def main():
         B1_mhz = B1 * 1000.0
 
         extra_lines.append("Bond distances")
-        extra_lines.append("(i, j) | Old dist | New dist | Convergence Err (%) | Original Bond Order")
+        extra_lines.append(
+            "(i, j) | Old dist | New dist | Convergence Err (%) | Original Bond Order"
+        )
         extra_lines.append("-" * 59)
         for i, j, r0, r1, err_pct, bndord in report_rows_final:
-            extra_lines.append(
-                f"({i}, {j}) | {r0:.6f} | {r1:.6f} | {err_pct:.6f} | {bndord:.3f}"
-            )
+            extra_lines.append(f"({i}, {j}) | {r0:.6f} | {r1:.6f} | {err_pct:.6f} | {bndord:.3f}")
         extra_lines.append("")
         extra_lines.append("Parent rotational constants")
         extra_lines.append("Asymmetric top, nearly prolate")
@@ -989,7 +992,7 @@ def main():
         B0 = rotational_constants(coords_au, masses)
         B1 = rotational_constants(coords_new, masses)
         print("\nIsotopes used (atom, Z, A, mass_amu):")
-        for (idx, z, a, mamu) in used_isotopes:
+        for idx, z, a, mamu in used_isotopes:
             a_str = f"{a:3d}" if a is not None else "avg"
             print(f"{idx:3d}  Z={z:3d}  A={a_str}  mass={mamu:.6f}")
         print("\nBond report (Angstrom):")

@@ -55,7 +55,7 @@ class Aromaticity:
             for i in ring.atoms:
                 self.aromatic_atoms.add(i)
 
-            for (i, j) in ring.bonds:
+            for i, j in ring.bonds:
                 self.aromatic_bonds.add((i, j))
 
     # --------------------------------------------------------
@@ -117,4 +117,3 @@ class Aromaticity:
             return deg == 2
 
         return False
-

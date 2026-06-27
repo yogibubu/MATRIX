@@ -47,4 +47,3 @@ class MolecularGeometry:
         for atom, (x, y, z) in zip(self.atoms, self.coordinates_angstrom):
             lines.append(f"{atom:2s} {x:15.8f} {y:15.8f} {z:15.8f}")
         return lines
-

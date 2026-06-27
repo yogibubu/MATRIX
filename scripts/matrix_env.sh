@@ -21,7 +21,7 @@ export MATRIX_PYTHON="${MATRIX_PYTHON:-${ORACLE_PYTHON:-python3}}"
 export MATRIX_AUTO_CREATE_VENV="${MATRIX_AUTO_CREATE_VENV:-${ORACLE_AUTO_CREATE_VENV:-1}}"
 export MATRIX_AUTO_INSTALL_RUNTIME_DEPS="${MATRIX_AUTO_INSTALL_RUNTIME_DEPS:-${ORACLE_AUTO_INSTALL_RUNTIME_DEPS:-1}}"
 export MATRIX_AUTO_INSTALL_GUI_DEPS="${MATRIX_AUTO_INSTALL_GUI_DEPS:-${ORACLE_AUTO_INSTALL_GUI_DEPS:-0}}"
-export MATRIX_RUNTIME_DEPS="${MATRIX_RUNTIME_DEPS:-${ORACLE_RUNTIME_DEPS:-numpy scipy matplotlib pandas sympy pytest rdkit}}"
+export MATRIX_RUNTIME_DEPS="${MATRIX_RUNTIME_DEPS:-${ORACLE_RUNTIME_DEPS:-numpy scipy matplotlib pandas sympy pytest ruff rdkit}}"
 export MATRIX_GUI_DEPS="${MATRIX_GUI_DEPS:-${ORACLE_GUI_DEPS:-PySide6 pytest-qt}}"
 
 export ORACLE_HOME="${ORACLE_HOME:-$MATRIX_HOME}"
@@ -124,6 +124,7 @@ import numpy
 import pandas
 import pytest
 import rdkit
+import ruff
 import scipy
 import sympy
 PY
@@ -266,12 +267,27 @@ matrix-test-all() {
     python -m pytest "$MATRIX_HOME/tests" "$MATRIX_HOME/packages"
 }
 
+matrix-format() {
+    matrix-set || return
+    python -m ruff format packages tests tools \
+        --exclude 'packages/matrix-morpheus/src/matrix_morpheus/legacy/**' \
+        --exclude 'packages/matrix-rovib/src/matrix_rovib/vendor/**' \
+        --exclude 'packages/matrix-chem/src/matrix_chem/average_atomic_masses.py' \
+        --exclude 'packages/matrix-chem/src/matrix_chem/isotopes_table.py' \
+        --exclude 'packages/matrix-chem/src/matrix_chem/topology/*_radii.py' \
+        --exclude 'packages/matrix-chem/src/matrix_chem/topology/electronegativity.py' \
+        --exclude 'packages/matrix-chem/src/matrix_chem/topology/elements.py' \
+        --exclude 'packages/matrix-chem/src/matrix_chem/topology/polarizability.py' \
+        --exclude 'packages/matrix-chem/src/matrix_chem/physical_constants.py' \
+        --force-exclude "$@"
+}
+
 matrix-run-check() {
     matrix-set || return
     python - <<'PY'
 import importlib
 
-mods = ["matrix_core", "numpy", "scipy", "matplotlib", "pandas", "sympy", "PySide6", "rdkit"]
+mods = ["matrix_core", "numpy", "scipy", "matplotlib", "pandas", "sympy", "pytest", "ruff", "PySide6", "rdkit"]
 ok = True
 for name in mods:
     try:
@@ -357,6 +373,7 @@ oracle-run() { matrix-run "$@"; }
 oracle-run-bg() { matrix-run-bg "$@"; }
 oracle-test() { matrix-test "$@"; }
 oracle-test-all() { matrix-test-all "$@"; }
+oracle-format() { matrix-format "$@"; }
 oracle-run-check() { matrix-run-check "$@"; }
 oracle-install-gui-deps() { matrix-install-gui-deps "$@"; }
 oracle-install-runtime-deps() { matrix-install-runtime-deps "$@"; }

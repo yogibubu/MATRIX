@@ -33,7 +33,9 @@ class CartesianCoordinateModel:
     model_kind: str = "cartesian_symmetry"
 
     def values(self, coordinates_angstrom: np.ndarray) -> np.ndarray:
-        delta = np.asarray(coordinates_angstrom, dtype=float).reshape(-1) - self.reference_coordinates_angstrom.reshape(-1)
+        delta = np.asarray(coordinates_angstrom, dtype=float).reshape(
+            -1
+        ) - self.reference_coordinates_angstrom.reshape(-1)
         return np.linalg.pinv(self.cartesian_from_q, rcond=1.0e-10) @ delta
 
     @property
@@ -111,7 +113,9 @@ def _symmetry_adapted_cartesian_vibrations(
         basis = _basis_from_projector(projector_vib)
         return basis, tuple("A" for _ in range(basis.shape[1]))
 
-    cart_ops = [_cartesian_operation(rotation, mapping, natoms) for _label, rotation, mapping in op_data]
+    cart_ops = [
+        _cartesian_operation(rotation, mapping, natoms) for _label, rotation, mapping in op_data
+    ]
     columns: list[np.ndarray] = []
     labels: list[str] = []
     for irrep, chars in irreps:
@@ -138,7 +142,12 @@ def _symmetry_adapted_cartesian_vibrations(
 def _basis_from_projector(projector: np.ndarray) -> np.ndarray:
     matrix = 0.5 * (np.asarray(projector, dtype=float) + np.asarray(projector, dtype=float).T)
     eigenvalues, eigenvectors = np.linalg.eigh(matrix)
-    tol = max(matrix.shape) * np.finfo(float).eps * max(float(np.max(np.abs(eigenvalues))), 1.0) * 100.0
+    tol = (
+        max(matrix.shape)
+        * np.finfo(float).eps
+        * max(float(np.max(np.abs(eigenvalues))), 1.0)
+        * 100.0
+    )
     indices = [idx for idx, value in enumerate(eigenvalues) if value > max(tol, 1.0e-8)]
     columns = [_canonicalize_vector_sign(eigenvectors[:, idx]) for idx in indices]
     columns.sort(key=_vector_sort_key)
@@ -220,7 +229,9 @@ def _operation_data_for_cartesians(atoms: tuple[str, ...], oriented_coords: np.n
     ]
 
 
-def _oriented_coords_and_rotation(atoms: tuple[str, ...], coords: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _oriented_coords_and_rotation(
+    atoms: tuple[str, ...], coords: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     weights = np.array([atomic_number(atom) for atom in atoms], dtype=float)
     arr = np.asarray(coords, dtype=float)
     com = np.sum(arr * weights[:, None], axis=0) / float(np.sum(weights))
@@ -247,7 +258,11 @@ def _point_group_from_ops(labels: list[str]) -> str:
         if any(label.startswith("sigma") for label in labels):
             return "Cs"
         return "C2"
-    if len(labels) == 4 and any(label.startswith("C2") for label in labels) and sum(label.startswith("sigma") for label in labels) == 2:
+    if (
+        len(labels) == 4
+        and any(label.startswith("C2") for label in labels)
+        and sum(label.startswith("sigma") for label in labels) == 2
+    ):
         return "C2v"
     return "UNKNOWN"
 

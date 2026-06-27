@@ -142,10 +142,16 @@ def generate_vibrational_basis(
                 continue
             if class_max is not None and total_quanta > class_max:
                 continue
-        if freqs is not None and energy_cutoff_cm is not None and float(np.dot(freqs, state)) > energy_cutoff_cm:
+        if (
+            freqs is not None
+            and energy_cutoff_cm is not None
+            and float(np.dot(freqs, state)) > energy_cutoff_cm
+        ):
             continue
         states.append(state)
-    states = sorted(states, key=lambda s: ((0.0 if freqs is None else float(np.dot(freqs, s))), sum(s), s))
+    states = sorted(
+        states, key=lambda s: ((0.0 if freqs is None else float(np.dot(freqs, s))), sum(s), s)
+    )
     if max_basis_states is not None:
         states = states[:max_basis_states]
     return tuple(states)
@@ -173,7 +179,9 @@ def _mode_powers(indices: tuple[int, ...], n_modes: int) -> tuple[int, ...]:
     return tuple(powers)
 
 
-def _term_element(left: tuple[int, ...], right: tuple[int, ...], xpowers: tuple[np.ndarray, ...]) -> float:
+def _term_element(
+    left: tuple[int, ...], right: tuple[int, ...], xpowers: tuple[np.ndarray, ...]
+) -> float:
     value = 1.0
     for mode, power_matrix in enumerate(xpowers):
         value *= power_matrix[left[mode], right[mode]]
@@ -184,7 +192,9 @@ def _term_element(left: tuple[int, ...], right: tuple[int, ...], xpowers: tuple[
 
 def _selected_force_field(force_field: QuarticForceField, options: VCIOptions) -> QuarticForceField:
     freqs = np.asarray(force_field.harmonic_frequencies_cm, dtype=float)
-    selected = list(range(len(freqs))) if options.active_modes is None else list(options.active_modes)
+    selected = (
+        list(range(len(freqs))) if options.active_modes is None else list(options.active_modes)
+    )
     if options.frequency_min_cm is not None:
         selected = [idx for idx in selected if freqs[idx] >= options.frequency_min_cm]
     if options.frequency_max_cm is not None:
@@ -215,7 +225,9 @@ def _selected_quanta_limits(
     options: VCIOptions,
 ) -> tuple[tuple[int, ...] | None, tuple[int, ...] | None]:
     freqs = np.asarray(force_field.harmonic_frequencies_cm, dtype=float)
-    selected = list(range(len(freqs))) if options.active_modes is None else list(options.active_modes)
+    selected = (
+        list(range(len(freqs))) if options.active_modes is None else list(options.active_modes)
+    )
     if options.frequency_min_cm is not None:
         selected = [idx for idx in selected if freqs[idx] >= options.frequency_min_cm]
     if options.frequency_max_cm is not None:
@@ -231,13 +243,17 @@ def _selected_quanta_limits(
     return select(options.mode_min_quanta), select(options.mode_max_quanta)
 
 
-def _selected_mode_symmetries(force_field: QuarticForceField, options: VCIOptions) -> tuple[str, ...] | None:
+def _selected_mode_symmetries(
+    force_field: QuarticForceField, options: VCIOptions
+) -> tuple[str, ...] | None:
     if options.mode_symmetries is None:
         return None
     freqs = np.asarray(force_field.harmonic_frequencies_cm, dtype=float)
     if len(options.mode_symmetries) != len(freqs):
         raise ValueError("mode_symmetries length must match the original mode count")
-    selected = list(range(len(freqs))) if options.active_modes is None else list(options.active_modes)
+    selected = (
+        list(range(len(freqs))) if options.active_modes is None else list(options.active_modes)
+    )
     if options.frequency_min_cm is not None:
         selected = [idx for idx in selected if freqs[idx] >= options.frequency_min_cm]
     if options.frequency_max_cm is not None:
@@ -248,7 +264,9 @@ def _selected_mode_symmetries(force_field: QuarticForceField, options: VCIOption
 def _state_symmetry(state: tuple[int, ...], labels: tuple[str, ...] | None) -> str:
     if labels is None:
         return "all"
-    odd = sorted({label for quanta, label in zip(state, labels) if quanta % 2 == 1 and label != "A"})
+    odd = sorted(
+        {label for quanta, label in zip(state, labels) if quanta % 2 == 1 and label != "A"}
+    )
     return "A" if not odd else "*".join(odd)
 
 
@@ -329,7 +347,9 @@ def _analyze_states(
             if weights[idx] < threshold:
                 continue
             dominant.append((basis[idx], float(weights[idx])))
-        out.append(VCIStateContribution(mode_quanta=mode_quanta, dominant_basis_states=tuple(dominant)))
+        out.append(
+            VCIStateContribution(mode_quanta=mode_quanta, dominant_basis_states=tuple(dominant))
+        )
     return tuple(out)
 
 
@@ -363,7 +383,11 @@ def solve_vci(
             infos.append(VCIBlockInfo(label=label, basis_indices=indices, n_roots=len(sub_e)))
         block_results.sort(key=lambda item: item[0])
         eig = np.array([item[0] for item in block_results], dtype=float)
-        vec = np.column_stack([item[1] for item in block_results]) if block_results else np.zeros((len(basis), 0))
+        vec = (
+            np.column_stack([item[1] for item in block_results])
+            if block_results
+            else np.zeros((len(basis), 0))
+        )
         davidson = None
         block_infos = tuple(infos)
     elif method == "dense":

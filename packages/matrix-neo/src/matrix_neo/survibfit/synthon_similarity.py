@@ -383,9 +383,7 @@ def compare_against_library(
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(
-        description="Molecule similarity with synthon Gaussian models."
-    )
+    ap = argparse.ArgumentParser(description="Molecule similarity with synthon Gaussian models.")
     ap.add_argument("--xyz-a", default=None, help="First XYZ file (pair mode)")
     ap.add_argument("--xyz-b", default=None, help="Second XYZ file (pair mode)")
     ap.add_argument("--query-xyz", default=None, help="Query XYZ (library mode)")
@@ -495,7 +493,9 @@ def main(argv=None):
         if not queries:
             raise SystemExit("No query XYZ files found with current --query-dir/--library-glob.")
         if not library:
-            raise SystemExit("No library XYZ files found with current --library-dir/--library-glob.")
+            raise SystemExit(
+                "No library XYZ files found with current --library-dir/--library-glob."
+            )
         result = compare_directory_sets(
             queries,
             library,

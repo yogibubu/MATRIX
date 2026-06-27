@@ -170,7 +170,9 @@ def parse_transitions_section(lines: list[str] | tuple[str, ...]) -> Transitions
         if columns:
             values = {column: parts[idx] for idx, column in enumerate(columns[: len(parts)])}
             from_state = values.get("FROM") or values.get("FROM_STATE") or parts[0]
-            to_state = values.get("TO") or values.get("TO_STATE") or (parts[1] if len(parts) > 1 else "")
+            to_state = (
+                values.get("TO") or values.get("TO_STATE") or (parts[1] if len(parts) > 1 else "")
+            )
             energy = values.get("ENERGY_EV") or values.get("EV")
             if energy is None:
                 continue
@@ -181,7 +183,8 @@ def parse_transitions_section(lines: list[str] | tuple[str, ...]) -> Transitions
                     energy_ev=float(energy.replace("D", "E")),
                     wavelength_nm=_optional_float(values.get("WAVELENGTH_NM", "-")),
                     oscillator_strength=_optional_float(values.get("OSC", "-")),
-                    strength=_dash_to_empty(values.get("STRENGTH", "electric-dipole")) or "electric-dipole",
+                    strength=_dash_to_empty(values.get("STRENGTH", "electric-dipole"))
+                    or "electric-dipole",
                     source=_dash_to_empty(values.get("SOURCE", "")),
                 )
             )
@@ -246,7 +249,9 @@ def read_electronic_section(path: Path | str) -> ElectronicSection:
 
 
 def read_transitions_section(path: Path | str) -> TransitionsSection:
-    return parse_transitions_section(section_content(read_sectioned_lines(Path(path)), "TRANSITIONS"))
+    return parse_transitions_section(
+        section_content(read_sectioned_lines(Path(path)), "TRANSITIONS")
+    )
 
 
 def read_orbitals_section(path: Path | str) -> OrbitalsSection:
@@ -265,7 +270,9 @@ def write_orbitals_section(path: Path | str, section: OrbitalsSection) -> None:
     replace_section(Path(path), "ORBITALS", orbitals_section_lines(section))
 
 
-def merge_orbitals_section(path: Path | str, records: tuple[OrbitalFileRecord, ...]) -> OrbitalsSection:
+def merge_orbitals_section(
+    path: Path | str, records: tuple[OrbitalFileRecord, ...]
+) -> OrbitalsSection:
     target = Path(path)
     current = read_orbitals_section(target)
     merged: dict[tuple[str, str, str], OrbitalFileRecord] = {

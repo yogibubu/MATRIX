@@ -701,7 +701,9 @@ def test_gf_cli_scaling_preview_does_not_run_gf(tmp_path, monkeypatch, capsys):
     xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
     scale.write_text("class CH 0.95 R(\n", encoding="utf-8")
 
-    def fake_preview_from_xyzin(xyzin_path, *, scale_path=None, scale_records=(), scale_class_records=()):
+    def fake_preview_from_xyzin(
+        xyzin_path, *, scale_path=None, scale_records=(), scale_class_records=()
+    ):
         calls["preview"] = (xyzin_path, scale_path, scale_records, scale_class_records)
         return SimpleNamespace()
 
@@ -804,14 +806,18 @@ def test_vpt2_vci_cli_writes_manifest_and_xyzin_section(tmp_path, monkeypatch, c
             "comparison.csv": outdir / f"{prefix}_comparison.csv",
             "mode_contributions.csv": outdir / f"{prefix}_mode_contributions.csv",
         }
-        paths["frequencies.csv"].write_text("mode,harmonic_frequency_cm-1\n1,100.0\n", encoding="utf-8")
+        paths["frequencies.csv"].write_text(
+            "mode,harmonic_frequency_cm-1\n1,100.0\n", encoding="utf-8"
+        )
         paths["comparison.csv"].write_text(
             "root,vpt2_abs_cm-1,vci_abs_cm-1,delta_abs_cm-1,"
             "vpt2_exc_cm-1,vci_exc_cm-1,delta_exc_cm-1\n"
             "1,50.0,50.0,0.0,0.0,0.0,0.0\n",
             encoding="utf-8",
         )
-        paths["mode_contributions.csv"].write_text("root,mode,expected_quanta\n1,1,0.5\n", encoding="utf-8")
+        paths["mode_contributions.csv"].write_text(
+            "root,mode,expected_quanta\n1,1,0.5\n", encoding="utf-8"
+        )
         return paths
 
     monkeypatch.setattr("matrix_vpt2_vci.load_force_field", fake_load_force_field)
@@ -846,7 +852,11 @@ def test_vpt2_vci_cli_writes_manifest_and_xyzin_section(tmp_path, monkeypatch, c
 
 
 def test_vpt2_vci_collect_cli_refreshes_section(tmp_path, capsys):
-    from matrix_vpt2_vci import read_vpt2_vci_section, vpt2_vci_section_from_run, write_vpt2_vci_section
+    from matrix_vpt2_vci import (
+        read_vpt2_vci_section,
+        vpt2_vci_section_from_run,
+        write_vpt2_vci_section,
+    )
 
     xyzin = tmp_path / "molecule.xyzin"
     run_dir = tmp_path / "vpt2_vci"
@@ -1395,12 +1405,8 @@ def test_gicforge_cli_passes_fragment_mode_override(tmp_path, monkeypatch, capsy
     monkeypatch.setattr("matrix_neo.write_gicforge_plan_sections", fake_plan)
     monkeypatch.setattr("matrix_neo.write_gicforge_build_sections", fake_build)
 
-    rc_plan = matrix_run.main(
-        ["gicforge", "plan", str(path), "--fragment-mode", "pseudo-bonds"]
-    )
-    rc_build = matrix_run.main(
-        ["gicforge", "build", str(path), "--fragment-mode", "pseudo-bonds"]
-    )
+    rc_plan = matrix_run.main(["gicforge", "plan", str(path), "--fragment-mode", "pseudo-bonds"])
+    rc_build = matrix_run.main(["gicforge", "build", str(path), "--fragment-mode", "pseudo-bonds"])
 
     assert rc_plan == 0
     assert rc_build == 0

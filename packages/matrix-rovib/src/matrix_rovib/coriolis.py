@@ -115,7 +115,9 @@ def compute_coriolis_from_vibin(
         Geff_thr_cm1=Geff_thr_cm1,
         only_upper=only_upper,
     )
-    return CoriolisResult(entries=entries, A_cm1=A_cm1, B_cm1=B_cm1, C_cm1=C_cm1, threshold_cm1=Geff_thr_cm1)
+    return CoriolisResult(
+        entries=entries, A_cm1=A_cm1, B_cm1=B_cm1, C_cm1=C_cm1, threshold_cm1=Geff_thr_cm1
+    )
 
 
 def compute_coriolis_from_xyzin(

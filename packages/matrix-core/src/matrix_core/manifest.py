@@ -32,11 +32,7 @@ def write_manifest(path: Path, data: Mapping[str, Any]) -> Path:
 
 
 def file_checksums(paths: Mapping[str, Path]) -> dict[str, str]:
-    return {
-        name: sha256_file(path)
-        for name, path in sorted(paths.items())
-        if Path(path).is_file()
-    }
+    return {name: sha256_file(path) for name, path in sorted(paths.items()) if Path(path).is_file()}
 
 
 @dataclass(frozen=True)

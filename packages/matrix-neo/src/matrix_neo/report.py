@@ -32,8 +32,10 @@ def gic_report_lines(definition: GICDefinition) -> list[str]:
     skipped_dependent = diagnostics.skipped_dependent if diagnostics else ()
     rank_method = diagnostics.rank_method if diagnostics else "UNKNOWN"
     reduction_policy = diagnostics.reduction_policy if diagnostics else REDUCTION_POLICY
-    selected = diagnostics.selected if diagnostics else tuple(
-        primitive.identifier for primitive in definition.primitives
+    selected = (
+        diagnostics.selected
+        if diagnostics
+        else tuple(primitive.identifier for primitive in definition.primitives)
     )
     selected_by_family = (
         diagnostics.selected_by_family
@@ -72,10 +74,7 @@ def gic_report_lines(definition: GICDefinition) -> list[str]:
     ]
     if family_counts:
         for family in sorted(family_counts):
-            lines.append(
-                f"{family}: {family_counts[family]} "
-                f"({primitive_reduction_class(family)})"
-            )
+            lines.append(f"{family}: {family_counts[family]} ({primitive_reduction_class(family)})")
     else:
         lines.append("NONE")
 
@@ -197,8 +196,7 @@ def _fragment_policy_lines(definition: GICDefinition) -> list[str]:
             ("INTERFRAGMENT_CLOSEST",) * len(definition.pseudo_bonds)
         )
         contacts = tuple(
-            f"{left}-{right}:{kind}"
-            for (left, right), kind in zip(definition.pseudo_bonds, kinds)
+            f"{left}-{right}:{kind}" for (left, right), kind in zip(definition.pseudo_bonds, kinds)
         )
         lines.extend(
             [
@@ -228,12 +226,10 @@ def _salc_coefficient_lines(definition: GICDefinition) -> list[str]:
         if len(gic.coefficients) <= 1:
             continue
         terms = ",".join(
-            f"{primitive_id}:{coefficient:+.12g}"
-            for primitive_id, coefficient in gic.coefficients
+            f"{primitive_id}:{coefficient:+.12g}" for primitive_id, coefficient in gic.coefficients
         )
         norm2 = sum(float(coefficient) ** 2 for _primitive_id, coefficient in gic.coefficients)
         lines.append(
-            f"{gic.name} irrep={gic.irrep} family={gic.family} "
-            f"norm2={norm2:.12g} coeffs={terms}"
+            f"{gic.name} irrep={gic.irrep} family={gic.family} norm2={norm2:.12g} coeffs={terms}"
         )
     return lines

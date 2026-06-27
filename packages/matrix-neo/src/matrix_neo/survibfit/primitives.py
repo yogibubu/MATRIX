@@ -104,7 +104,7 @@ def eval_primitive(p: Primitive, coords: np.ndarray):
             x = coords[atoms_idx] - coords[atoms_idx].mean(axis=0)
             I = np.zeros((3, 3))
             for v in x:
-                I += (np.dot(v, v) * np.eye(3) - np.outer(v, v))
+                I += np.dot(v, v) * np.eye(3) - np.outer(v, v)
             evals, evecs = np.linalg.eigh(I)
             order = np.argsort(evals)
             F = evecs[:, order]

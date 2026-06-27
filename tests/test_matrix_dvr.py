@@ -47,9 +47,7 @@ def test_dvr_request_builds_python_args(tmp_path):
 
     args = build_path_analysis_args(request)
 
-    assert args[0] == str(
-        tmp_path / "engines" / "puckering_dvr" / "scripts" / "mw_path_dvr.py"
-    )
+    assert args[0] == str(tmp_path / "engines" / "puckering_dvr" / "scripts" / "mw_path_dvr.py")
     assert "--gaussian-log" in args
     assert str(tmp_path / "scan.log") in args
     assert args[args.index("--solver") + 1] == "fourier"
@@ -284,9 +282,7 @@ def _write_dvr_outputs(outdir: Path, prefix: str) -> None:
         encoding="utf-8",
     )
     (outdir / f"{prefix}_levels.csv").write_text(
-        "state,energy_cm-1,energy_above_ground_cm-1\n"
-        "0,100.0,0.0\n"
-        "1,112.5,12.5\n",
+        "state,energy_cm-1,energy_above_ground_cm-1\n0,100.0,0.0\n1,112.5,12.5\n",
         encoding="utf-8",
     )
     (outdir / f"{prefix}_grid.csv").write_text(
@@ -296,8 +292,6 @@ def _write_dvr_outputs(outdir: Path, prefix: str) -> None:
         encoding="utf-8",
     )
     (outdir / f"{prefix}_expectations.csv").write_text(
-        "state,energy_cm-1,energy_above_ground_cm-1,rotA\n"
-        "0,100.0,0.0,10.0\n"
-        "1,112.5,12.5,9.8\n",
+        "state,energy_cm-1,energy_above_ground_cm-1,rotA\n0,100.0,0.0,10.0\n1,112.5,12.5,9.8\n",
         encoding="utf-8",
     )

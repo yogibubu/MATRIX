@@ -16,7 +16,12 @@ from matrix_core.isotopologues import (
 )
 from matrix_core.xyzin_geometry import read_xyzin_geometry
 
-from .contracts import ElectronicCorrection, IsotopologueObservation, RotationalConstants, VibrationalCorrection
+from .contracts import (
+    ElectronicCorrection,
+    IsotopologueObservation,
+    RotationalConstants,
+    VibrationalCorrection,
+)
 
 
 def read_xyzin_isotopologues(path: Path) -> tuple[IsotopologueObservation, ...]:
@@ -30,7 +35,9 @@ def read_xyzin_isotopologues(path: Path) -> tuple[IsotopologueObservation, ...]:
     return observations_from_xyzin_records(records, atom_count=atom_count)
 
 
-def write_xyzin_isotopologues(path: Path, observations: tuple[IsotopologueObservation, ...]) -> Path:
+def write_xyzin_isotopologues(
+    path: Path, observations: tuple[IsotopologueObservation, ...]
+) -> Path:
     records = xyzin_records_from_observations(observations)
     return write_xyzin_isotopologue_records(Path(path), records)
 
@@ -44,7 +51,9 @@ def observations_from_xyzin_records(
     *,
     atom_count: int | None = None,
 ) -> tuple[IsotopologueObservation, ...]:
-    issues = validate_xyzin_isotopologue_records(records, atom_count=atom_count, require_rotational=True)
+    issues = validate_xyzin_isotopologue_records(
+        records, atom_count=atom_count, require_rotational=True
+    )
     errors = xyzin_isotopologue_validation_errors(issues)
     if errors:
         raise ValueError(format_xyzin_isotopologue_issues(errors))

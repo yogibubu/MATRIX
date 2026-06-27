@@ -77,7 +77,9 @@ class GICForgePythonModel:
             point_group="UNKNOWN",
             symmetrized=False,
             symmetry_source="none",
-            gaussian_input="\n".join(_format_readgic(name, coord.terms) for name, coord in zip(names, self.coordinates))
+            gaussian_input="\n".join(
+                _format_readgic(name, coord.terms) for name, coord in zip(names, self.coordinates)
+            )
             + "\n",
             source="gicforge-python",
             generation_workdir=str(workdir) if workdir is not None else None,
@@ -113,7 +115,9 @@ def build_gicforge_python_model(
     if coords.shape != (len(atoms), 3):
         raise ValueError(f"Expected coordinate shape ({len(atoms)}, 3), got {coords.shape}")
     atomic_numbers = tuple(atomic_number(atom) for atom in atoms)
-    _cg, graph, ringset, _synthons, _aromaticity = build_topology_objects(coords, np.asarray(atomic_numbers))
+    _cg, graph, ringset, _synthons, _aromaticity = build_topology_objects(
+        coords, np.asarray(atomic_numbers)
+    )
     _validate_no_spurious_hh_contacts(coords, atomic_numbers, graph.bonds)
     if _remove_collapsed_bonds(graph, coords):
         ringset = RingSet(graph, coords=coords)
@@ -142,12 +146,17 @@ def build_gicforge_python_model(
         )
         candidates = tuple(coord for block in primitive_blocks for coord in block)
     if not primitive_fallback and len(candidates) < target:
-        raise ValueError(f"GICForge Python candidates below vibrational rank ({len(candidates)} < {target})")
+        raise ValueError(
+            f"GICForge Python candidates below vibrational rank ({len(candidates)} < {target})"
+        )
     if len(candidates) < target:
-        raise ValueError(f"Primitive candidates below vibrational rank ({len(candidates)} < {target})")
+        raise ValueError(
+            f"Primitive candidates below vibrational rank ({len(candidates)} < {target})"
+        )
     coordinates = _prune_type_local(candidates, coords, target_rank=target, block_pruning=svd_local)
     if primitive_fallback and (
-        len(coordinates) < target or (svd_local and _coordinate_b_rank(coordinates, coords) < target)
+        len(coordinates) < target
+        or (svd_local and _coordinate_b_rank(coordinates, coords) < target)
     ):
         primitive_blocks = _primitive_fallback_blocks(
             graph,
@@ -159,8 +168,12 @@ def build_gicforge_python_model(
         )
         candidates = tuple(coord for block in primitive_blocks for coord in block)
         if len(candidates) < target:
-            raise ValueError(f"Primitive candidates below vibrational rank ({len(candidates)} < {target})")
-        coordinates = _prune_type_local(candidates, coords, target_rank=target, block_pruning=svd_local)
+            raise ValueError(
+                f"Primitive candidates below vibrational rank ({len(candidates)} < {target})"
+            )
+        coordinates = _prune_type_local(
+            candidates, coords, target_rank=target, block_pruning=svd_local
+        )
         if len(coordinates) < target or _coordinate_b_rank(coordinates, coords) < target:
             raise ValueError(
                 f"GICForge Python primitive fallback did not reach vibrational rank "
@@ -212,7 +225,9 @@ def _validate_no_spurious_hh_contacts(
     if contacts:
         preview = ", ".join(contacts[:8])
         extra = f"; {len(contacts) - 8} additional H-H contacts" if len(contacts) > 8 else ""
-        raise ValueError(f"GICForge Python input topology validation failed: spurious nonbonded H-H contact {preview}{extra}")
+        raise ValueError(
+            f"GICForge Python input topology validation failed: spurious nonbonded H-H contact {preview}{extra}"
+        )
 
 
 def compare_gicforge_python_to_fortran(
@@ -249,8 +264,12 @@ def compare_gicforge_python_to_fortran(
         symmetrize=False,
         extra_keywords=tuple(extra_keywords),
     )
-    raw_coords = _gicforge_cartesian_from_gauin(fortran_dir / "gauin", len(fortran_definition.atom_symbols))
-    fortran_signatures = tuple(_primitive_signature(primitive) for primitive in fortran_definition.primitives)
+    raw_coords = _gicforge_cartesian_from_gauin(
+        fortran_dir / "gauin", len(fortran_definition.atom_symbols)
+    )
+    fortran_signatures = tuple(
+        _primitive_signature(primitive) for primitive in fortran_definition.primitives
+    )
     python_candidates: list[tuple[str, GICDefinition]] = [
         ("input", python_model.to_definition(workdir=workdir / "python-input"))
     ]
@@ -271,7 +290,9 @@ def compare_gicforge_python_to_fortran(
         pass
     selected_frame, python_definition = python_candidates[0]
     for candidate_frame, candidate_definition in python_candidates:
-        candidate_signatures = tuple(_primitive_signature(primitive) for primitive in candidate_definition.primitives)
+        candidate_signatures = tuple(
+            _primitive_signature(primitive) for primitive in candidate_definition.primitives
+        )
         if (
             len(candidate_definition.names) == len(fortran_definition.names)
             and _definition_coordinate_kind_counts(candidate_definition)
@@ -281,11 +302,18 @@ def compare_gicforge_python_to_fortran(
             selected_frame = candidate_frame
             python_definition = candidate_definition
             break
-    python_signatures = tuple(_primitive_signature(primitive) for primitive in python_definition.primitives)
+    python_signatures = tuple(
+        _primitive_signature(primitive) for primitive in python_definition.primitives
+    )
     same_ordered_primitives = fortran_signatures == python_signatures
     b_max_abs_diff = None
-    if same_ordered_primitives and fortran_definition.u_matrix.shape == python_definition.u_matrix.shape:
-        fortran_b = fortran_definition.u_matrix.T @ b_matrix_analytic(fortran_definition.primitives, raw_coords)
+    if (
+        same_ordered_primitives
+        and fortran_definition.u_matrix.shape == python_definition.u_matrix.shape
+    ):
+        fortran_b = fortran_definition.u_matrix.T @ b_matrix_analytic(
+            fortran_definition.primitives, raw_coords
+        )
         python_b = python_definition.u_matrix.T @ b_matrix_analytic(
             python_definition.primitives,
             raw_coords,
@@ -355,7 +383,9 @@ def _fortran_like_primitive_blocks(
         for first in neigh:
             if first < center:
                 continue
-            bonds.append(_primitive_coordinate("Stre", len(bonds) + 1, Primitive("bond", (center, first))))
+            bonds.append(
+                _primitive_coordinate("Stre", len(bonds) + 1, Primitive("bond", (center, first)))
+            )
         if svd_local and len(neigh) > 1:
             exo_primitives, exo_linears = _exocyclic_angle_primitives(
                 center,
@@ -374,7 +404,9 @@ def _fortran_like_primitive_blocks(
                         kind_type_index=0,
                     )
                 )
-            exo_linears = exo_linears[:max(0, max_linear_angle_pairs_per_center)] if len(neigh) == 2 else []
+            exo_linears = (
+                exo_linears[: max(0, max_linear_angle_pairs_per_center)] if len(neigh) == 2 else []
+            )
             for primitive in exo_linears:
                 linears.append(_primitive_coordinate("LAng", len(linears) + 1, primitive))
                 linears.append(
@@ -439,7 +471,9 @@ def _fortran_like_primitive_blocks(
                     left, right = sorted((first_angle, second_angle))
                     if value < linear_threshold:
                         bends.append(
-                            _primitive_coordinate("Bend", len(bends) + 1, Primitive("angle", (left, center, right)))
+                            _primitive_coordinate(
+                                "Bend", len(bends) + 1, Primitive("angle", (left, center, right))
+                            )
                         )
                     else:
                         linears.append(
@@ -469,7 +503,9 @@ def _fortran_like_primitive_blocks(
                 )
             )
         else:
-            bends.extend(_cyclic_coordinates(ring, valence_angle=True, prefix="RDef", start=len(bends) + 1))
+            bends.extend(
+                _cyclic_coordinates(ring, valence_angle=True, prefix="RDef", start=len(bends) + 1)
+            )
 
     for bond in bonds:
         _coef, primitive = bond.terms[0]
@@ -520,7 +556,11 @@ def _fortran_like_primitive_blocks(
                 )
             )
         else:
-            torsions.extend(_cyclic_coordinates(ring, valence_angle=False, prefix="RPck", start=len(torsions) + 1))
+            torsions.extend(
+                _cyclic_coordinates(
+                    ring, valence_angle=False, prefix="RPck", start=len(torsions) + 1
+                )
+            )
 
     oop_prefix = "ImpD" if impdih else "OuPl"
     for center in range(graph.natoms):
@@ -568,7 +608,9 @@ def _primitive_fallback_blocks(
         for first in neigh:
             if first < center:
                 continue
-            bonds.append(_primitive_coordinate("Stre", len(bonds) + 1, Primitive("bond", (center, first))))
+            bonds.append(
+                _primitive_coordinate("Stre", len(bonds) + 1, Primitive("bond", (center, first)))
+            )
         for ib, first_angle in enumerate(neigh[:-1]):
             for second_angle in neigh[ib + 1 :]:
                 left, right = sorted((first_angle, second_angle))
@@ -631,7 +673,9 @@ def _primitive_fallback_blocks(
     return bonds, bends, linears, torsions, oops
 
 
-def _has_linear_pair(center: int, neigh: list[int], coords: np.ndarray, linear_threshold: float) -> bool:
+def _has_linear_pair(
+    center: int, neigh: list[int], coords: np.ndarray, linear_threshold: float
+) -> bool:
     for ib, first in enumerate(neigh[:-1]):
         for second in neigh[ib + 1 :]:
             if angle(first, center, second, coords) >= linear_threshold:
@@ -735,7 +779,9 @@ def _orient_ring_for_gicforge(
     )
 
 
-def _connected_ring_traversal(atoms: tuple[int, ...], neighbors: list[list[int]]) -> tuple[int, ...]:
+def _connected_ring_traversal(
+    atoms: tuple[int, ...], neighbors: list[list[int]]
+) -> tuple[int, ...]:
     remaining = list(atoms)
     first = min(remaining)
     start = remaining.index(first)
@@ -777,7 +823,11 @@ def _exocyclic_neighbor_priorities(
     ring_atoms = set(ring)
     return tuple(
         sorted(
-            (round(effective_atomic_numbers[neighbor], 12) for neighbor in neighbors[atom] if neighbor not in ring_atoms),
+            (
+                round(effective_atomic_numbers[neighbor], 12)
+                for neighbor in neighbors[atom]
+                if neighbor not in ring_atoms
+            ),
             reverse=True,
         )
     )
@@ -829,11 +879,15 @@ def _effective_atomic_numbers(
                 rigidity += abs(np.sin(angle(neighbor, center, other, coords) - np.deg2rad(t0)))
         if angle_count == 0:
             angle_count = 1
-        synthons.append(coordination / len(neigh) + delocalization / len(neigh) + rigidity / angle_count)
+        synthons.append(
+            coordination / len(neigh) + delocalization / len(neigh) + rigidity / angle_count
+        )
 
     synmax = max(synthons) if synthons else 0.0
     denominator = synmax + 0.1
-    return tuple(float(z) - 0.495 + synthon / denominator for z, synthon in zip(atomic_numbers, synthons))
+    return tuple(
+        float(z) - 0.495 + synthon / denominator for z, synthon in zip(atomic_numbers, synthons)
+    )
 
 
 def _all_atoms_in_three_selected_rings(ring: tuple[int, ...], rings: list[tuple[int, ...]]) -> bool:
@@ -970,7 +1024,10 @@ def _torsion_coordinate(
         name=f"Tors{index:04d}",
         block="Tors",
         type_index=-1,
-        terms=tuple((coefficient, Primitive("dihedral", (left, center, right, far))) for left, far in candidates),
+        terms=tuple(
+            (coefficient, Primitive("dihedral", (left, center, right, far)))
+            for left, far in candidates
+        ),
     )
 
 
@@ -1035,7 +1092,9 @@ def _onedih_torsion_coordinate(
         name=f"Tors{index:04d}",
         block="Tors",
         type_index=-1,
-        terms=tuple((coefficient, Primitive("dihedral", (left, center, right, far))) for left, far in orbit),
+        terms=tuple(
+            (coefficient, Primitive("dihedral", (left, center, right, far))) for left, far in orbit
+        ),
     )
 
 
@@ -1092,7 +1151,9 @@ def _cyclic_coordinates(
             if valence_angle:
                 primitive = Primitive("angle", (ring[iang1], ring[iang2], ring[iang3]))
             else:
-                primitive = Primitive("dihedral", (ring[iang1], ring[iang2], ring[iang3], ring[iang4]))
+                primitive = Primitive(
+                    "dihedral", (ring[iang1], ring[iang2], ring[iang3], ring[iang4])
+                )
             terms.append((float(coefficient), primitive))
         coordinates.append(
             GICForgePythonCoordinate(
@@ -1162,13 +1223,20 @@ def _cyclic_primitives(ring: tuple[int, ...], *, valence_angle: bool) -> list[Pr
             primitives.append(
                 Primitive(
                     "dihedral",
-                    (ring[(term - 1) % ncyc], ring[term], ring[(term + 1) % ncyc], ring[(term + 2) % ncyc]),
+                    (
+                        ring[(term - 1) % ncyc],
+                        ring[term],
+                        ring[(term + 1) % ncyc],
+                        ring[(term + 2) % ncyc],
+                    ),
                 )
             )
     return primitives
 
 
-def _cyclic_primitives_legacy_order(ring: tuple[int, ...], *, valence_angle: bool) -> list[Primitive]:
+def _cyclic_primitives_legacy_order(
+    ring: tuple[int, ...], *, valence_angle: bool
+) -> list[Primitive]:
     ncyc = len(ring)
     if ncyc == 3:
         return []
@@ -1182,7 +1250,9 @@ def _cyclic_primitives_legacy_order(ring: tuple[int, ...], *, valence_angle: boo
         if valence_angle:
             primitives.append(Primitive("angle", (ring[iang1], ring[iang2], ring[iang3])))
         else:
-            primitives.append(Primitive("dihedral", (ring[iang1], ring[iang2], ring[iang3], ring[iang4])))
+            primitives.append(
+                Primitive("dihedral", (ring[iang1], ring[iang2], ring[iang3], ring[iang4]))
+            )
     return primitives
 
 
@@ -1522,7 +1592,9 @@ def _order_four_atom_neighbors(
     return jat, kat, lat, mat
 
 
-def _four_atom_equal_count(atoms: tuple[int, int, int, int], effective_atomic_numbers: tuple[float, ...]) -> int:
+def _four_atom_equal_count(
+    atoms: tuple[int, int, int, int], effective_atomic_numbers: tuple[float, ...]
+) -> int:
     jat, kat, lat, mat = atoms
     threshold = 5.0e-4
 
@@ -1700,7 +1772,11 @@ def _w2xy2_coordinates(
     ]
     if not any(frozen.values()):
         coordinates.append(
-            _primitive_coordinate("Bend" if equal_count != 2 else "Bend", start + 4, Primitive("angle", (inot1, center, inot2)))
+            _primitive_coordinate(
+                "Bend" if equal_count != 2 else "Bend",
+                start + 4,
+                Primitive("angle", (inot1, center, inot2)),
+            )
         )
     return coordinates
 
@@ -1741,11 +1817,17 @@ def _wxy3_coordinates(
     ]
     if sum(1 for value in frozen.values() if value) == 3:
         return coordinates
-    coordinates.append(_primitive_coordinate("Bend", start + 2, Primitive("angle", (lat, center, mat))))
+    coordinates.append(
+        _primitive_coordinate("Bend", start + 2, Primitive("angle", (lat, center, mat)))
+    )
     if sum(1 for value in frozen.values() if value) == 2:
         return coordinates
-    coordinates.append(_primitive_coordinate("Bend", start + 3, Primitive("angle", (kat, center, lat))))
-    coordinates.append(_primitive_coordinate("Bend", start + 4, Primitive("angle", (kat, center, mat))))
+    coordinates.append(
+        _primitive_coordinate("Bend", start + 3, Primitive("angle", (kat, center, lat)))
+    )
+    coordinates.append(
+        _primitive_coordinate("Bend", start + 4, Primitive("angle", (kat, center, mat)))
+    )
     return coordinates
 
 
@@ -1833,7 +1915,11 @@ def _high_coord_angle_coordinates(
             left, right = sorted((first, second))
             value = angle(left, center, right, coords)
             coordinates.append(
-                _primitive_coordinate("HCAn", angle_start + len(coordinates), Primitive("angle", (left, center, right)))
+                _primitive_coordinate(
+                    "HCAn",
+                    angle_start + len(coordinates),
+                    Primitive("angle", (left, center, right)),
+                )
             )
             if value >= linear_threshold:
                 linears.append(
@@ -1869,7 +1955,9 @@ def _atom_selected_ring_counts(rings: list[tuple[int, ...]], natoms: int) -> lis
     return counts
 
 
-def _primitive_coordinate(prefix: str, index: int, primitive: Primitive) -> GICForgePythonCoordinate:
+def _primitive_coordinate(
+    prefix: str, index: int, primitive: Primitive
+) -> GICForgePythonCoordinate:
     return GICForgePythonCoordinate(
         name=f"{prefix}{index:04d}",
         block=prefix,
@@ -1920,7 +2008,9 @@ def _coordinate_block_counts(coordinates: tuple[GICForgePythonCoordinate, ...]) 
     return dict(sorted(counts.items()))
 
 
-def _coordinate_b_rank(coordinates: tuple[GICForgePythonCoordinate, ...], coords: np.ndarray) -> int:
+def _coordinate_b_rank(
+    coordinates: tuple[GICForgePythonCoordinate, ...], coords: np.ndarray
+) -> int:
     if not coordinates:
         return 0
     primitive_basis = _primitive_basis(coordinates)
@@ -1958,7 +2048,13 @@ def _prune_type_local(
         linear_bends = _high_coord_linear_pruning_order(linear_bends)
         if linear_bends:
             forced_linear_atoms = linear_bends[0].terms[0][1].atoms
-    ordered = by_kind["bond"] + by_kind["angle"] + linear_bends + by_kind["dihedral"] + by_kind["out_of_plane"]
+    ordered = (
+        by_kind["bond"]
+        + by_kind["angle"]
+        + linear_bends
+        + by_kind["dihedral"]
+        + by_kind["out_of_plane"]
+    )
     if len(ordered) <= target_rank:
         return tuple(ordered)
     primitive_basis = _primitive_basis(ordered)
@@ -2072,7 +2168,9 @@ def _high_coord_linear_pruning_order(
     return ordered
 
 
-def _seed_basis_row(row: np.ndarray, basis: list[np.ndarray], *, t_abs: float = 1.0e-10, t_rel: float = 1.0e-8) -> bool:
+def _seed_basis_row(
+    row: np.ndarray, basis: list[np.ndarray], *, t_abs: float = 1.0e-10, t_rel: float = 1.0e-8
+) -> bool:
     candidate = np.asarray(row, dtype=float).copy()
     norm0 = float(np.linalg.norm(candidate))
     if norm0 <= t_abs:

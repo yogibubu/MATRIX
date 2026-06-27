@@ -158,11 +158,7 @@ def _rdkit_modules() -> tuple[Any, Any]:
 
 
 def _normalize_legacy_smiles(smiles: str) -> str:
-    return (
-        smiles.strip()
-        .replace("[C@@H2]", "C")
-        .replace("[C@H2]", "C")
-    )
+    return smiles.strip().replace("[C@@H2]", "C").replace("[C@H2]", "C")
 
 
 def _looks_like_legacy_smiles_text(text: str) -> bool:

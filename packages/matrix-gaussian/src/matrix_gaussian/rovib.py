@@ -412,28 +412,32 @@ def _parse_dipole_debye_from_log(
     return dipole
 
 
-def _merge_rotational_sections(existing: RotationalSection, incoming: RotationalSection) -> RotationalSection:
+def _merge_rotational_sections(
+    existing: RotationalSection, incoming: RotationalSection
+) -> RotationalSection:
     return RotationalSection(
         rotor_type=incoming.rotor_type or existing.rotor_type,
         representation=incoming.representation or existing.representation,
         point_group=incoming.point_group or existing.point_group,
         watson_reduction=incoming.watson_reduction or existing.watson_reduction,
-        symmetry_number=incoming.symmetry_number if incoming.symmetry_number is not None else existing.symmetry_number,
-        temperature_K=incoming.temperature_K if incoming.temperature_K is not None else existing.temperature_K,
-        pressure_atm=incoming.pressure_atm if incoming.pressure_atm is not None else existing.pressure_atm,
+        symmetry_number=incoming.symmetry_number
+        if incoming.symmetry_number is not None
+        else existing.symmetry_number,
+        temperature_K=incoming.temperature_K
+        if incoming.temperature_K is not None
+        else existing.temperature_K,
+        pressure_atm=incoming.pressure_atm
+        if incoming.pressure_atm is not None
+        else existing.pressure_atm,
         A_MHz=incoming.A_MHz if incoming.A_MHz is not None else existing.A_MHz,
         B_MHz=incoming.B_MHz if incoming.B_MHz is not None else existing.B_MHz,
         C_MHz=incoming.C_MHz if incoming.C_MHz is not None else existing.C_MHz,
         dipole_debye=(
-            incoming.dipole_debye
-            if incoming.dipole_debye is not None
-            else existing.dipole_debye
+            incoming.dipole_debye if incoming.dipole_debye is not None else existing.dipole_debye
         ),
         q_rot=incoming.q_rot if incoming.q_rot is not None else existing.q_rot,
         delta_vib_MHz=(
-            incoming.delta_vib_MHz
-            if incoming.delta_vib_MHz is not None
-            else existing.delta_vib_MHz
+            incoming.delta_vib_MHz if incoming.delta_vib_MHz is not None else existing.delta_vib_MHz
         ),
     )
 

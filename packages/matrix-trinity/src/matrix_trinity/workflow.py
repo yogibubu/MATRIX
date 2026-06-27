@@ -15,7 +15,9 @@ from matrix_core import (
 
 
 ORACLE_XYZ_TRINITY_SCHEMA = "oracle.xyz.trinity.v1"
-TRINITY_LONG_NAME = "Trust-Region Interface for Numerical Iterative Trajectories with external energY/gradients"
+TRINITY_LONG_NAME = (
+    "Trust-Region Interface for Numerical Iterative Trajectories with external energY/gradients"
+)
 
 
 @dataclass(frozen=True)
@@ -375,4 +377,3 @@ def _path_text(path: Path | None) -> str:
 
 def _normalize_output_key(value: str) -> str:
     return "_".join(part for part in str(value).lower().replace("-", "_").split("_") if part)
-

@@ -132,7 +132,9 @@ def run_auto_reports(
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Auto-report pipeline (topology + symmetry + similarity).")
+    ap = argparse.ArgumentParser(
+        description="Auto-report pipeline (topology + symmetry + similarity)."
+    )
     ap.add_argument("--query-dir", required=True)
     ap.add_argument("--library-dir", required=True)
     ap.add_argument("--out-dir", required=True)

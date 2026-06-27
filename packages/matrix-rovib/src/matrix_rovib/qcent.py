@@ -181,8 +181,8 @@ def tau_wilson(freq_cm1, principal_moments, didq) -> np.ndarray:
                     for mode_idx, omega in enumerate(freq):
                         if omega == 0.0:
                             continue
-                        acc += didq[_sym6(i, j), mode_idx] * didq[_sym6(k, l), mode_idx] / (
-                            omega**2
+                        acc += (
+                            didq[_sym6(i, j), mode_idx] * didq[_sym6(k, l), mode_idx] / (omega**2)
                         )
                     denom = factg**3 * pmom[i] * pmom[j] * pmom[k] * pmom[l]
                     tau[i, j, k, l] = 0.0 if denom == 0.0 else -0.5 * acc / denom
@@ -190,9 +190,7 @@ def tau_wilson(freq_cm1, principal_moments, didq) -> np.ndarray:
 
 
 def _sym6(i: int, j: int) -> int:
-    return [(0, 0), (1, 1), (2, 2), (0, 1), (0, 2), (1, 2)].index(
-        tuple(sorted((i, j)))
-    )
+    return [(0, 0), (1, 1), (2, 2), (0, 1), (0, 2), (1, 2)].index(tuple(sorted((i, j))))
 
 
 def _rep_id(rep: str) -> int:

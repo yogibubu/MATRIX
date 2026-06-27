@@ -95,7 +95,9 @@ class DVRSection:
         object.__setattr__(self, "label_cremer_pople", bool(self.label_cremer_pople))
         object.__setattr__(self, "check_only", bool(self.check_only))
 
-    def with_outputs(self, outputs: Mapping[str, Path], *, status: str | None = None) -> "DVRSection":
+    def with_outputs(
+        self, outputs: Mapping[str, Path], *, status: str | None = None
+    ) -> "DVRSection":
         return DVRSection(
             log_path=self.log_path,
             outdir=self.outdir,
@@ -288,7 +290,9 @@ def run_dvr_request(
 
     bridge_args: list[str] = []
     if is_fortran_solver(request.solver):
-        executable = fortran_exe if fortran_exe is not None else resolve_dvr_executable(request.repo_root)
+        executable = (
+            fortran_exe if fortran_exe is not None else resolve_dvr_executable(request.repo_root)
+        )
         bridge_args = build_fortran_bridge_args(request, executable)
         manifest_args = [build_fortran_shell_command(request, python_args, bridge_args)]
         try:
@@ -434,7 +438,9 @@ def _run_backend_command(command: list[str], *, timeout: float | None) -> DVRCom
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise DVRRunError(f"DVR backend command timed out after {exc.timeout} s: {command}") from exc
+        raise DVRRunError(
+            f"DVR backend command timed out after {exc.timeout} s: {command}"
+        ) from exc
     return DVRCommandResult(
         args=tuple(str(arg) for arg in command),
         returncode=int(completed.returncode),

@@ -25,7 +25,14 @@ from .geometry_input import (
 
 MSR_LEGACY_SUFFIXES = (".msr", ".msr.inp", "_msr.inp")
 MSR_SECTION_NAMES = {"bexp", "dbvib", "weights", "dbelec", "dbele", "dbelec"}
-MSR_CARTESIAN_CONSTRAINT_HEADERS = {"constraints", "constraint", "modredundant", "modredundant_constraints", "frozen", "freeze"}
+MSR_CARTESIAN_CONSTRAINT_HEADERS = {
+    "constraints",
+    "constraint",
+    "modredundant",
+    "modredundant_constraints",
+    "frozen",
+    "freeze",
+}
 MSR_CARTESIAN_CONSTRAINT_END = {"end", "endconstraints", "endmodredundant"}
 
 
@@ -93,7 +100,9 @@ def read_msr_legacy_input(path: Path) -> MSRLegacyInput:
         fixed_parameters,
         source_format,
     )
-    return MSRLegacyInput(target, geometry, observations, tuple(block.label for block in isotope_blocks), physical_map)
+    return MSRLegacyInput(
+        target, geometry, observations, tuple(block.label for block in isotope_blocks), physical_map
+    )
 
 
 def read_msr_legacy_geometry(path: Path) -> SemiexperimentalGeometryInput:
@@ -104,7 +113,9 @@ def read_msr_legacy_observations(path: Path) -> tuple[IsotopologueObservation, .
     return read_msr_legacy_input(path).observations
 
 
-def _split_msr_legacy_lines(lines: Iterable[str]) -> tuple[str, list[str], dict[str, float], list[str]]:
+def _split_msr_legacy_lines(
+    lines: Iterable[str],
+) -> tuple[str, list[str], dict[str, float], list[str]]:
     stripped = [line.strip() for line in lines]
     idx = 0
     while idx < len(stripped):
@@ -220,7 +231,9 @@ def _parse_zmatrix(lines: list[str], variables: dict[str, float]) -> tuple[_ZMat
     return tuple(parsed)
 
 
-def _parse_cartesian_geometry(lines: list[str]) -> tuple[list[str], list[tuple[float, float, float]]]:
+def _parse_cartesian_geometry(
+    lines: list[str],
+) -> tuple[list[str], list[tuple[float, float, float]]]:
     atoms: list[str] = []
     coords: list[tuple[float, float, float]] = []
     for line in lines:
@@ -237,7 +250,9 @@ def _parse_cartesian_geometry(lines: list[str]) -> tuple[list[str], list[tuple[f
     return atoms, coords
 
 
-def _zmatrix_to_cartesian(zmat: tuple[_ZMatrixLine, ...]) -> tuple[list[str], list[tuple[float, float, float]], tuple[int, ...]]:
+def _zmatrix_to_cartesian(
+    zmat: tuple[_ZMatrixLine, ...],
+) -> tuple[list[str], list[tuple[float, float, float]], tuple[int, ...]]:
     coords: list[np.ndarray] = []
     for idx, row in enumerate(zmat):
         if idx == 0:
@@ -282,8 +297,12 @@ def _zmatrix_to_cartesian(zmat: tuple[_ZMatrixLine, ...]) -> tuple[list[str], li
     return atoms, clean_coords, tuple(physical_map)
 
 
-def _zmatrix_frozen_constraints(zmat: tuple[_ZMatrixLine, ...], physical_map: tuple[int, ...]) -> tuple[str, ...]:
-    z_to_physical = {z_index: phys_index for phys_index, z_index in enumerate(physical_map, start=1)}
+def _zmatrix_frozen_constraints(
+    zmat: tuple[_ZMatrixLine, ...], physical_map: tuple[int, ...]
+) -> tuple[str, ...]:
+    z_to_physical = {
+        z_index: phys_index for phys_index, z_index in enumerate(physical_map, start=1)
+    }
     constraints: list[str] = []
     seen: set[str] = set()
     for z_zero, row in enumerate(zmat):
@@ -296,11 +315,17 @@ def _zmatrix_frozen_constraints(zmat: tuple[_ZMatrixLine, ...], physical_map: tu
         if _is_frozen_token(row.angle_token) and z_zero >= 2:
             atoms = _physical_atoms(z_to_physical, z_index, row.refs[0] + 1, row.refs[1] + 1)
             if atoms is not None:
-                _append_unique_constraint(constraints, seen, f"A({atoms[0]},{atoms[1]},{atoms[2]}) Frozen")
+                _append_unique_constraint(
+                    constraints, seen, f"A({atoms[0]},{atoms[1]},{atoms[2]}) Frozen"
+                )
         if _is_frozen_token(row.dihedral_token) and z_zero >= 3:
-            atoms = _physical_atoms(z_to_physical, z_index, row.refs[0] + 1, row.refs[1] + 1, row.refs[2] + 1)
+            atoms = _physical_atoms(
+                z_to_physical, z_index, row.refs[0] + 1, row.refs[1] + 1, row.refs[2] + 1
+            )
             if atoms is not None:
-                _append_unique_constraint(constraints, seen, f"D({atoms[0]},{atoms[1]},{atoms[2]},{atoms[3]}) Frozen")
+                _append_unique_constraint(
+                    constraints, seen, f"D({atoms[0]},{atoms[1]},{atoms[2]},{atoms[3]}) Frozen"
+                )
     return tuple(constraints)
 
 
@@ -381,7 +406,9 @@ def _is_modredundant_constraint_line(line: str) -> bool:
     return atoms >= expected and "F" in actions
 
 
-def _parse_isotopes_and_sections(lines: list[str], *, natoms: int) -> tuple[tuple[_IsotopeBlock, ...], dict[str, tuple[_SectionRow, ...]]]:
+def _parse_isotopes_and_sections(
+    lines: list[str], *, natoms: int
+) -> tuple[tuple[_IsotopeBlock, ...], dict[str, tuple[_SectionRow, ...]]]:
     rows = [line for line in lines if line.strip()]
     idx = 0
     isotope_blocks: list[_IsotopeBlock] = []
@@ -445,7 +472,9 @@ def _build_observations(
                 constants=RotationalConstants(*constants),
                 substitutions=_substitutions_from_masses(parent, block.masses),
                 correction=VibrationalCorrection(*vib, source="MSR dbvib", convention="additive"),
-                electronic_correction=ElectronicCorrection(*elec, source="MSR dbelec", convention="additive"),
+                electronic_correction=ElectronicCorrection(
+                    *elec, source="MSR dbelec", convention="additive"
+                ),
                 weights=RotationalConstants(*weight_values) if weight_values is not None else None,
             )
         )
@@ -471,7 +500,9 @@ def _section_by_label_or_order(
 def _substitutions_from_masses(parent: tuple[int, ...], masses: tuple[int, ...]) -> dict[int, int]:
     if len(parent) != len(masses):
         raise ValueError("MSR isotope blocks have inconsistent lengths")
-    return {idx: mass for idx, (base, mass) in enumerate(zip(parent, masses), start=1) if mass != base}
+    return {
+        idx: mass for idx, (base, mass) in enumerate(zip(parent, masses), start=1) if mass != base
+    }
 
 
 def _parse_section_row(line: str) -> _SectionRow:
@@ -498,9 +529,13 @@ def _validate_zmatrix_rows(rows: list[_ZMatrixLine]) -> None:
             raise ValueError(f"MSR Z-matrix distance must be positive for atom {idx + 1}")
         if idx >= 2:
             if not math.isfinite(row.angle) or row.angle < 0.0 or row.angle > 180.0:
-                raise ValueError(f"MSR Z-matrix angle must be between 0 and 180 degrees for atom {idx + 1}")
+                raise ValueError(
+                    f"MSR Z-matrix angle must be between 0 and 180 degrees for atom {idx + 1}"
+                )
             if row.refs[0] == row.refs[1]:
-                raise ValueError(f"MSR Z-matrix bond and angle references must be distinct for atom {idx + 1}")
+                raise ValueError(
+                    f"MSR Z-matrix bond and angle references must be distinct for atom {idx + 1}"
+                )
         if idx >= 3:
             if not math.isfinite(row.dihedral):
                 raise ValueError(f"MSR Z-matrix dihedral must be finite for atom {idx + 1}")
@@ -661,12 +696,20 @@ def _zmatrix_reference_frame(
     """
     ez = _unit(angle_atom - bond_atom)
     if dihedral_atom is None:
-        ref = np.array([0.0, 0.0, 1.0], dtype=float) if abs(ez[2]) < 0.9 else np.array([0.0, 1.0, 0.0], dtype=float)
+        ref = (
+            np.array([0.0, 0.0, 1.0], dtype=float)
+            if abs(ez[2]) < 0.9
+            else np.array([0.0, 1.0, 0.0], dtype=float)
+        )
         normal = _unit(np.cross(ez, ref))
     else:
         normal_raw = np.cross(ez, dihedral_atom - angle_atom)
         if np.linalg.norm(normal_raw) <= 1.0e-8:
-            ref = np.array([0.0, 0.0, 1.0], dtype=float) if abs(ez[2]) < 0.9 else np.array([0.0, 1.0, 0.0], dtype=float)
+            ref = (
+                np.array([0.0, 0.0, 1.0], dtype=float)
+                if abs(ez[2]) < 0.9
+                else np.array([0.0, 1.0, 0.0], dtype=float)
+            )
             normal_raw = np.cross(ez, ref)
         normal = _unit(normal_raw)
     ey = _unit(np.cross(normal, ez))

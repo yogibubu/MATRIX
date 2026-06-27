@@ -2153,7 +2153,9 @@ def oracle_main(argv: list[str] | None = None) -> int:
 def link_main(argv: list[str] | None = None) -> int:
     """Console-script alias for the LINK preprocessing/import tool."""
     command_args = sys.argv[1:] if argv is None else argv
-    alias_parser = argparse.ArgumentParser(prog="link", description="LINK preprocessing/import tool")
+    alias_parser = argparse.ArgumentParser(
+        prog="link", description="LINK preprocessing/import tool"
+    )
     alias_sub = alias_parser.add_subparsers(dest="link_command", required=True)
     alias_preprocess = alias_sub.add_parser("preprocess", help="Import a source into xyzin")
     _add_preprocess_arguments(alias_preprocess)
@@ -2181,9 +2183,8 @@ def _add_preprocess_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _is_link_command(args: argparse.Namespace) -> bool:
-    return (
-        (args.command == "link" and args.link_command == "preprocess")
-        or (args.command == "babel" and args.babel_command == "preprocess")
+    return (args.command == "link" and args.link_command == "preprocess") or (
+        args.command == "babel" and args.babel_command == "preprocess"
     )
 
 

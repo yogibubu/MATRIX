@@ -146,7 +146,9 @@ def rot_dos_logg(
             e = beff * J * (J + 1)
             if e > emax_cm1:
                 break
-            counts[int(e // bin_cm1)] = counts.get(int(e // bin_cm1), 0.0) + ((2 * J + 1) ** 2) / sigma_eff
+            counts[int(e // bin_cm1)] = (
+                counts.get(int(e // bin_cm1), 0.0) + ((2 * J + 1) ** 2) / sigma_eff
+            )
         return {bin_idx: math.log(count) for bin_idx, count in counts.items() if count > 0.0}
 
     Aeff = max(A, B, C)
@@ -231,7 +233,9 @@ def rovib_pipeline(
     )
 
 
-def write_dos(path: Path | str, dos_logg: dict[int, float], emin_cm1: float, bin_cm1: float) -> Path:
+def write_dos(
+    path: Path | str, dos_logg: dict[int, float], emin_cm1: float, bin_cm1: float
+) -> Path:
     target = Path(path)
     lines = ["# format: E_cm1 log_g"]
     for bin_idx in sorted(dos_logg):

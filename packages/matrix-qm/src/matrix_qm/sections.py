@@ -42,7 +42,9 @@ class CartesianHessianSection:
             raise ValueError(f"Cartesian Hessian must have shape {expected}")
         if not np.allclose(hessian, hessian.T):
             raise ValueError("Cartesian Hessian must be symmetric")
-        object.__setattr__(self, "atomic_numbers", tuple(int(value) for value in self.atomic_numbers))
+        object.__setattr__(
+            self, "atomic_numbers", tuple(int(value) for value in self.atomic_numbers)
+        )
         object.__setattr__(self, "cartesian_coordinates_bohr", coords)
         object.__setattr__(self, "masses_amu", tuple(float(value) for value in self.masses_amu))
         object.__setattr__(self, "cartesian_hessian", hessian)
@@ -66,7 +68,9 @@ class NormalModesSection:
             raise ValueError("normal modes must be a mode x Cartesian-coordinate matrix")
         if self.frequencies_cm and modes.shape[0] != len(self.frequencies_cm):
             raise ValueError("normal-mode row count must match frequency count")
-        object.__setattr__(self, "frequencies_cm", tuple(float(value) for value in self.frequencies_cm))
+        object.__setattr__(
+            self, "frequencies_cm", tuple(float(value) for value in self.frequencies_cm)
+        )
         object.__setattr__(self, "modes", modes)
 
 
@@ -102,7 +106,9 @@ class QFFSection:
         object.__setattr__(self, "quartic_cm", quartic)
 
 
-def cartesian_hessian_section_from_hessian_input(input_data, *, source: str | None = None) -> CartesianHessianSection:
+def cartesian_hessian_section_from_hessian_input(
+    input_data, *, source: str | None = None
+) -> CartesianHessianSection:
     return CartesianHessianSection(
         atomic_numbers=tuple(int(value) for value in input_data.atomic_numbers),
         cartesian_coordinates_bohr=np.asarray(input_data.cartesian_coordinates_bohr, dtype=float),
@@ -156,7 +162,9 @@ def normal_modes_section_from_arrays(
 def qff_section_from_anharmonic_input(input_data, *, source: str | None = None) -> QFFSection:
     return QFFSection(
         harmonic_frequencies_cm=tuple(float(value) for value in input_data.harmonic_frequencies_cm),
-        anharmonic_frequencies_cm=tuple(float(value) for value in input_data.anharmonic_frequencies_cm),
+        anharmonic_frequencies_cm=tuple(
+            float(value) for value in input_data.anharmonic_frequencies_cm
+        ),
         cubic_cm=dict(input_data.cubic_cm),
         quartic_cm=dict(input_data.quartic_cm),
         source=input_data.source if source is None else source,
@@ -179,7 +187,9 @@ def anharmonic_input_from_qff_section(section: QFFSection):
 
 def qff_section_from_quartic_force_field(force_field, *, source: str = "") -> QFFSection:
     return QFFSection(
-        harmonic_frequencies_cm=tuple(float(value) for value in force_field.harmonic_frequencies_cm),
+        harmonic_frequencies_cm=tuple(
+            float(value) for value in force_field.harmonic_frequencies_cm
+        ),
         cubic_cm=dict(force_field.cubic_cm),
         quartic_cm=dict(force_field.quartic_cm),
         source=source,

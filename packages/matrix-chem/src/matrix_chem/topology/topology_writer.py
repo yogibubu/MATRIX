@@ -40,7 +40,7 @@ def write_topology_section(
         spin = spin_density[i] if spin_density is not None else 0.0
 
         fh.write(
-            f"{i+1:3d} {Z:3d} {Zeff:7.3f} {charge:7.3f} "
+            f"{i + 1:3d} {Z:3d} {Zeff:7.3f} {charge:7.3f} "
             f"{coval:7.3f} {deloc:7.3f} {strain:7.3f} {spin:7.3f}\n"
         )
 
@@ -53,7 +53,7 @@ def write_topology_section(
 
     if dg.bonds:
         for i, j in dg.bonds:
-            fh.write(f"({i+1},{j+1})\n")
+            fh.write(f"({i + 1},{j + 1})\n")
     else:
         fh.write("Bonds: none\n")
 
@@ -84,9 +84,7 @@ def write_topology_section(
             fh.write("Atoms: none\n")
 
         if aromaticity.aromatic_bonds:
-            bonds = ", ".join(
-                f"({i+1},{j+1})" for i, j in aromaticity.aromatic_bonds
-            )
+            bonds = ", ".join(f"({i + 1},{j + 1})" for i, j in aromaticity.aromatic_bonds)
             fh.write(f"Bonds: [{bonds}]\n")
         else:
             fh.write("Bonds: none\n")
@@ -107,6 +105,7 @@ def write_topology_section(
 # ======================================================================
 # Helper functions for safe topology writing
 # ======================================================================
+
 
 def remove_topology_section(lines):
     """

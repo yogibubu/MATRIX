@@ -77,7 +77,9 @@ def _xyzin_target(geometry_source: Path, workdir: Path | None) -> Path:
     candidates: list[Path] = []
     if workdir is not None:
         candidates.extend((Path(workdir) / "xyzin", Path(workdir) / "working" / "xyzin"))
-    candidates.extend((Path.cwd() / "xyzin", geometry_source.parent / "xyzin", Path.cwd() / "working" / "xyzin"))
+    candidates.extend(
+        (Path.cwd() / "xyzin", geometry_source.parent / "xyzin", Path.cwd() / "working" / "xyzin")
+    )
     seen: set[Path] = set()
     for candidate in candidates:
         resolved = candidate.resolve()

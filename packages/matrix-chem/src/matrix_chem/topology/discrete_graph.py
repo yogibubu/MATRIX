@@ -19,8 +19,8 @@ from .covalent_radii import covalent_radius
 # Parameters
 # ------------------------------------------------------------
 
-BOND_THRESHOLD = 0.2      # minimum physical bond order
-REFF_SCALE = 1.25         # distance sanity factor
+BOND_THRESHOLD = 0.2  # minimum physical bond order
+REFF_SCALE = 1.25  # distance sanity factor
 
 
 class DiscreteGraph:
@@ -57,8 +57,10 @@ class DiscreteGraph:
                 rj = covalent_radius(Zj)
                 if rj is None:
                     continue
-                if Zi == 1 and Zj == 1 and (
-                    self._has_heavy_partner(i) or self._has_heavy_partner(j)
+                if (
+                    Zi == 1
+                    and Zj == 1
+                    and (self._has_heavy_partner(i) or self._has_heavy_partner(j))
                 ):
                     continue
 
@@ -102,9 +104,7 @@ class DiscreteGraph:
     def _validate_hydrogens(self):
         for i, Zi in enumerate(self.Z):
             if Zi == 1 and len(self.adjacency[i]) != 1:
-                raise ValueError(
-                    f"Hydrogen atom {i+1} has {len(self.adjacency[i])} bonds"
-                )
+                raise ValueError(f"Hydrogen atom {i + 1} has {len(self.adjacency[i])} bonds")
 
     # --------------------------------------------------------
     # Public helpers

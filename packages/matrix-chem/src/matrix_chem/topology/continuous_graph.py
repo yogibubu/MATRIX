@@ -61,6 +61,7 @@ class ContinuousGraph:
 # Principal quantum number
 # ============================================================
 
+
 def principal_quantum_number(Z):
     if Z <= 2:
         return 1
@@ -81,6 +82,7 @@ def principal_quantum_number(Z):
 # ============================================================
 # Continuous Coordination Number (CNA)
 # ============================================================
+
 
 def continuous_coordination_number(i, Z, coords, neighbors):
     Zi = Z[i]
@@ -108,12 +110,13 @@ def continuous_coordination_number(i, Z, coords, neighbors):
 # Effective covalent radius (Pyykkö, C¹ interpolation)
 # ============================================================
 
+
 def _hermite(R0, R1, m, t):
-    h00 = 2*t**3 - 3*t**2 + 1
-    h10 = t**3 - 2*t**2 + t
-    h01 = -2*t**3 + 3*t**2
+    h00 = 2 * t**3 - 3 * t**2 + 1
+    h10 = t**3 - 2 * t**2 + t
+    h01 = -2 * t**3 + 3 * t**2
     h11 = t**3 - t**2
-    return h00*R0 + h10*m + h01*R1 + h11*m
+    return h00 * R0 + h10 * m + h01 * R1 + h11 * m
 
 
 def effective_covalent_radius(Zi, cna):
@@ -130,19 +133,20 @@ def effective_covalent_radius(Zi, cna):
         return Rs[-1]
 
     for k in range(len(CNs) - 1):
-        if CNs[k] <= cna <= CNs[k+1]:
-            CN0, CN1 = CNs[k], CNs[k+1]
-            R0, R1 = Rs[k], Rs[k+1]
+        if CNs[k] <= cna <= CNs[k + 1]:
+            CN0, CN1 = CNs[k], CNs[k + 1]
+            R0, R1 = Rs[k], Rs[k + 1]
             break
 
     t = (cna - CN0) / (CN1 - CN0)
     m = (R1 - R0) / (CN1 - CN0)
-    return _hermite(R0, R1, m*(CN1-CN0), t)
+    return _hermite(R0, R1, m * (CN1 - CN0), t)
 
 
 # ============================================================
 # Bond order
 # ============================================================
+
 
 def _bond_order_switched(Rij, R0):
     """

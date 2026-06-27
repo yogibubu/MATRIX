@@ -82,7 +82,7 @@ def is_linear(coords, tol=1.0e-3):
     x = np.array(coords, dtype=float)
     I = np.zeros((3, 3))
     for r in x:
-        I += (np.dot(r, r) * np.eye(3) - np.outer(r, r))
+        I += np.dot(r, r) * np.eye(3) - np.outer(r, r)
     evals = np.linalg.eigvalsh(I)
     return bool(evals[0] < tol)
 
@@ -115,7 +115,7 @@ def symmetry_elements_from_geometry(
     if auto_max_n:
         I = np.zeros((3, 3))
         for r in coords:
-            I += (np.dot(r, r) * np.eye(3) - np.outer(r, r))
+            I += np.dot(r, r) * np.eye(3) - np.outer(r, r)
         evals = np.linalg.eigvalsh(I)
         maxI = float(np.max(evals)) if len(evals) else 0.0
         if maxI > 0.0:

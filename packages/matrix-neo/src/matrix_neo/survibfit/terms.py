@@ -47,7 +47,7 @@ def eval_terms(q: np.ndarray, terms: List[Term], basis_cfg: Dict[int, Dict]):
         # precompute factors
         factors = []
         derivs = []
-        for (i, exp) in term.exps:
+        for i, exp in term.exps:
             cfg = basis_cfg.get(i, {})
             mode = cfg.get("mode", "poly")
             params = cfg.get("params", {})
@@ -62,11 +62,11 @@ def eval_terms(q: np.ndarray, terms: List[Term], basis_cfg: Dict[int, Dict]):
             v *= val
         phi[t_idx] = v
         # derivatives
-        for (i, dval) in derivs:
+        for i, dval in derivs:
             if dval == 0.0:
                 continue
             dv = dval
-            for (j, val) in factors:
+            for j, val in factors:
                 if j == i:
                     continue
                 dv *= val

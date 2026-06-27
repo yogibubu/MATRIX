@@ -13,6 +13,7 @@ import numpy as np
 # Plane fitting and planarity
 # ============================================================
 
+
 def best_fit_plane(xyz):
     """
     Compute the best-fit plane to a set of points.
@@ -63,6 +64,7 @@ def ring_planarity(xyz):
 # ============================================================
 # Cyclic topology helpers
 # ============================================================
+
 
 def cyclic_triplets(atoms):
     """
@@ -119,6 +121,7 @@ def cyclic_quartets(atoms):
 # Orientation helpers (optional, future use)
 # ============================================================
 
+
 def ring_normal(xyz):
     """
     Return unit normal vector to a ring.
@@ -151,4 +154,3 @@ def signed_distance_from_plane(xyz, plane_point, plane_normal):
         Signed distances.
     """
     return np.dot(xyz - plane_point, plane_normal)
-

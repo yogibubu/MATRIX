@@ -211,7 +211,10 @@ def _diagonalize_gpu(
                 lower=lower,
             )
     except Exception:
-        if _env_value("MATRIX_DIAGONALIZER_STRICT_GPU", "ORACLE_DIAGONALIZER_STRICT_GPU", "0") == "1":
+        if (
+            _env_value("MATRIX_DIAGONALIZER_STRICT_GPU", "ORACLE_DIAGONALIZER_STRICT_GPU", "0")
+            == "1"
+        ):
             raise
     return _diagonalize_scipy(
         array,

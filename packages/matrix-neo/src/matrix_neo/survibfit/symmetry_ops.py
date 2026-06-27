@@ -68,8 +68,18 @@ def candidate_ops(max_n=6):
         for power in range(1, order, 2):
             theta = 2.0 * np.pi * power / order
             ops.append((f"sigma_h*C{order}z^{power}", sigma_h @ rotation_matrix((0, 0, 1), theta)))
-            ops.append((f"C2_xy_{order}_{power}", rotation_matrix((np.cos(theta / 2.0), np.sin(theta / 2.0), 0), np.pi)))
-            ops.append((f"sigma_v_{order}_{power}", reflection_matrix_from_normal((np.cos(theta / 2.0), np.sin(theta / 2.0), 0.0))))
+            ops.append(
+                (
+                    f"C2_xy_{order}_{power}",
+                    rotation_matrix((np.cos(theta / 2.0), np.sin(theta / 2.0), 0), np.pi),
+                )
+            )
+            ops.append(
+                (
+                    f"sigma_v_{order}_{power}",
+                    reflection_matrix_from_normal((np.cos(theta / 2.0), np.sin(theta / 2.0), 0.0)),
+                )
+            )
 
     # C2 axes in xy plane (D_n families)
     for n in range(2, max_n + 1):

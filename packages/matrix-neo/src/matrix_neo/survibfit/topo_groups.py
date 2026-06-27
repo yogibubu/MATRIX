@@ -51,7 +51,13 @@ def primitive_signature(p, atom_class, Z, ringset=None, angle_bin_val=None):
             1 if Z[k] == 1 else 0,
             1 if Z[l] == 1 else 0,
         )
-        return (kind, atom_class[j], tuple(sorted((atom_class[i], atom_class[k], atom_class[l]))), htag, ring_tag)
+        return (
+            kind,
+            atom_class[j],
+            tuple(sorted((atom_class[i], atom_class[k], atom_class[l]))),
+            htag,
+            ring_tag,
+        )
     if kind == "linear_bend":
         i, j, k = atoms
         htag = (1 if Z[i] == 1 else 0, 1 if Z[j] == 1 else 0, 1 if Z[k] == 1 else 0)

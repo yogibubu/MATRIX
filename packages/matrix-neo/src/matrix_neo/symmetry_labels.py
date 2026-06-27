@@ -84,10 +84,7 @@ def irrep_sequence(point_group: str | None) -> tuple[str, ...]:
     if suffix == "D":
         if n % 2 == 1:
             return tuple(
-                dict.fromkeys(
-                    [f"{name}g" for name in base]
-                    + [f"{name}u" for name in base]
-                )
+                dict.fromkeys([f"{name}g" for name in base] + [f"{name}u" for name in base])
             )
         return tuple(dict.fromkeys(base))
     if suffix == "H" and n % 2 == 0:
@@ -466,8 +463,7 @@ def _dnd_characters(
         (
             name + suffix,
             tuple(
-                _dn_irrep_value(underlying_label, n, name)
-                * (float(parity) if reflected else 1.0)
+                _dn_irrep_value(underlying_label, n, name) * (float(parity) if reflected else 1.0)
                 for underlying_label, reflected in underlying
             ),
         )
@@ -688,14 +684,7 @@ def _matrix_dn_label_characters(
                 values.append(0.0)
             else:
                 values.append(
-                    2.0
-                    * np.cos(
-                        2.0
-                        * np.pi
-                        * order
-                        * _matrix_rotation_power(label)
-                        / float(n)
-                    )
+                    2.0 * np.cos(2.0 * np.pi * order * _matrix_rotation_power(label) / float(n))
                 )
         rows.append((f"E{order}", tuple(float(2.0 * value) for value in values)))
     return tuple(rows)
@@ -705,10 +694,7 @@ def _matrix_gerade_ungerade(
     base: tuple[tuple[str, tuple[float, ...]], ...],
     labels: tuple[str, ...],
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
-    parity = tuple(
-        -1.0 if label == "i" or label.startswith("sigma") else 1.0
-        for label in labels
-    )
+    parity = tuple(-1.0 if label == "i" or label.startswith("sigma") else 1.0 for label in labels)
     rows: list[tuple[str, tuple[float, ...]]] = []
     for name, chars in base:
         rows.append((f"{name}g", chars))
@@ -721,8 +707,7 @@ def _matrix_prime_doubleprime(
     labels: tuple[str, ...],
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
     reflection = tuple(
-        -1.0 if label.startswith("sigma") or label.startswith("S") else 1.0
-        for label in labels
+        -1.0 if label.startswith("sigma") or label.startswith("S") else 1.0 for label in labels
     )
     rows: list[tuple[str, tuple[float, ...]]] = []
     for name, chars in base:
@@ -873,8 +858,7 @@ def _d2_characters(labels: tuple[str, ...]) -> tuple[tuple[str, tuple[float, ...
         "B3": {"C2x": 1.0, "C2y": -1.0, "C2z": -1.0},
     }
     return tuple(
-        (name, tuple(chars.get(label, 1.0) for label in labels))
-        for name, chars in values.items()
+        (name, tuple(chars.get(label, 1.0) for label in labels)) for name, chars in values.items()
     )
 
 
@@ -886,8 +870,7 @@ def _c2h_characters(labels: tuple[str, ...]) -> tuple[tuple[str, tuple[float, ..
         "Bu": {"E": 1.0, "C2z": -1.0, "i": -1.0, "sigma_xy": 1.0},
     }
     return tuple(
-        (name, tuple(chars.get(label, 0.0) for label in labels))
-        for name, chars in values.items()
+        (name, tuple(chars.get(label, 0.0) for label in labels)) for name, chars in values.items()
     )
 
 
@@ -1081,9 +1064,7 @@ def _matrix_polyhedral_label_characters(
     if group_key == "OH":
         base = _matrix_polyhedral_label_characters(labels, "O")
         parity = tuple(
-            -1.0
-            if label == "i" or label.startswith("sigma") or label.startswith("S")
-            else 1.0
+            -1.0 if label == "i" or label.startswith("sigma") or label.startswith("S") else 1.0
             for label in labels
         )
         rows: list[tuple[str, tuple[float, ...]]] = []
@@ -1094,9 +1075,7 @@ def _matrix_polyhedral_label_characters(
     if group_key == "IH":
         base = _matrix_polyhedral_label_characters(labels, "I")
         parity = tuple(
-            -1.0
-            if label == "i" or label.startswith("sigma") or label.startswith("S")
-            else 1.0
+            -1.0 if label == "i" or label.startswith("sigma") or label.startswith("S") else 1.0
             for label in labels
         )
         return tuple((f"{name}g", chars) for name, chars in base) + tuple(
@@ -1194,11 +1173,7 @@ def _polyhedral_operation_classes(
 
     classes = []
     for label in labels:
-        operation_class = (
-            _td_label_class(label)
-            if family == "TD"
-            else _oh_label_class(label)
-        )
+        operation_class = _td_label_class(label) if family == "TD" else _oh_label_class(label)
         if operation_class is None:
             return None
         classes.append(operation_class)

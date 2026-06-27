@@ -97,9 +97,7 @@ def read_vpt2_vci_mode_contributions(path: Path | str) -> tuple[VPT2VCIModeContr
 
 def collect_vpt2_vci_outputs(section: VPT2VCISection) -> VPT2VCIOutputSnapshot:
     outputs = detected_vpt2_vci_outputs(section)
-    comparison = (
-        read_vpt2_vci_comparison(outputs["comparison"]) if "comparison" in outputs else ()
-    )
+    comparison = read_vpt2_vci_comparison(outputs["comparison"]) if "comparison" in outputs else ()
     frequencies = (
         read_vpt2_vci_frequencies(outputs["frequencies"]) if "frequencies" in outputs else ()
     )
@@ -186,7 +184,13 @@ def _read_csv_rows(path: Path) -> list[dict[str, str]]:
             raise ValueError(f"empty VPT2/VCI CSV: {path}")
         rows: list[dict[str, str]] = []
         for row in reader:
-            rows.append({key.strip(): (value or "").strip() for key, value in row.items() if key is not None})
+            rows.append(
+                {
+                    key.strip(): (value or "").strip()
+                    for key, value in row.items()
+                    if key is not None
+                }
+            )
         return rows
 
 

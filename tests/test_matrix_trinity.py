@@ -111,4 +111,3 @@ def test_trinity_cli_prepare_and_status(tmp_path, capsys):
     assert rc == 0
     assert "coordinate model: gic" in status_out
     assert "max steps: 7" in status_out
-

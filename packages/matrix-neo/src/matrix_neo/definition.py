@@ -341,18 +341,14 @@ def _construct_merlino_python_definition(
             if refs:
                 primitive_index = primitive_indices[existing]
                 current = primitives[primitive_index]
-                merged_refs = current.refs + tuple(
-                    ref for ref in refs if ref not in current.refs
-                )
+                merged_refs = current.refs + tuple(ref for ref in refs if ref not in current.refs)
                 if merged_refs != current.refs:
                     primitives[primitive_index] = replace(current, refs=merged_refs)
             return existing
         identifier = f"P{len(primitives) + 1:03d}"
         primitive_ids[key] = identifier
         primitive_indices[identifier] = len(primitives)
-        primitives.append(
-            _merlino_runtime_primitive(identifier, primitive, family, refs=refs)
-        )
+        primitives.append(_merlino_runtime_primitive(identifier, primitive, family, refs=refs))
         return identifier
 
     for index, coordinate in enumerate(model.coordinates, start=1):
@@ -364,9 +360,7 @@ def _construct_merlino_python_definition(
             if abs(float(coefficient)) > 1.0e-14
         )
         if not coefficients:
-            raise GICForgeContractError(
-                f"empty Merlino Python coordinate {coordinate.name!r}"
-            )
+            raise GICForgeContractError(f"empty Merlino Python coordinate {coordinate.name!r}")
         gics.append(
             FrozenGIC(
                 identifier=f"GIC{index:03d}",
@@ -742,9 +736,7 @@ def build_gic_b_matrix(
                 )
             row += float(coefficient) * _analytic_b_row(primitive, coords)
         if not np.all(np.isfinite(row)):
-            raise GICForgeContractError(
-                f"non-finite B-matrix row for frozen GIC {gic.identifier}"
-            )
+            raise GICForgeContractError(f"non-finite B-matrix row for frozen GIC {gic.identifier}")
         rows.append(tuple(float(value) for value in row))
     return GICBMatrix(
         backend=B_MATRIX_BACKEND,
@@ -764,12 +756,10 @@ def _build_merlino_python_b_matrix(
 
     primitive_by_id = {primitive.identifier: primitive for primitive in definition.primitives}
     primitive_index_by_id = {
-        primitive.identifier: index
-        for index, primitive in enumerate(definition.primitives)
+        primitive.identifier: index for index, primitive in enumerate(definition.primitives)
     }
     primitive_basis = tuple(
-        _survibfit_primitive_from_gic_primitive(primitive)
-        for primitive in definition.primitives
+        _survibfit_primitive_from_gic_primitive(primitive) for primitive in definition.primitives
     )
     primitive_b = b_matrix_analytic(primitive_basis, coords)
     rows: list[tuple[float, ...]] = []
@@ -785,9 +775,7 @@ def _build_merlino_python_b_matrix(
             primitive_index = primitive_index_by_id[primitive.identifier]
             row += float(coefficient) * primitive_b[primitive_index]
         if not np.all(np.isfinite(row)):
-            raise GICForgeContractError(
-                f"non-finite B-matrix row for frozen GIC {gic.identifier}"
-            )
+            raise GICForgeContractError(f"non-finite B-matrix row for frozen GIC {gic.identifier}")
         rows.append(tuple(float(value) for value in row))
     return GICBMatrix(
         backend="merlino-python-survibfit-bmatrix.v1",
@@ -878,8 +866,7 @@ def read_gic_definition_from_xyzin(path: Path) -> GICDefinition:
         rank=_parse_int(_section_value(section, "RANK")),
         candidate_count=_parse_int(_section_value(section, "CANDIDATE_COUNT")),
         reference_coordinates_angstrom=tuple(
-            tuple(float(value) for value in row)
-            for row in geometry.coordinates_angstrom
+            tuple(float(value) for value in row) for row in geometry.coordinates_angstrom
         ),
         primitives=primitives,
         gics=gics,
@@ -1121,8 +1108,7 @@ def _ring_pucker_component_candidates(
                     tuple(ring_atoms),
                     counters,
                     refs=tuple(
-                        _encode_ring_pucker_term(coefficient, atoms)
-                        for coefficient, atoms in terms
+                        _encode_ring_pucker_term(coefficient, atoms) for coefficient, atoms in terms
                     ),
                 )
             )
@@ -1232,8 +1218,10 @@ def _ring_index_for_atoms(
         if not atom_set.issubset(ring_set):
             continue
         ring_size = len(ring_atoms)
-        if best_size is None or ring_size < best_size or (
-            ring_size == best_size and ring_index < (best_index or ring_index)
+        if (
+            best_size is None
+            or ring_size < best_size
+            or (ring_size == best_size and ring_index < (best_index or ring_index))
         ):
             best_index = ring_index
             best_size = ring_size
@@ -1390,9 +1378,7 @@ def _select_ranked_primitives_with_diagnostics(
     basis: list[np.ndarray] = []
     rank = 0
 
-    special_candidates = [
-        primitive for primitive in candidates if _is_special_primitive(primitive)
-    ]
+    special_candidates = [primitive for primitive in candidates if _is_special_primitive(primitive)]
     ordinary_candidates = [
         primitive for primitive in candidates if not _is_special_primitive(primitive)
     ]
@@ -1645,15 +1631,8 @@ def _apply_local_symmetrization(
             ),
         )
 
-    groups_by_first = {
-        group[0].identifier: (key, group)
-        for key, group in source_groups.items()
-    }
-    grouped_ids = {
-        gic.identifier
-        for group in source_groups.values()
-        for gic in group
-    }
+    groups_by_first = {group[0].identifier: (key, group) for key, group in source_groups.items()}
+    grouped_ids = {gic.identifier for group in source_groups.values() for gic in group}
     name_counters: dict[tuple[str, str, str], int] = {}
     output: list[FrozenGIC] = []
     diagnostics: list[GICSymmetrizedGroup] = []
@@ -1699,9 +1678,7 @@ def _apply_local_symmetrization(
             symmetry_group=point_group,
             total_symmetric_irrep=total_symmetric_irrep(point_group),
             total_symmetric_gics=tuple(
-                gic.name
-                for gic in output_tuple
-                if is_total_symmetric_irrep(point_group, gic.irrep)
+                gic.name for gic in output_tuple if is_total_symmetric_irrep(point_group, gic.irrep)
             ),
             groups=tuple(diagnostics),
         ),
@@ -1794,9 +1771,7 @@ def _apply_point_group_projector(
             symmetry_group=point_group,
             total_symmetric_irrep=total_symmetric_irrep(point_group),
             total_symmetric_gics=tuple(
-                gic.name
-                for gic in output_tuple
-                if is_total_symmetric_irrep(point_group, gic.irrep)
+                gic.name for gic in output_tuple if is_total_symmetric_irrep(point_group, gic.irrep)
             ),
             groups=tuple(diagnostics),
         ),
@@ -1922,9 +1897,7 @@ def _apply_rank_revealing_global_projector(
     if not candidates:
         return None
 
-    selected: list[
-        tuple[tuple[str, str], str, np.ndarray, tuple[GICPrimitive, ...]]
-    ] = []
+    selected: list[tuple[tuple[str, str], str, np.ndarray, tuple[GICPrimitive, ...]]] = []
     q_basis: list[np.ndarray] = []
     remaining = list(candidates)
     for special_phase in (True, False):
@@ -1997,9 +1970,7 @@ def _apply_rank_revealing_global_projector(
             symmetry_group=point_group,
             total_symmetric_irrep=total_symmetric_irrep(point_group),
             total_symmetric_gics=tuple(
-                gic.name
-                for gic in output_tuple
-                if is_total_symmetric_irrep(point_group, gic.irrep)
+                gic.name for gic in output_tuple if is_total_symmetric_irrep(point_group, gic.irrep)
             ),
             groups=diagnostics,
         ),
@@ -2062,11 +2033,7 @@ def _valid_projector_operations(
             return ()
         unique_key = (
             operation.permutation,
-            tuple(
-                round(float(value), 10)
-                for row in operation.rotation
-                for value in row
-            ),
+            tuple(round(float(value), 10) for row in operation.rotation for value in row),
         )
         if unique_key in seen:
             continue
@@ -2098,11 +2065,7 @@ def _symmetry_closed_projector_primitives(
         return primitives
 
     output = list(primitives)
-    keys = {
-        key
-        for primitive in output
-        if (key := _primitive_projector_key(primitive)) is not None
-    }
+    keys = {key for primitive in output if (key := _primitive_projector_key(primitive)) is not None}
     cursor = 0
     while cursor < len(output):
         primitive = output[cursor]
@@ -2138,9 +2101,7 @@ def _mapped_projector_primitive(
     mapped_atoms = tuple(_mapped_atom(operation, atom) for atom in primitive.atoms)
     mapped_refs = tuple(_mapped_atom(operation, atom) for atom in primitive.ref_atoms)
     mapped_frame = tuple(_mapped_atom(operation, atom) for atom in primitive.frame_atoms)
-    mapped_ref_frame = tuple(
-        _mapped_atom(operation, atom) for atom in primitive.ref_frame_atoms
-    )
+    mapped_ref_frame = tuple(_mapped_atom(operation, atom) for atom in primitive.ref_frame_atoms)
     if any(atom < 1 for atom in mapped_atoms + mapped_refs + mapped_frame + mapped_ref_frame):
         return None
     return replace(
@@ -2427,10 +2388,7 @@ def _extend_projector_source_vectors_with_primitive_basis(
     vector_size: int,
 ) -> tuple[np.ndarray, ...]:
     out = [np.asarray(vector, dtype=float) for vector in source_vectors if vector is not None]
-    seen = {
-        tuple(round(float(value), 12) for value in vector)
-        for vector in out
-    }
+    seen = {tuple(round(float(value), 12) for value in vector) for vector in out}
     for idx in range(vector_size):
         unit = np.zeros(vector_size, dtype=float)
         unit[idx] = 1.0
@@ -2591,13 +2549,17 @@ def _primitive_projector_key(primitive: GICPrimitive) -> tuple[object, ...] | No
             tuple(sorted((primitive.atoms[0], primitive.atoms[2]))),
             primitive.mode,
         )
-    if primitive.family in {
-        "TORSION",
-        "CYCLIC_TORSION",
-        "CONDENSED_RING_TORSION",
-        "BUTTERFLY",
-        "RING_PUCKER_COMPONENT",
-    } and len(primitive.atoms) == 4:
+    if (
+        primitive.family
+        in {
+            "TORSION",
+            "CYCLIC_TORSION",
+            "CONDENSED_RING_TORSION",
+            "BUTTERFLY",
+            "RING_PUCKER_COMPONENT",
+        }
+        and len(primitive.atoms) == 4
+    ):
         canonical, _sign = _canonical_torsion_key_and_sign(primitive.atoms)
         return (primitive.family, canonical)
     if primitive.family == "RING_PUCKER_COMPONENT" and primitive.function == "RPCK":
@@ -2613,9 +2575,7 @@ def _primitive_projector_key(primitive: GICPrimitive) -> tuple[object, ...] | No
             tuple(sorted(primitive.atoms[1:])),
         )
     if primitive.family == "FRAG_DISTANCE":
-        pair = tuple(
-            sorted((_atom_set_key(primitive.atoms), _atom_set_key(primitive.ref_atoms)))
-        )
+        pair = tuple(sorted((_atom_set_key(primitive.atoms), _atom_set_key(primitive.ref_atoms))))
         return ("FRAG_DISTANCE", pair)
     if primitive.family == "FRAG_CENTER_ATOM_DISTANCE":
         return (
@@ -2655,9 +2615,7 @@ def _mapped_primitive_projector_terms(
     mapped_atoms = tuple(_mapped_atom(operation, atom) for atom in primitive.atoms)
     mapped_refs = tuple(_mapped_atom(operation, atom) for atom in primitive.ref_atoms)
     mapped_frame = tuple(_mapped_atom(operation, atom) for atom in primitive.frame_atoms)
-    mapped_ref_frame = tuple(
-        _mapped_atom(operation, atom) for atom in primitive.ref_frame_atoms
-    )
+    mapped_ref_frame = tuple(_mapped_atom(operation, atom) for atom in primitive.ref_frame_atoms)
     if any(atom < 1 for atom in mapped_atoms + mapped_refs + mapped_frame + mapped_ref_frame):
         return None
 
@@ -2679,13 +2637,17 @@ def _mapped_primitive_projector_terms(
             return None
         key = _primitive_projector_key(primitive)
         return ((key, 1.0),) if key is not None else None
-    if primitive.family in {
-        "TORSION",
-        "CYCLIC_TORSION",
-        "CONDENSED_RING_TORSION",
-        "BUTTERFLY",
-        "RING_PUCKER_COMPONENT",
-    } and len(mapped_atoms) == 4:
+    if (
+        primitive.family
+        in {
+            "TORSION",
+            "CYCLIC_TORSION",
+            "CONDENSED_RING_TORSION",
+            "BUTTERFLY",
+            "RING_PUCKER_COMPONENT",
+        }
+        and len(mapped_atoms) == 4
+    ):
         canonical, sign = _canonical_torsion_key_and_sign(mapped_atoms)
         return (((primitive.family, canonical), sign),)
     if primitive.family == "RING_PUCKER_COMPONENT" and primitive.function == "RPCK":
@@ -2823,9 +2785,7 @@ def _canonical_torsion_key_and_sign(atoms: tuple[int, ...]) -> tuple[tuple[int, 
 def _ring_pucker_projector_signature(
     primitive: GICPrimitive,
 ) -> tuple[tuple[tuple[tuple[int, ...], float], ...], float] | None:
-    return _ring_pucker_projector_signature_from_terms(
-        _ring_pucker_terms_from_refs(primitive)
-    )
+    return _ring_pucker_projector_signature_from_terms(_ring_pucker_terms_from_refs(primitive))
 
 
 def _ring_pucker_projector_signature_from_terms(
@@ -2898,11 +2858,7 @@ def _local_symmetry_groups(
             continue
         key = (primitive_symmetry_block(primitive.family), primitive.family, signature)
         grouped.setdefault(key, []).append(gic)
-    return {
-        key: tuple(group)
-        for key, group in grouped.items()
-        if len(group) > 1
-    }
+    return {key: tuple(group) for key, group in grouped.items() if len(group) > 1}
 
 
 def _single_source_primitive(
@@ -2944,15 +2900,18 @@ def _local_symmetry_signature(
             f"L:{primitive.mode}:{_atom_symbol(primitive.atoms[1], atom_symbols)}:"
             f"{'-'.join(end_symbols)}"
         )
-    if primitive.family in {
-        "TORSION",
-        "CYCLIC_TORSION",
-        "CONDENSED_RING_TORSION",
-        "BUTTERFLY",
-    } and len(primitive.atoms) == 4:
-        return (
-            f"{primitive.family}:D:"
-            + "-".join(_atom_symbol(atom, atom_symbols) for atom in primitive.atoms)
+    if (
+        primitive.family
+        in {
+            "TORSION",
+            "CYCLIC_TORSION",
+            "CONDENSED_RING_TORSION",
+            "BUTTERFLY",
+        }
+        and len(primitive.atoms) == 4
+    ):
+        return f"{primitive.family}:D:" + "-".join(
+            _atom_symbol(atom, atom_symbols) for atom in primitive.atoms
         )
     if primitive.family in {"OUT_OF_PLANE", "IMPROPER_DIHEDRAL"} and len(primitive.atoms) == 4:
         substituents = _sorted_atom_symbols(primitive.atoms[1:], atom_symbols)
@@ -3093,9 +3052,7 @@ def _prefix_symmetrized_singletons(
 
 def _prefix_symmetrized_gic(gic: FrozenGIC, *, point_group: str) -> FrozenGIC:
     irrep = (
-        gic.irrep
-        if gic.irrep and gic.irrep != "UNASSIGNED"
-        else total_symmetric_irrep(point_group)
+        gic.irrep if gic.irrep and gic.irrep != "UNASSIGNED" else total_symmetric_irrep(point_group)
     )
     prefix = irrep_name_prefix(irrep)
     name = gic.name if gic.name.startswith(prefix) else f"{prefix}{gic.name}"
@@ -3208,11 +3165,14 @@ def _raise_if_remaining_special_independent(
             skipped_singular.append(primitive.identifier)
             skipped_singular_details.append(_primitive_diagnostic_token(primitive))
             continue
-        if _orthonormal_residual_or_none(
-            basis,
-            normalized,
-            rank_tolerance=rank_tolerance,
-        ) is not None:
+        if (
+            _orthonormal_residual_or_none(
+                basis,
+                normalized,
+                rank_tolerance=rank_tolerance,
+            )
+            is not None
+        ):
             raise GICForgeContractError(
                 "protected special primitive set exceeds the vibrational rank: "
                 f"{primitive.identifier} {primitive.name} would add an independent "
@@ -3606,8 +3566,7 @@ def _dual_fragment_rotation_value(
     frame_frag = _d_fragment_frame(dcoords, atoms, frame_atoms=frame_atoms)
     frame_ref = _d_fragment_frame(dcoords, ref_atoms, frame_atoms=ref_frame_atoms)
     rotation = [
-        [_d_dot(frame_frag[left], frame_ref[right]) for right in range(3)]
-        for left in range(3)
+        [_d_dot(frame_frag[left], frame_ref[right]) for right in range(3)] for left in range(3)
     ]
     return _d_rotation_vector(rotation)[mode]
 
@@ -4002,8 +3961,7 @@ def _interaction_center_primitive_candidates(
     if definition is None:
         return ()
     centers = {
-        getattr(center, "identifier"): center
-        for center in getattr(definition, "centers", ())
+        getattr(center, "identifier"): center for center in getattr(definition, "centers", ())
     }
     candidates: list[GICPrimitive] = []
     for interaction in getattr(definition, "interactions", ()):
@@ -4268,9 +4226,7 @@ def _fragment_frame(
     if _fragment_frame_rank(coords, atoms) < 2:
         raise FloatingPointError("fragment orientation is underdefined")
     p_atom, q_atom = (
-        tuple(frame_atoms)
-        if frame_atoms
-        else _fragment_frame_anchor_atoms(atoms, coords=coords)
+        tuple(frame_atoms) if frame_atoms else _fragment_frame_anchor_atoms(atoms, coords=coords)
     )
     center = _fragment_center(coords, atoms)
     p_axis = _unit(coords[p_atom - 1] - center)
@@ -4463,9 +4419,7 @@ def _symmetry_operations(lines: list[str]) -> tuple[GICPointGroupOperation, ...]
                 )
             )
         except KeyError as exc:
-            raise GICForgeContractError(
-                f"invalid #SYMMETRY operation line: {line}"
-            ) from exc
+            raise GICForgeContractError(f"invalid #SYMMETRY operation line: {line}") from exc
         except ValueError as exc:
             raise GICForgeContractError(
                 f"invalid #SYMMETRY operation numeric field: {line}"
@@ -4558,8 +4512,7 @@ def _parse_reduction_diagnostics(
     if not lines:
         return GICReductionDiagnostics(
             rank_method=_section_value(section_lines, "RANK_METHOD") or RANK_METHOD,
-            reduction_policy=_section_value(section_lines, "REDUCTION_POLICY")
-            or REDUCTION_POLICY,
+            reduction_policy=_section_value(section_lines, "REDUCTION_POLICY") or REDUCTION_POLICY,
             selected=selected,
         )
     return GICReductionDiagnostics(
@@ -4601,9 +4554,7 @@ def _parse_symmetry_diagnostics(
                 )
             )
         except KeyError as exc:
-            raise GICForgeContractError(
-                f"invalid symmetry diagnostic group line: {line}"
-            ) from exc
+            raise GICForgeContractError(f"invalid symmetry diagnostic group line: {line}") from exc
     return GICSymmetrizationDiagnostics(
         method=_section_value(lines, "METHOD") or "UNKNOWN",
         policy=_section_value(lines, "POLICY") or SYMMETRIZATION_POLICY,
@@ -4897,9 +4848,7 @@ def _gaussian_ring_puckering_function_lines(definition: GICDefinition) -> list[s
             left = components[component_index][0]
             right = components[component_index + 1][0]
             pair_index += 1
-            lines.append(
-                f"QPck{pair_index:04d} = SQRT({left}*{left}+{right}*{right})"
-            )
+            lines.append(f"QPck{pair_index:04d} = SQRT({left}*{left}+{right}*{right})")
             lines.append(f"PhiP{pair_index:04d} = ATAN2({right},{left})")
             component_index += 2
     return lines
@@ -4988,8 +4937,7 @@ def _ring_pucker_source_ring_keys_for_gic(
 
 def _ring_edges(ring: tuple[int, ...]) -> tuple[tuple[int, int], ...]:
     return tuple(
-        tuple(sorted((atom, ring[(index + 1) % len(ring)])))
-        for index, atom in enumerate(ring)
+        tuple(sorted((atom, ring[(index + 1) % len(ring)]))) for index, atom in enumerate(ring)
     )
 
 
@@ -5074,9 +5022,7 @@ def _gaussian_symmetrized_ring_puckering_function_lines(
             left = labels[component_index]
             right = labels[component_index + 1]
             pair_index += 1
-            lines.append(
-                f"QPck{pair_index:04d} = SQRT({left}*{left}+{right}*{right})"
-            )
+            lines.append(f"QPck{pair_index:04d} = SQRT({left}*{left}+{right}*{right})")
             lines.append(f"PhiP{pair_index:04d} = ATAN2({right},{left})")
             component_index += 2
     return lines
@@ -5256,9 +5202,7 @@ def _gaussian_frame_lines(
     frame_atoms: tuple[int, ...] = (),
 ) -> list[str]:
     p_atom, q_atom = (
-        tuple(frame_atoms)
-        if frame_atoms
-        else _fragment_frame_anchor_atoms(atoms, coords=coords)
+        tuple(frame_atoms) if frame_atoms else _fragment_frame_anchor_atoms(atoms, coords=coords)
     )
     return [
         f"RP{fragment_id}(Inactive)=SQRT((X({p_atom})-Cx{fragment_id})**2+"
@@ -5340,13 +5284,9 @@ def _atom_interval(atoms: tuple[int, ...]) -> str:
 def _frozen_gic_line(gic: FrozenGIC) -> str:
     coefficients = gic.coefficients or ((gic.primitive_id, 1.0),)
     coeffs = ",".join(
-        f"{primitive_id}:{coefficient:.12f}"
-        for primitive_id, coefficient in coefficients
+        f"{primitive_id}:{coefficient:.12f}" for primitive_id, coefficient in coefficients
     )
-    return (
-        f"{gic.identifier} NAME={gic.name} FAMILY={gic.family} IRREP={gic.irrep} "
-        f"COEFFS={coeffs}"
-    )
+    return f"{gic.identifier} NAME={gic.name} FAMILY={gic.family} IRREP={gic.irrep} COEFFS={coeffs}"
 
 
 def _sycart_components(vector: tuple[float, ...]) -> str:

@@ -57,7 +57,7 @@ CNA_SCALE = 4.0 / 3.0
 # ------------------------------------------------------------
 
 BO_LAMBDA_STRONG = 0.20
-BO_LAMBDA_WEAK   = 0.40
+BO_LAMBDA_WEAK = 0.40
 
 
 # Smooth switching parameter for bond-order decay
@@ -89,13 +89,12 @@ EAN_SIGMA = 1.0
 # ------------------------------------------------------------
 
 REF_ANGLE_SUM = {
-    2: 180.0,            # linear
-    3: 360.0,            # trigonal planar
-    4: 6 * 109.47122,    # tetrahedral (Platonic)
-    5: 720.0,            # trigonal bipyramidal (approx., non-Platonic)
-    6: 12 * 90.0,        # octahedral (Platonic)
-    7: 1260.0,           # capped octahedron (approx., non-Platonic)
-    8: 24 * 90.0,        # cubic (Platonic)
-    12: 30 * 63.43495,   # icosahedral (Platonic)
+    2: 180.0,  # linear
+    3: 360.0,  # trigonal planar
+    4: 6 * 109.47122,  # tetrahedral (Platonic)
+    5: 720.0,  # trigonal bipyramidal (approx., non-Platonic)
+    6: 12 * 90.0,  # octahedral (Platonic)
+    7: 1260.0,  # capped octahedron (approx., non-Platonic)
+    8: 24 * 90.0,  # cubic (Platonic)
+    12: 30 * 63.43495,  # icosahedral (Platonic)
 }
-

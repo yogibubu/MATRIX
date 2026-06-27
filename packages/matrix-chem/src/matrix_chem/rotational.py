@@ -23,9 +23,9 @@ def rotational_constants_MHz(
     I = principal_moments(structure, isotopic=isotopic)
 
     # physical constants
-    h = pc[Phy.PLANCK]          # J s
-    amu_to_kg = pc[Phy.TO_KG]   # kg / amu
-    ang_to_m = 1.0e-10          # m / Å
+    h = pc[Phy.PLANCK]  # J s
+    amu_to_kg = pc[Phy.TO_KG]  # kg / amu
+    ang_to_m = 1.0e-10  # m / Å
 
     Bvals = []
     for Ii in I:
@@ -90,10 +90,10 @@ def classify_rotor(
 
     # Symmetric tops
     if abs(B - C) / B < eps_rel:
-        return "symmetric_prolate"   # A >> B ≈ C
+        return "symmetric_prolate"  # A >> B ≈ C
 
     if abs(A - B) / A < eps_rel:
-        return "symmetric_oblate"    # A ≈ B >> C
+        return "symmetric_oblate"  # A ≈ B >> C
 
     # Asymmetric tops: classify via Ray's kappa
     kappa = ray_asymmetry(A, B, C)

@@ -18,13 +18,7 @@ from matrix_fragments import (
 
 
 def _test_molecule_path(name: str) -> Path:
-    return (
-        Path(__file__).resolve().parent
-        / "fixtures"
-        / "test_molecules"
-        / "molecules"
-        / name
-    )
+    return Path(__file__).resolve().parent / "fixtures" / "test_molecules" / "molecules" / name
 
 
 def test_fragment_plan_requires_topology_and_synthons(tmp_path):
@@ -83,8 +77,7 @@ def test_fragment_plan_section_preserves_existing_sections(tmp_path):
     fragments = section_content(lines, "FRAGMENTS")
     assert fragments[0] == "SCHEMA oracle.xyz.fragments.v1"
     assert (
-        "DEPENDENCIES TOPOLOGY=oracle.xyz.topology.v1 SYNTHONS=oracle.xyz.synthons.v1"
-        in fragments
+        "DEPENDENCIES TOPOLOGY=oracle.xyz.topology.v1 SYNTHONS=oracle.xyz.synthons.v1" in fragments
     )
     assert "PENDING ROBUST_TOPOLOGY_CONTRACT" in fragments
 

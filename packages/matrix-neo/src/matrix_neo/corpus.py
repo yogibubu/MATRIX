@@ -264,10 +264,7 @@ def format_gic_corpus_geometry_failures(
     limit: int | None = None,
 ) -> list[str]:
     failures = _limited(_filter_audit_entries(audit.entries, status="fail"), limit)
-    return [
-        f"FAIL {entry.path} {entry.error_type}: {entry.error}"
-        for entry in failures
-    ]
+    return [f"FAIL {entry.path} {entry.error_type}: {entry.error}" for entry in failures]
 
 
 def _audit_geometry_entry(entry: GICCorpusEntry) -> GICCorpusGeometryAuditEntry:

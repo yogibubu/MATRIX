@@ -55,9 +55,7 @@ def _template_vectors() -> Dict[int, Dict[str, np.ndarray]]:
                 ],
                 dtype=float,
             ),
-            "square_planar": np.array(
-                [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)], dtype=float
-            ),
+            "square_planar": np.array([(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)], dtype=float),
         },
         5: {
             "tbp": np.array(

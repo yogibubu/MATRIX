@@ -22,7 +22,9 @@ class DavidsonResult:
     converged: bool
 
 
-def _orthonormalize(candidates: np.ndarray, reference: np.ndarray | None = None, tol: float = 1.0e-12) -> np.ndarray:
+def _orthonormalize(
+    candidates: np.ndarray, reference: np.ndarray | None = None, tol: float = 1.0e-12
+) -> np.ndarray:
     vecs: list[np.ndarray] = []
     refs = [] if reference is None else [reference[:, i] for i in range(reference.shape[1])]
     for col in range(candidates.shape[1]):

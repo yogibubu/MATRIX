@@ -156,9 +156,9 @@ def test_default_fortran_audit_covers_official_golden_parity_roles():
 
 def test_legacy_merlino_group_dispatch_includes_ih_and_dnd_extensions():
     root = Path(__file__).resolve().parents[1]
-    symm = (
-        root / "engines" / "fortran" / "gicforge" / "legacy_merlino" / "symm.f"
-    ).read_text(encoding="utf-8")
+    symm = (root / "engines" / "fortran" / "gicforge" / "legacy_merlino" / "symm.f").read_text(
+        encoding="utf-8"
+    )
 
     assert "FAM .EQ. 'Dnd'" in symm
     assert "CALL OPS_DND" in symm

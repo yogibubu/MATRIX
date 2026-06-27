@@ -27,4 +27,3 @@ __all__ = [
     "write_trinity_manifest",
     "write_trinity_section",
 ]
-

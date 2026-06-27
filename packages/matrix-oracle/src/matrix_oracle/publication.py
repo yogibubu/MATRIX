@@ -104,7 +104,9 @@ def export_spectrum_publication(
     paths: list[Path] = []
     for fmt in requested:
         if fmt == "csv":
-            paths.append(_write_spectrum_csv(destination / f"{basename}.csv", peaks, x_label, y_label))
+            paths.append(
+                _write_spectrum_csv(destination / f"{basename}.csv", peaks, x_label, y_label)
+            )
         elif fmt == "svg":
             paths.append(
                 _write_spectrum_svg(
@@ -187,8 +189,8 @@ def _write_svg(path: Path, rows: list[list[str]]) -> Path:
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="white"/>',
-        '<style>text{font-family:Helvetica,Arial,sans-serif;font-size:13px}'
-        '.head{font-weight:bold}</style>',
+        "<style>text{font-family:Helvetica,Arial,sans-serif;font-size:13px}"
+        ".head{font-weight:bold}</style>",
     ]
     for row_index, row in enumerate(rows):
         y = 28 + row_index * line_height
@@ -215,7 +217,11 @@ def _write_pdf(path: Path, rows: list[list[str]]) -> Path:
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
         b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+        b"<< /Length "
+        + str(len(stream)).encode("ascii")
+        + b" >>\nstream\n"
+        + stream
+        + b"\nendstream",
     ]
     buffer = io.BytesIO()
     buffer.write(b"%PDF-1.4\n")
@@ -279,17 +285,17 @@ def _write_spectrum_svg(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="white"/>',
-        '<style>text{font-family:Helvetica,Arial,sans-serif;font-size:13px}'
-        '.axis{stroke:#222;stroke-width:1.2}.stick{stroke:#1b6ca8;stroke-width:2}'
-        '.env{fill:none;stroke:#d1495b;stroke-width:2}</style>',
-        f'<line class="axis" x1="{left}" y1="{height-bottom}" x2="{width-right}" y2="{height-bottom}"/>',
-        f'<line class="axis" x1="{left}" y1="{top}" x2="{left}" y2="{height-bottom}"/>',
+        "<style>text{font-family:Helvetica,Arial,sans-serif;font-size:13px}"
+        ".axis{stroke:#222;stroke-width:1.2}.stick{stroke:#1b6ca8;stroke-width:2}"
+        ".env{fill:none;stroke:#d1495b;stroke-width:2}</style>",
+        f'<line class="axis" x1="{left}" y1="{height - bottom}" x2="{width - right}" y2="{height - bottom}"/>',
+        f'<line class="axis" x1="{left}" y1="{top}" x2="{left}" y2="{height - bottom}"/>',
         f'<polyline class="env" points="{envelope_points}"/>',
     ]
     for peak in peaks:
         x = sx(peak.position)
         lines.append(
-            f'<line class="stick" x1="{x:.2f}" y1="{height-bottom:.2f}" '
+            f'<line class="stick" x1="{x:.2f}" y1="{height - bottom:.2f}" '
             f'x2="{x:.2f}" y2="{sy(peak.intensity):.2f}"/>'
         )
         lines.append(
@@ -297,10 +303,10 @@ def _write_spectrum_svg(
         )
     lines.extend(
         [
-            f'<text x="{width/2:.1f}" y="{height-24}">{_xml_escape(x_label)}</text>',
-            f'<text x="16" y="{height/2:.1f}" transform="rotate(-90 16 {height/2:.1f})">{_xml_escape(y_label)}</text>',
-            f'<text x="{left}" y="{height-bottom+24}">{xmin:.3g}</text>',
-            f'<text x="{width-right-44}" y="{height-bottom+24}">{xmax:.3g}</text>',
+            f'<text x="{width / 2:.1f}" y="{height - 24}">{_xml_escape(x_label)}</text>',
+            f'<text x="16" y="{height / 2:.1f}" transform="rotate(-90 16 {height / 2:.1f})">{_xml_escape(y_label)}</text>',
+            f'<text x="{left}" y="{height - bottom + 24}">{xmin:.3g}</text>',
+            f'<text x="{width - right - 44}" y="{height - bottom + 24}">{xmax:.3g}</text>',
             "</svg>",
         ]
     )
@@ -331,8 +337,8 @@ def _write_spectrum_pdf(
 
     stream_lines = [
         "1 w",
-        f"{left} {bottom} m {width-right} {bottom} l S",
-        f"{left} {bottom} m {left} {height-top} l S",
+        f"{left} {bottom} m {width - right} {bottom} l S",
+        f"{left} {bottom} m {left} {height - top} l S",
         "0.1 0.42 0.66 RG",
     ]
     for peak in peaks:
@@ -343,8 +349,8 @@ def _write_spectrum_pdf(
             "0 0 0 RG",
             "BT",
             "/F1 9 Tf",
-            f"250 {bottom-34} Td ({_pdf_escape(x_label)}) Tj",
-            f"{left} {height-top+12} Td ({_pdf_escape(y_label)}) Tj",
+            f"250 {bottom - 34} Td ({_pdf_escape(x_label)}) Tj",
+            f"{left} {height - top + 12} Td ({_pdf_escape(y_label)}) Tj",
             "ET",
         ]
     )
@@ -355,7 +361,11 @@ def _write_spectrum_pdf(
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 420] "
         b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+        b"<< /Length "
+        + str(len(stream)).encode("ascii")
+        + b" >>\nstream\n"
+        + stream
+        + b"\nendstream",
     ]
     _write_pdf_objects(path, objects)
     return path
@@ -432,10 +442,7 @@ def _latex_cell(text: str) -> str:
 
 def _xml_escape(text: str) -> str:
     return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 

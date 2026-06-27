@@ -96,14 +96,15 @@ def format_vpt2_vci_report(qff: QuarticForceField, comparison: VPT2VCIComparison
     if comparison.vci.blocks:
         lines.extend(["", "Symmetry blocks:"])
         for block in comparison.vci.blocks:
-            lines.append(f"  {block.label}: states={len(block.basis_indices)} roots={block.n_roots}")
+            lines.append(
+                f"  {block.label}: states={len(block.basis_indices)} roots={block.n_roots}"
+            )
 
     if comparison.vci.state_contributions:
         lines.extend(["", "Dominant VCI contributions:"])
         for root, contribution in enumerate(comparison.vci.state_contributions[:n], start=1):
             pieces = [
-                f"{state}:{coeff:+.3f}"
-                for state, coeff in contribution.dominant_basis_states[:4]
+                f"{state}:{coeff:+.3f}" for state, coeff in contribution.dominant_basis_states[:4]
             ]
             lines.append(
                 f"  root {root:3d}: <n>={np.array2string(contribution.mode_quanta, precision=3)} "
@@ -117,32 +118,38 @@ def vpt2_vci_csv_tables(report: VPT2VCIReport) -> dict[str, str]:
     qff = report.force_field
     comparison = report.comparison
     freq_rows = [["mode", "harmonic_frequency_cm-1"]]
-    freq_rows.extend([[idx, f"{freq:.10g}"] for idx, freq in enumerate(qff.harmonic_frequencies_cm, start=1)])
+    freq_rows.extend(
+        [[idx, f"{freq:.10g}"] for idx, freq in enumerate(qff.harmonic_frequencies_cm, start=1)]
+    )
 
     n = min(
         len(comparison.vpt2.energies_cm),
         len(comparison.vci.energies_cm),
         len(comparison.energy_differences_cm),
     )
-    comparison_rows = [[
-        "root",
-        "vpt2_abs_cm-1",
-        "vci_abs_cm-1",
-        "delta_abs_cm-1",
-        "vpt2_exc_cm-1",
-        "vci_exc_cm-1",
-        "delta_exc_cm-1",
-    ]]
+    comparison_rows = [
+        [
+            "root",
+            "vpt2_abs_cm-1",
+            "vci_abs_cm-1",
+            "delta_abs_cm-1",
+            "vpt2_exc_cm-1",
+            "vci_exc_cm-1",
+            "delta_exc_cm-1",
+        ]
+    ]
     for idx in range(n):
-        comparison_rows.append([
-            idx + 1,
-            f"{comparison.vpt2.energies_cm[idx]:.10g}",
-            f"{comparison.vci.energies_cm[idx]:.10g}",
-            f"{comparison.energy_differences_cm[idx]:.10g}",
-            f"{comparison.vpt2.excitation_energies_cm[idx]:.10g}",
-            f"{comparison.vci.excitation_energies_cm[idx]:.10g}",
-            f"{comparison.excitation_differences_cm[idx]:.10g}",
-        ])
+        comparison_rows.append(
+            [
+                idx + 1,
+                f"{comparison.vpt2.energies_cm[idx]:.10g}",
+                f"{comparison.vci.energies_cm[idx]:.10g}",
+                f"{comparison.energy_differences_cm[idx]:.10g}",
+                f"{comparison.vpt2.excitation_energies_cm[idx]:.10g}",
+                f"{comparison.vci.excitation_energies_cm[idx]:.10g}",
+                f"{comparison.excitation_differences_cm[idx]:.10g}",
+            ]
+        )
 
     contribution_rows = [["root", "mode", "expected_quanta"]]
     for root, contribution in enumerate(comparison.vci.state_contributions[:n], start=1):
@@ -156,7 +163,9 @@ def vpt2_vci_csv_tables(report: VPT2VCIReport) -> dict[str, str]:
     }
 
 
-def write_csv_tables(report: VPT2VCIReport, outdir: Path, *, prefix: str = "vpt2_vci") -> dict[str, Path]:
+def write_csv_tables(
+    report: VPT2VCIReport, outdir: Path, *, prefix: str = "vpt2_vci"
+) -> dict[str, Path]:
     """Write structured CSV outputs for a VPT2/VCI report."""
     target_dir = Path(outdir)
     target_dir.mkdir(parents=True, exist_ok=True)

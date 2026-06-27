@@ -28,7 +28,9 @@ def damped_normal_step(
     weighted_residual: np.ndarray,
     damping: float,
 ) -> np.ndarray:
-    lhs = weighted_jacobian.T @ weighted_jacobian + float(damping) * np.eye(weighted_jacobian.shape[1])
+    lhs = weighted_jacobian.T @ weighted_jacobian + float(damping) * np.eye(
+        weighted_jacobian.shape[1]
+    )
     rhs = weighted_jacobian.T @ weighted_residual
     return np.linalg.solve(lhs, rhs)
 
@@ -37,8 +39,8 @@ def rank_condition(matrix: np.ndarray) -> RankCondition:
     if matrix.size == 0:
         return RankCondition(rank=0, condition_number=float("inf"), singular_values=np.array(()))
     singular = np.linalg.svd(matrix, compute_uv=False)
-    threshold = max(matrix.shape) * np.finfo(float).eps * (
-        float(singular[0]) if singular.size else 0.0
+    threshold = (
+        max(matrix.shape) * np.finfo(float).eps * (float(singular[0]) if singular.size else 0.0)
     )
     rank = int(np.sum(singular > threshold))
     if singular.size and singular[-1] > threshold:

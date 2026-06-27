@@ -111,7 +111,9 @@ def get_u_config(cfg: configparser.ConfigParser) -> UConfig:
         symmetry_quasi_tol=float(section.get("symmetry_quasi_tol", 0.0)) or None,
         symmetry_tol_H=float(section.get("symmetry_tol_H", 0.0)) or None,
         heavy_only_orient=section.get("heavy_only_orient", "false").lower() == "true",
-        symmetry_center_idx=int(section.get("symmetry_center_idx", -1)) if section.get("symmetry_center_idx", "-1") != "-1" else None,
+        symmetry_center_idx=int(section.get("symmetry_center_idx", -1))
+        if section.get("symmetry_center_idx", "-1") != "-1"
+        else None,
         ignore_isotopes=section.get("ignore_isotopes", "false").lower() == "true",
         symmetry_max_dev_strict=float(section.get("symmetry_max_dev_strict", 0.0)) or None,
         symmetry_tol_rel=float(section.get("symmetry_tol_rel", 0.0)),

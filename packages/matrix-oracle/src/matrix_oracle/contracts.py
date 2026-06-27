@@ -86,4 +86,3 @@ def _readiness_table(readinesses: tuple[ToolReadiness, ...]) -> ToolContractTabl
 
 def _join(values: tuple[str, ...]) -> str:
     return ", ".join(values) if values else "none"
-

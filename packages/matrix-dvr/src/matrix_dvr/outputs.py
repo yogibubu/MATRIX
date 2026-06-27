@@ -158,7 +158,9 @@ def read_dvr_grid(path: Path | str) -> tuple[DVRGridPoint, ...]:
         values = {
             key: value
             for key, value in _numeric_values(row).items()
-            if key not in reserved and not key.startswith("psi_") and not key.startswith("prob_density_")
+            if key not in reserved
+            and not key.startswith("psi_")
+            and not key.startswith("prob_density_")
         }
         grid.append(
             DVRGridPoint(
@@ -175,7 +177,15 @@ def read_dvr_grid(path: Path | str) -> tuple[DVRGridPoint, ...]:
 def read_dvr_expectations(path: Path | str) -> tuple[DVRExpectation, ...]:
     rows = _read_csv_rows(Path(path))
     expectations: list[DVRExpectation] = []
-    reserved = {"state", "energy_cm-1", "energy_cm1", "energy_cm", "energy_above_ground_cm-1", "energy_above_ground_cm1", "energy_above_ground_cm"}
+    reserved = {
+        "state",
+        "energy_cm-1",
+        "energy_cm1",
+        "energy_cm",
+        "energy_above_ground_cm-1",
+        "energy_above_ground_cm1",
+        "energy_above_ground_cm",
+    }
     for row in rows:
         expectations.append(
             DVRExpectation(
@@ -187,7 +197,9 @@ def read_dvr_expectations(path: Path | str) -> tuple[DVRExpectation, ...]:
                     "energy_above_ground_cm1",
                     "energy_above_ground_cm",
                 ),
-                values={key: value for key, value in _numeric_values(row).items() if key not in reserved},
+                values={
+                    key: value for key, value in _numeric_values(row).items() if key not in reserved
+                },
             )
         )
     return tuple(expectations)
@@ -213,16 +225,29 @@ def read_fortran_vectors(path: Path | str) -> tuple[DVRVectorPoint, ...]:
 
 def collect_dvr_outputs(section: DVRSection) -> DVROutputSnapshot:
     outputs = detected_dvr_outputs(section)
-    level_path = outputs.get("levels") or outputs.get("anharmonic_levels") or outputs.get("two_d_levels") or outputs.get("fortran_levels")
-    grid_path = outputs.get("grid_csv") or outputs.get("anharmonic_grid") or outputs.get("two_d_grid")
+    level_path = (
+        outputs.get("levels")
+        or outputs.get("anharmonic_levels")
+        or outputs.get("two_d_levels")
+        or outputs.get("fortran_levels")
+    )
+    grid_path = (
+        outputs.get("grid_csv") or outputs.get("anharmonic_grid") or outputs.get("two_d_grid")
+    )
     expectation_path = outputs.get("expectations") or outputs.get("two_d_expectations")
     levels = read_dvr_levels(level_path) if level_path is not None else ()
     grid = read_dvr_grid(grid_path) if grid_path is not None else ()
     expectations = read_dvr_expectations(expectation_path) if expectation_path is not None else ()
-    vectors = read_fortran_vectors(outputs["fortran_vectors"]) if "fortran_vectors" in outputs else ()
-    summary_path = outputs.get("summary") or outputs.get("anharmonic_summary") or outputs.get("two_d_summary")
+    vectors = (
+        read_fortran_vectors(outputs["fortran_vectors"]) if "fortran_vectors" in outputs else ()
+    )
+    summary_path = (
+        outputs.get("summary") or outputs.get("anharmonic_summary") or outputs.get("two_d_summary")
+    )
     summary_text = summary_path.read_text(encoding="utf-8") if summary_path is not None else ""
-    missing = tuple(name for name in PRIMARY_OUTPUTS if not _has_primary_or_alternate(name, outputs))
+    missing = tuple(
+        name for name in PRIMARY_OUTPUTS if not _has_primary_or_alternate(name, outputs)
+    )
     status = "complete" if levels and not missing else "partial" if outputs else "prepared"
     return DVROutputSnapshot(
         section=section,
@@ -314,7 +339,13 @@ def _read_csv_rows(path: Path) -> list[dict[str, str]]:
             raise ValueError(f"empty DVR CSV: {path}")
         rows: list[dict[str, str]] = []
         for row in reader:
-            rows.append({key.strip(): (value or "").strip() for key, value in row.items() if key is not None})
+            rows.append(
+                {
+                    key.strip(): (value or "").strip()
+                    for key, value in row.items()
+                    if key is not None
+                }
+            )
         return rows
 
 

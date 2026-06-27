@@ -5,7 +5,12 @@ import json
 from pathlib import Path
 import tomllib
 
-from .contracts import ElectronicCorrection, IsotopologueObservation, RotationalConstants, VibrationalCorrection
+from .contracts import (
+    ElectronicCorrection,
+    IsotopologueObservation,
+    RotationalConstants,
+    VibrationalCorrection,
+)
 from .isotopologue_format import (
     format_substitutions,
     mass_number as _mass_number,
@@ -179,7 +184,9 @@ def _observation_from_mapping(item: dict) -> IsotopologueObservation:
         label=str(item["label"]).strip(),
         constants=constants,
         substitutions=_observation_substitutions(item),
-        correction=_vibrational_from_mapping(item.get("vibrational_correction", item.get("correction", {}))),
+        correction=_vibrational_from_mapping(
+            item.get("vibrational_correction", item.get("correction", {}))
+        ),
         electronic_correction=_electronic_from_mapping(item.get("electronic_correction", {})),
         weights=_weights_from_sigma_mapping(item.get("sigma_MHz", item.get("sigma", {}))),
     )

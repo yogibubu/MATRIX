@@ -149,12 +149,8 @@ PRIMITIVE_FAMILY_POLICIES = (
     ),
 )
 
-PRIMITIVE_POLICY_BY_FAMILY = {
-    policy.family: policy for policy in PRIMITIVE_FAMILY_POLICIES
-}
-PRIMITIVE_POLICY_BY_FUNCTION = {
-    policy.function: policy for policy in PRIMITIVE_FAMILY_POLICIES
-}
+PRIMITIVE_POLICY_BY_FAMILY = {policy.family: policy for policy in PRIMITIVE_FAMILY_POLICIES}
+PRIMITIVE_POLICY_BY_FUNCTION = {policy.function: policy for policy in PRIMITIVE_FAMILY_POLICIES}
 PRIMITIVE_FAMILY_ORDER = tuple(policy.family for policy in PRIMITIVE_FAMILY_POLICIES)
 SPECIAL_PRIMITIVE_FAMILIES = frozenset(
     policy.family

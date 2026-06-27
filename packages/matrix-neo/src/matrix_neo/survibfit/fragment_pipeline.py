@@ -52,7 +52,9 @@ def _bo_class(bo: float) -> str:
     return "S"
 
 
-def _bond_torsion_vec(core_atoms: list[int], dg, coords: np.ndarray, Z: np.ndarray) -> tuple[np.ndarray, bool]:
+def _bond_torsion_vec(
+    core_atoms: list[int], dg, coords: np.ndarray, Z: np.ndarray
+) -> tuple[np.ndarray, bool]:
     if len(core_atoms) != 2:
         return np.zeros(2, dtype=float), False
     a, b = int(core_atoms[0]), int(core_atoms[1])
@@ -173,7 +175,14 @@ def _build_fragment(
             elem,
             bond_desc,
             np.array(
-                [core_size, float(planarity), float(fused_degree), radial_pos, core_radius, frag_size],
+                [
+                    core_size,
+                    float(planarity),
+                    float(fused_degree),
+                    radial_pos,
+                    core_radius,
+                    frag_size,
+                ],
                 dtype=float,
             ),
         ]
@@ -185,7 +194,7 @@ def _build_fragment(
     core_coords_norm = np.array(core_xyz_centered / core_scale, dtype=float)
     if fragment_kind == "ring":
         local_type = (
-            f"ring:s{int(core_size)}:h{int(n_hetero>0)}:a{int(float(bond_desc[2])>0.3)}"
+            f"ring:s{int(core_size)}:h{int(n_hetero > 0)}:a{int(float(bond_desc[2]) > 0.3)}"
         )
         torsion_vec = np.zeros(2, dtype=float)
         torsion_available = False
@@ -193,7 +202,7 @@ def _build_fragment(
         z1 = int(Z[int(core_atoms[0])])
         z2 = int(Z[int(core_atoms[1])])
         bo_core = float(synthons.bond_order(int(core_atoms[0]), int(core_atoms[1])))
-        local_type = f"bond:{min(z1,z2)}-{max(z1,z2)}:{_bo_class(bo_core)}:h{int(n_hetero>0)}"
+        local_type = f"bond:{min(z1, z2)}-{max(z1, z2)}:{_bo_class(bo_core)}:h{int(n_hetero > 0)}"
         torsion_vec, torsion_available = _bond_torsion_vec(core_atoms, dg, coords, Z)
 
     return Fragment(
@@ -246,7 +255,7 @@ def _fragment_features(path: Path, source_library: str) -> list[Fragment]:
                 _build_fragment(
                     path,
                     source_library,
-                    f"{path.stem}:ring_{idx+1}",
+                    f"{path.stem}:ring_{idx + 1}",
                     "ring",
                     ring_atoms,
                     frag_atoms,
@@ -289,7 +298,7 @@ def _fragment_features(path: Path, source_library: str) -> list[Fragment]:
             _build_fragment(
                 path,
                 source_library,
-                f"{path.stem}:bond_{int(i)+1}_{int(j)+1}",
+                f"{path.stem}:bond_{int(i) + 1}_{int(j) + 1}",
                 "bond",
                 core_atoms,
                 frag_atoms,
@@ -313,7 +322,9 @@ def _sim(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.exp(-(d / np.sqrt(dim))))
 
 
-def _standardize_feature_vectors(library_frags: list[Fragment]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _standardize_feature_vectors(
+    library_frags: list[Fragment],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if not library_frags:
         return np.array([], dtype=float), np.array([], dtype=float), np.array([], dtype=float)
     x = np.vstack([f.feature_vector for f in library_frags])
@@ -376,7 +387,8 @@ def _chemical_compatibility(query: Fragment, cand: Fragment) -> float:
     diff_arom = abs(query.aromatic_like_frac - cand.aromatic_like_frac)
     if query.elem_profile.shape == cand.elem_profile.shape and query.elem_profile.size:
         diff_elem = float(
-            np.linalg.norm(query.elem_profile - cand.elem_profile) / np.sqrt(query.elem_profile.size)
+            np.linalg.norm(query.elem_profile - cand.elem_profile)
+            / np.sqrt(query.elem_profile.size)
         )
     else:
         diff_elem = 1.0
@@ -579,7 +591,10 @@ def _assemble_global_solution(
     for r in idx_ranges:
         ncomb *= max(len(r), 1)
     if ncomb > int(max_combinations):
-        chosen = [{"query_fragment": b["query_fragment"], "candidate": b["candidates"][0]} for b in bundles]
+        chosen = [
+            {"query_fragment": b["query_fragment"], "candidate": b["candidates"][0]}
+            for b in bundles
+        ]
         ind_mean = float(np.mean([x["candidate"]["similarity"] for x in chosen]))
         pair_terms = []
         for i in range(len(chosen)):
@@ -913,7 +928,7 @@ def run_fragment_pipeline(
     for r in report_rows:
         best = r["ranking"][0]["candidate_fragment_label"] if r["ranking"] else "-"
         lines.append(
-            f"| `{r['query_fragment_id']}` | {r.get('query_fragment_kind','-')} | {r.get('query_core_size', r['query_ring_size'])} | "
+            f"| `{r['query_fragment_id']}` | {r.get('query_fragment_kind', '-')} | {r.get('query_core_size', r['query_ring_size'])} | "
             f"`{best}` | {r['best_similarity']:.6f} | {r['status']} |"
         )
     lines.append("")
@@ -958,7 +973,7 @@ def run_fragment_pipeline(
     sr_lines = ["fragment_id,kind,core_size,best_similarity,best_reliability"]
     for r in report_rows:
         sr_lines.append(
-            f"{r['query_fragment_id']},{r.get('query_fragment_kind','')},"
+            f"{r['query_fragment_id']},{r.get('query_fragment_kind', '')},"
             f"{r.get('query_core_size', '')},{r.get('best_similarity', 0.0):.6f},"
             f"{r.get('best_reliability', 0.0):.6f}"
         )

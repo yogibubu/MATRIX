@@ -44,8 +44,7 @@ def gic_plan_section_lines(
         "SYMMETRY=oracle.xyz.symmetry.v1",
         "INDEXING ATOMS=ONE_BASED",
         f"SYMMETRIZE {_bool_text(symmetrize)}",
-        "OUT_OF_PLANE_MODE "
-        f"{'IMPROPER_DIHEDRAL' if improper_dihedrals else 'OUT_OF_PLANE'}",
+        f"OUT_OF_PLANE_MODE {'IMPROPER_DIHEDRAL' if improper_dihedrals else 'OUT_OF_PLANE'}",
         f"FRAGMENT_MODE {mode}",
         "BACKEND UNASSIGNED",
         "[FROZEN_GICS]",

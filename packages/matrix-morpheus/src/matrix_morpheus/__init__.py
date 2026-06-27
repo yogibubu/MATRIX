@@ -43,7 +43,11 @@ from .kraitchman import (
     kraitchman_seed_geometry,
 )
 from .cartesian_coordinates import CartesianCoordinateModel, cartesian_symmetry_coordinate_model
-from .geometry_input import SemiexperimentalGeometryInput, read_gaussian_cartesian_input, read_geometry_input
+from .geometry_input import (
+    SemiexperimentalGeometryInput,
+    read_gaussian_cartesian_input,
+    read_geometry_input,
+)
 from .job_input import (
     SEMIEXP_JOB_SCHEMA,
     SemiexperimentalJobInput,

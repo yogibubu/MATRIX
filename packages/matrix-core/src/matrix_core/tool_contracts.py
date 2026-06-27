@@ -8,9 +8,7 @@ from .sectioned_xyz import is_section_header_line, read_sectioned_lines, xyz_tai
 
 
 PLANNED_FRAMEWORK_NAME = "MATRIX"
-PLANNED_FRAMEWORK_EXPANSION = (
-    "Molecular Analysis Toolkit for Reusable Integrated eXperiments"
-)
+PLANNED_FRAMEWORK_EXPANSION = "Molecular Analysis Toolkit for Reusable Integrated eXperiments"
 
 
 @dataclass(frozen=True)
@@ -344,10 +342,7 @@ def tool_readiness_lines(readinesses: tuple[ToolReadiness, ...]) -> list[str]:
     lines: list[str] = []
     for readiness in readinesses:
         missing = _join_sections(readiness.missing_required_sections)
-        lines.append(
-            f"{readiness.contract.key}: ready={int(readiness.ready)} "
-            f"missing={missing}"
-        )
+        lines.append(f"{readiness.contract.key}: ready={int(readiness.ready)} missing={missing}")
     return lines
 
 

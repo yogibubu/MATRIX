@@ -208,13 +208,17 @@ def format_xyzin_isotopologue_issues(
     )
 
 
-def write_xyzin_isotopologue_records(path: Path, records: tuple[XyzinIsotopologueRecord, ...]) -> Path:
+def write_xyzin_isotopologue_records(
+    path: Path, records: tuple[XyzinIsotopologueRecord, ...]
+) -> Path:
     target = Path(path)
     replace_section(target, XYZIN_ISOTOPOLOGUES_SECTION, xyzin_isotopologue_section_lines(records))
     return target
 
 
-def merge_xyzin_isotopologue_records(path: Path, records: tuple[XyzinIsotopologueRecord, ...]) -> Path:
+def merge_xyzin_isotopologue_records(
+    path: Path, records: tuple[XyzinIsotopologueRecord, ...]
+) -> Path:
     target = Path(path)
     existing = read_xyzin_isotopologue_records(target) if has_xyzin_isotopologues(target) else ()
     merged = _merge_records(existing, records)
@@ -268,7 +272,11 @@ def parse_xyzin_isotopologue_records(lines: list[str]) -> tuple[XyzinIsotopologu
             raise ValueError(f"#ISOTOPOLOGUES entry outside BEGIN/END: {line}")
         if keyword == "DEFINITION":
             definition = " ".join(tokens[1:]).strip()
-            current["substitutions"] = {} if not definition or definition.lower() == "parent" else parse_substitutions(definition)
+            current["substitutions"] = (
+                {}
+                if not definition or definition.lower() == "parent"
+                else parse_substitutions(definition)
+            )
             continue
         values = _assignment_dict(tokens[1:])
         if keyword == "ROTATIONAL_MHZ":
@@ -304,7 +312,9 @@ def xyzin_isotopologue_section_lines(records: tuple[XyzinIsotopologueRecord, ...
     ]
     for record in records:
         label = record.label.strip() or "unnamed"
-        definition = format_substitutions(record.substitutions) if record.substitutions else "parent"
+        definition = (
+            format_substitutions(record.substitutions) if record.substitutions else "parent"
+        )
         lines.extend(
             [
                 f"BEGIN {shlex.quote(label)}",
@@ -353,17 +363,25 @@ def _merge_records(
     return tuple(ordered)
 
 
-def _merge_record(old: XyzinIsotopologueRecord, new: XyzinIsotopologueRecord) -> XyzinIsotopologueRecord:
+def _merge_record(
+    old: XyzinIsotopologueRecord, new: XyzinIsotopologueRecord
+) -> XyzinIsotopologueRecord:
     return XyzinIsotopologueRecord(
         label=new.label or old.label,
         substitutions=new.substitutions,
         rotational_MHz=new.rotational_MHz if new.rotational_MHz is not None else old.rotational_MHz,
         deltavib_MHz=new.deltavib_MHz if new.deltavib_MHz is not None else old.deltavib_MHz,
-        deltavib_source=new.deltavib_source if new.deltavib_MHz is not None else old.deltavib_source,
-        deltavib_convention=new.deltavib_convention if new.deltavib_MHz is not None else old.deltavib_convention,
+        deltavib_source=new.deltavib_source
+        if new.deltavib_MHz is not None
+        else old.deltavib_source,
+        deltavib_convention=new.deltavib_convention
+        if new.deltavib_MHz is not None
+        else old.deltavib_convention,
         deltael_MHz=new.deltael_MHz if new.deltael_MHz is not None else old.deltael_MHz,
         deltael_source=new.deltael_source if new.deltael_MHz is not None else old.deltael_source,
-        deltael_convention=new.deltael_convention if new.deltael_MHz is not None else old.deltael_convention,
+        deltael_convention=new.deltael_convention
+        if new.deltael_MHz is not None
+        else old.deltael_convention,
         sigma_MHz=new.sigma_MHz if new.sigma_MHz is not None else old.sigma_MHz,
     )
 
@@ -372,7 +390,9 @@ def _record_from_mapping(item: dict[str, object]) -> XyzinIsotopologueRecord:
     return XyzinIsotopologueRecord(
         label=str(item["label"]),
         substitutions=dict(item.get("substitutions", {})),
-        rotational_MHz=item.get("rotational") if isinstance(item.get("rotational"), tuple) else None,
+        rotational_MHz=item.get("rotational")
+        if isinstance(item.get("rotational"), tuple)
+        else None,
         deltavib_MHz=item.get("deltavib") if isinstance(item.get("deltavib"), tuple) else None,
         deltavib_source=str(item.get("deltavib_source", "unspecified")),
         deltavib_convention=str(item.get("deltavib_convention", "subtract")),

@@ -199,9 +199,7 @@ def _summary(definition: GICDefinition) -> GICForgeSummary:
         symmetry_group=symmetry.symmetry_group if symmetry else definition.point_group,
         total_symmetric_irrep=symmetry.total_symmetric_irrep if symmetry else "",
         total_symmetric_gics=(
-            symmetry.total_symmetric_gics
-            if symmetry
-            else total_symmetric_gic_names(definition)
+            symmetry.total_symmetric_gics if symmetry else total_symmetric_gic_names(definition)
         ),
         symmetrize=definition.symmetrize,
         target_rank=definition.target_rank,

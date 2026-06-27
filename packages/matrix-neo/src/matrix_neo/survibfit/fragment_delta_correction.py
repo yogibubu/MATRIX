@@ -71,7 +71,9 @@ def prepare_delta_workflow(query_xyz: Path, fragment_report_json: Path, out_dir:
         proposed_new_frag_xyz = frag_dir / "proposed_new_library_fragment.xyz"
         ll_xyz = frag_dir / "low_level_result.xyz"
         hl_xyz = frag_dir / "high_level_result.xyz"
-        write_xyz(q_frag_xyz, q_atoms, q_coords, comment=f"query fragment {row['query_fragment_id']}")
+        write_xyz(
+            q_frag_xyz, q_atoms, q_coords, comment=f"query fragment {row['query_fragment_id']}"
+        )
         write_xyz(
             proposed_new_frag_xyz,
             q_atoms,
@@ -98,7 +100,9 @@ def prepare_delta_workflow(query_xyz: Path, fragment_report_json: Path, out_dir:
                 "high_level_result_xyz": str(c_frag_xyz),
                 "reserved_high_level_result_xyz": str(hl_xyz),
                 "proposed_new_library_fragment_xyz": str(proposed_new_frag_xyz),
-                "proposed_new_library_high_level_xyz": str(frag_dir / "proposed_new_library_high_level.xyz"),
+                "proposed_new_library_high_level_xyz": str(
+                    frag_dir / "proposed_new_library_high_level.xyz"
+                ),
                 "weight_prior": float(best.get("similarity", 0.0)),
                 "is_low_score": bool(row.get("is_low_score", False)),
                 "suggested_new_fragment": new_frag_suggestion,
@@ -204,7 +208,9 @@ def prepare_hpcs2_delta_workflow(
         q_frag_xyz = frag_dir / "query_fragment.xyz"
         pcs2_frag_xyz = frag_dir / "pcs2_fragment.xyz"
         hpcs2_frag_xyz = frag_dir / "hpcs2_fragment.xyz"
-        write_xyz(q_frag_xyz, q_atoms, q_coords, comment=f"query fragment {row['query_fragment_id']}")
+        write_xyz(
+            q_frag_xyz, q_atoms, q_coords, comment=f"query fragment {row['query_fragment_id']}"
+        )
         write_xyz(
             pcs2_frag_xyz,
             c_atoms,
@@ -434,12 +440,12 @@ def apply_delta_correction(
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(
-        description="Fragment delta-correction workflow (prepare/apply)."
-    )
+    ap = argparse.ArgumentParser(description="Fragment delta-correction workflow (prepare/apply).")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    ap_prep = sub.add_parser("prepare", help="Prepare fragment files + manifest for LL/HL calculations.")
+    ap_prep = sub.add_parser(
+        "prepare", help="Prepare fragment files + manifest for LL/HL calculations."
+    )
     ap_prep.add_argument("--query-xyz", required=True)
     ap_prep.add_argument("--fragment-report", required=True, help="fragment_pipeline.json")
     ap_prep.add_argument("--out", required=True, help="Output folder for workflow bundle.")
@@ -458,7 +464,9 @@ def main(argv=None):
         "prepare-low-level", help="Create Gaussian .gjf inputs for fragment low-level calculations."
     )
     ap_ll.add_argument("--manifest", required=True, help="delta_manifest.json")
-    ap_ll.add_argument("--route", required=True, help='Gaussian route, e.g. "#p b3lyp/6-31g(d) opt"')
+    ap_ll.add_argument(
+        "--route", required=True, help='Gaussian route, e.g. "#p b3lyp/6-31g(d) opt"'
+    )
     ap_ll.add_argument("--charge", type=int, default=0)
     ap_ll.add_argument("--multiplicity", type=int, default=1)
     ap_ll.add_argument("--nproc", type=int, default=8)
@@ -470,7 +478,9 @@ def main(argv=None):
     )
     ap_hl.add_argument("--manifest", required=True, help="delta_manifest.json")
     ap_hl.add_argument("--out", required=True, help="Output folder for HL job queue")
-    ap_hl.add_argument("--route", required=True, help='Gaussian route, e.g. "#p wB97XD/def2TZVP Opt"')
+    ap_hl.add_argument(
+        "--route", required=True, help='Gaussian route, e.g. "#p wB97XD/def2TZVP Opt"'
+    )
     ap_hl.add_argument("--charge", type=int, default=0)
     ap_hl.add_argument("--multiplicity", type=int, default=1)
     ap_hl.add_argument("--nproc", type=int, default=8)

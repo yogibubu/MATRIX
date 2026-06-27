@@ -159,7 +159,9 @@ def compare_vpt2_vci(
     vci_method: str = "dense",
 ) -> VPT2VCIComparison:
     vpt2 = solve_vpt2(force_field, max_quanta=max_quanta, n_roots=n_roots, options=options)
-    vci = solve_vci(force_field, max_quanta=max_quanta, n_roots=n_roots, options=options, method=vci_method)
+    vci = solve_vci(
+        force_field, max_quanta=max_quanta, n_roots=n_roots, options=options, method=vci_method
+    )
     n = min(len(vpt2.energies_cm), len(vci.energies_cm))
     return VPT2VCIComparison(
         vpt2=vpt2,

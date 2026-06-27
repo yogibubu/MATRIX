@@ -20,4 +20,6 @@ def validate_force_field(qff: QuarticForceField) -> None:
             if len(key) != order:
                 raise ScientificValidationError(f"{label} term {key} has wrong order")
             if any(idx < 0 or idx >= n_modes for idx in key):
-                raise ScientificValidationError(f"{label} term {key} has mode index outside 1..{n_modes}")
+                raise ScientificValidationError(
+                    f"{label} term {key} has mode index outside 1..{n_modes}"
+                )

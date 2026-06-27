@@ -29,11 +29,7 @@ def write_gicforge_gaussian_input(
     _require_gic_section(source)
     geometry = read_enriched_xyz(source)
     job_charge = (
-        charge
-        if charge is not None
-        else geometry.charge
-        if geometry.charge is not None
-        else 0
+        charge if charge is not None else geometry.charge if geometry.charge is not None else 0
     )
     job_multiplicity = (
         multiplicity

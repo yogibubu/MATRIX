@@ -56,9 +56,9 @@ def wmsrot_input_text_from_xyzin(
     rot = read_rotational_section(target)
     deltabvib = read_deltabvib_section(target) if has_section(target, "DELTABVIB") else None
     basic = read_basic_section(target) if has_section(target, "BASIC") else None
-    return "\n".join(
-        wmsrot_input_lines(rot, deltabvib=deltabvib, options=options, basic=basic)
-    ) + "\n"
+    return (
+        "\n".join(wmsrot_input_lines(rot, deltabvib=deltabvib, options=options, basic=basic)) + "\n"
+    )
 
 
 def write_wmsrot_input(

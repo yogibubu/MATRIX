@@ -73,11 +73,15 @@ def run_gicforge(
     effective_symmetrize = symmetrize or gicsym_requested(run_dir)
     do_symmetry_post = effective_symmetrize or symmetry_postprocess_requested(run_dir)
     if do_symmetry_post:
-        write_gic_symmetry_files(run_dir, symmetrize_gics=effective_symmetrize, symmetry_backend=symmetry_backend)
+        write_gic_symmetry_files(
+            run_dir, symmetrize_gics=effective_symmetrize, symmetry_backend=symmetry_backend
+        )
     else:
         _remove_symmetry_outputs(run_dir)
     files = _collect_outputs(run_dir, output_names)
-    manifest = _write_gicforge_manifest(run_dir, exe, logfile, files, symmetrize=effective_symmetrize)
+    manifest = _write_gicforge_manifest(
+        run_dir, exe, logfile, files, symmetrize=effective_symmetrize
+    )
     return GICForgeResult(
         workdir=run_dir,
         executable=exe,
@@ -98,7 +102,14 @@ def _copy_legacy_report(run_dir: Path) -> None:
 
 
 def _remove_symmetry_outputs(run_dir: Path) -> None:
-    for name in ("gauin.raw", "gauin.symm", "gicsym", "gic_symmetry_diagnostics.json", "sycart.xyz", "symmetrized.xyz"):
+    for name in (
+        "gauin.raw",
+        "gauin.symm",
+        "gicsym",
+        "gic_symmetry_diagnostics.json",
+        "sycart.xyz",
+        "symmetrized.xyz",
+    ):
         path = run_dir / name
         if path.exists():
             path.unlink()
@@ -131,9 +142,7 @@ def _write_gicforge_manifest(
         if (checksum := _optional_checksum(run_dir / name)) is not None
     }
     output_checksums = {
-        name: sha256_file(path)
-        for name, path in sorted(files.items())
-        if path.is_file()
+        name: sha256_file(path) for name, path in sorted(files.items()) if path.is_file()
     }
     legacy_manifest = {
         "workflow": "gicforge",

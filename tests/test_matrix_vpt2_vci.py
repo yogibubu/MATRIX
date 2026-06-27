@@ -268,7 +268,9 @@ def test_gui_service_reports_are_independent_from_qt(tmp_path):
     qff_file.write_text("FREQ 1 1000.0\nFREQ 2 1500.0\nQUARTIC 1 1 1 1 0.8\n", encoding="utf-8")
 
     qff = load_force_field(qff_path=qff_file)
-    report = run_vpt2_vci_report(qff, max_quanta=2, roots=3, options=VCIOptions(active_modes=(0, 1)))
+    report = run_vpt2_vci_report(
+        qff, max_quanta=2, roots=3, options=VCIOptions(active_modes=(0, 1))
+    )
 
     assert "VPT2/VCI comparison on canonical MATRIX QFF" in report.text
     assert len(report.comparison.vci.basis) >= 3
@@ -357,7 +359,9 @@ def test_vpt2_vci_fortran_inventory_uses_matrix_engines_layout():
         "vci_core.f",
         "davidson_core.f",
     }
-    assert inventory.davidson_backend == ROOT / "engines" / "fortran" / "vpt2_vci" / "davidson_core.f"
+    assert (
+        inventory.davidson_backend == ROOT / "engines" / "fortran" / "vpt2_vci" / "davidson_core.f"
+    )
 
 
 def _write_vpt2_vci_outputs(run_dir: Path) -> None:

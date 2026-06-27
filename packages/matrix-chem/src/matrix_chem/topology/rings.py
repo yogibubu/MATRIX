@@ -54,11 +54,11 @@ class Ring:
         self.index = index
 
         # --- Topology ---
-        self.atoms = list(atoms)          # ordered cyclic atoms
+        self.atoms = list(atoms)  # ordered cyclic atoms
         self.n_atoms = len(self.atoms)
 
         self.bonds = bonds if bonds is not None else self._build_bonds()
-        self.connected_rings = set()      # indices of fused/adjacent rings
+        self.connected_rings = set()  # indices of fused/adjacent rings
 
         # --- Geometry (optional) ---
         self.coords = coords
@@ -189,8 +189,4 @@ class Ring:
         return self.n_atoms
 
     def __repr__(self):
-        return (
-            f"<Ring {self.index}: "
-            f"size={self.n_atoms}, "
-            f"atoms={self.atoms}>"
-        )
+        return f"<Ring {self.index}: size={self.n_atoms}, atoms={self.atoms}>"

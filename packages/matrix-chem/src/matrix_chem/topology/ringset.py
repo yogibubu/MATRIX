@@ -65,8 +65,7 @@ class RingSet:
         seen_cycles = set()
         ring_index = 0
 
-        nat = getattr(self.graph, "natoms",
-                      getattr(self.graph, "n_atoms", None))
+        nat = getattr(self.graph, "natoms", getattr(self.graph, "n_atoms", None))
         if nat is None:
             raise AttributeError("Graph must define natoms or n_atoms")
 

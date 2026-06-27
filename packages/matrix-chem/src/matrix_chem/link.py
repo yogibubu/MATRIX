@@ -247,7 +247,9 @@ def gaussian_topology_overrides_from_xyzin(path: Path) -> dict[str, object]:
         "bond_orders": bond_orders,
         "charge_source": "Gaussian CM5" if charges else "Synthons electronegativity model",
         "bond_order_source": (
-            f"Gaussian {bo_source}" if bond_orders and bo_source else "Topology Pauling continuous model"
+            f"Gaussian {bo_source}"
+            if bond_orders and bo_source
+            else "Topology Pauling continuous model"
         ),
     }
 

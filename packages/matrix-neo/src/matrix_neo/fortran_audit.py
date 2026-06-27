@@ -207,8 +207,7 @@ def format_gicforge_fortran_audit_summary(audit: GICForgeFortranAudit) -> list[s
         f"FAIL {audit.failed}",
         f"ERROR {audit.errored}",
         f"SKIP {audit.skipped}",
-        "MAX_ROW_SPACE_RESIDUAL "
-        + ("NONE" if max_residual is None else f"{max_residual:.12g}"),
+        "MAX_ROW_SPACE_RESIDUAL " + ("NONE" if max_residual is None else f"{max_residual:.12g}"),
         f"MIXED_SYMMETRY_GROUPS {audit.mixed_symmetry_groups}",
         f"SALC_COEFFICIENT_GICS {audit.salc_coefficient_gics}",
         "MAX_SALC_COEFFICIENT_NORM_ERROR "
@@ -234,7 +233,9 @@ def format_gicforge_fortran_audit_cases(
     for result in audit.results:
         if normalized != "ALL" and result.status != normalized:
             continue
-        residual = "NONE" if result.row_space_residual is None else f"{result.row_space_residual:.12g}"
+        residual = (
+            "NONE" if result.row_space_residual is None else f"{result.row_space_residual:.12g}"
+        )
         lines.append(
             "CASE "
             f"{result.status} "
@@ -330,10 +331,7 @@ def _audit_one(
             and oracle_row_rank == fortran_row_rank == oracle_rank
             and oracle_b.shape == fortran_b.shape
             and residual <= tolerance
-            and (
-                not projector_required
-                or projector["projector_status"] == "POINT_GROUP_PROJECTOR"
-            )
+            and (not projector_required or projector["projector_status"] == "POINT_GROUP_PROJECTOR")
             and projector["mixed_symmetry_group_count"] == 0
         )
         return GICForgeFortranAuditResult(
@@ -358,9 +356,7 @@ def _audit_one(
             mixed_symmetry_group_count=int(projector["mixed_symmetry_group_count"]),
             total_symmetric_gic_count=int(projector["total_symmetric_gic_count"]),
             salc_coefficient_gic_count=int(projector["salc_coefficient_gic_count"]),
-            salc_coefficient_max_norm_error=float(
-                projector["salc_coefficient_max_norm_error"]
-            ),
+            salc_coefficient_max_norm_error=float(projector["salc_coefficient_max_norm_error"]),
             message=""
             if passed
             else _failure_message(
@@ -416,9 +412,7 @@ def _projector_audit(
         "mixed_symmetry_group_count": mixed_groups,
         "total_symmetric_gic_count": len(diagnostics.total_symmetric_gics),
         "salc_coefficient_gic_count": _salc_coefficient_gic_count(symmetrized_definition),
-        "salc_coefficient_max_norm_error": _salc_coefficient_max_norm_error(
-            symmetrized_definition
-        ),
+        "salc_coefficient_max_norm_error": _salc_coefficient_max_norm_error(symmetrized_definition),
     }
 
 

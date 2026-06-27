@@ -688,7 +688,9 @@ def test_gf_controller_builds_run_command_with_options(tmp_path):
     assert "--local" in command.argv
     assert "--symmetry-blocks" not in command.argv
     assert command.argv[command.argv.index("--scale") + 1] == "GIC003=0.9"
-    assert command.argv[command.argv.index("--scale-class") + 1] == "CH_stretches:0.95:R(1,2)|R(1,3)"
+    assert (
+        command.argv[command.argv.index("--scale-class") + 1] == "CH_stretches:0.95:R(1,2)|R(1,3)"
+    )
     assert command.argv[command.argv.index("--force-threshold") + 1] == "1e-08"
     assert "--subtract-electrostatic" in command.argv
     assert "--subtract-uff-vdw" in command.argv
@@ -704,7 +706,9 @@ def test_gf_controller_builds_run_command_with_options(tmp_path):
     assert "--scale-preview" in preview.argv
     assert preview.argv[preview.argv.index("--scale-file") + 1] == str(scale)
     assert preview.argv[preview.argv.index("--scale") + 1] == "GIC003=0.9"
-    assert preview.argv[preview.argv.index("--scale-class") + 1] == "CH_stretches:0.95:R(1,2)|R(1,3)"
+    assert (
+        preview.argv[preview.argv.index("--scale-class") + 1] == "CH_stretches:0.95:R(1,2)|R(1,3)"
+    )
 
 
 def test_qm_jobs_controller_builds_adapter_commands(tmp_path):

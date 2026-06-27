@@ -84,19 +84,39 @@ class EnsembleClassCorrection:
         if self.kind and not normalized_kind:
             raise ValueError(f"Unknown ensemble class coordinate kind: {self.kind}")
         if self.atom_symbols and len(self.atom_symbols) < 2 and normalized_kind != "out_of_plane":
-            raise ValueError(f"Ensemble class correction {self.name!r} needs at least two atom symbols")
-        if self.value_min is not None and self.value_max is not None and self.value_min > self.value_max:
-            raise ValueError(f"Ensemble class correction {self.name!r} has value_min larger than value_max")
-        if (self.value_min is not None or self.value_max is not None) and normalized_kind != "stretch":
-            raise ValueError(f"Ensemble class correction {self.name!r} value ranges are currently supported for stretches")
+            raise ValueError(
+                f"Ensemble class correction {self.name!r} needs at least two atom symbols"
+            )
+        if (
+            self.value_min is not None
+            and self.value_max is not None
+            and self.value_min > self.value_max
+        ):
+            raise ValueError(
+                f"Ensemble class correction {self.name!r} has value_min larger than value_max"
+            )
+        if (
+            self.value_min is not None or self.value_max is not None
+        ) and normalized_kind != "stretch":
+            raise ValueError(
+                f"Ensemble class correction {self.name!r} value ranges are currently supported for stretches"
+            )
         if self.synthon_threshold is not None and self.synthon_threshold < 0.0:
-            raise ValueError(f"Ensemble class correction {self.name!r} synthon_threshold must be non-negative")
+            raise ValueError(
+                f"Ensemble class correction {self.name!r} synthon_threshold must be non-negative"
+            )
         if self.synthon_zeff and self.synthon_threshold is None:
-            raise ValueError(f"Ensemble class correction {self.name!r} needs synthon_threshold with synthon_zeff")
+            raise ValueError(
+                f"Ensemble class correction {self.name!r} needs synthon_threshold with synthon_zeff"
+            )
         if (self.prior_value is None) != (self.prior_sigma is None):
-            raise ValueError(f"Ensemble class correction {self.name!r} needs both prior_value and prior_sigma")
+            raise ValueError(
+                f"Ensemble class correction {self.name!r} needs both prior_value and prior_sigma"
+            )
         if self.prior_sigma is not None and self.prior_sigma <= 0.0:
-            raise ValueError(f"Ensemble class correction {self.name!r} prior_sigma must be positive")
+            raise ValueError(
+                f"Ensemble class correction {self.name!r} prior_sigma must be positive"
+            )
 
 
 @dataclass(frozen=True)
@@ -137,15 +157,23 @@ class EnsembleAcceptancePolicy:
         if self.max_condition_number <= 0.0 or not np.isfinite(self.max_condition_number):
             raise ValueError("Ensemble acceptance max_condition_number must be positive and finite")
         if self.min_residual_degrees_of_freedom < 0:
-            raise ValueError("Ensemble acceptance min_residual_degrees_of_freedom must be non-negative")
+            raise ValueError(
+                "Ensemble acceptance min_residual_degrees_of_freedom must be non-negative"
+            )
         if self.min_molecule_support < 1:
             raise ValueError("Ensemble acceptance min_molecule_support must be at least one")
         if not 0.0 <= self.high_correlation_review_threshold <= 1.0:
-            raise ValueError("Ensemble acceptance high_correlation_review_threshold must be between 0 and 1")
+            raise ValueError(
+                "Ensemble acceptance high_correlation_review_threshold must be between 0 and 1"
+            )
         if not 0.0 <= self.high_correlation_reject_threshold <= 1.0:
-            raise ValueError("Ensemble acceptance high_correlation_reject_threshold must be between 0 and 1")
+            raise ValueError(
+                "Ensemble acceptance high_correlation_reject_threshold must be between 0 and 1"
+            )
         if self.high_correlation_reject_threshold < self.high_correlation_review_threshold:
-            raise ValueError("Ensemble acceptance reject correlation threshold must be >= review threshold")
+            raise ValueError(
+                "Ensemble acceptance reject correlation threshold must be >= review threshold"
+            )
 
 
 @dataclass(frozen=True)
@@ -176,7 +204,9 @@ class EnsembleClassCorrectionFit:
         default_factory=lambda: EnsembleNumericalDiagnostics(0, 0, 0, 0, float("inf"), (), ())
     )
     acceptance: EnsembleAcceptanceDecision = field(
-        default_factory=lambda: EnsembleAcceptanceDecision("rejected", False, ("not evaluated",), ())
+        default_factory=lambda: EnsembleAcceptanceDecision(
+            "rejected", False, ("not evaluated",), ()
+        )
     )
 
     @property
@@ -295,7 +325,9 @@ def fit_ensemble_class_corrections(
                     n_active_gics=int(np.count_nonzero(block.active_mask)),
                     residual_before=_weighted_rms(block.residual, block.measurement.weights),
                     residual_after=0.0,
-                    rank_contribution=rank_condition(block.design * np.sqrt(block.measurement.weights)[:, None]).rank,
+                    rank_contribution=rank_condition(
+                        block.design * np.sqrt(block.measurement.weights)[:, None]
+                    ).rank,
                 )
             )
 
@@ -314,7 +346,9 @@ def fit_ensemble_class_corrections(
     weighted_design = fit_design * np.sqrt(fit_weights)[:, None]
     weighted_residual = fit_residual * np.sqrt(fit_weights)
     if not np.any(np.abs(weighted_design) > 0.0):
-        raise ValueError("No ensemble class correction matched an active coordinate with non-zero sensitivity")
+        raise ValueError(
+            "No ensemble class correction matched an active coordinate with non-zero sensitivity"
+        )
 
     solution, covariance, conditioning, column_norms = _solve_scaled_weighted_lstsq(
         weighted_design,
@@ -323,8 +357,16 @@ def fit_ensemble_class_corrections(
         rcond=rcond,
     )
     residual_after = residual - design @ solution
-    prior_after = prior_residual - prior_design @ solution if len(prior_residual) else np.zeros(0, dtype=float)
-    sigma_values = np.sqrt(np.maximum(np.diag(covariance), 0.0)) if covariance.size else np.zeros(len(class_items))
+    prior_after = (
+        prior_residual - prior_design @ solution
+        if len(prior_residual)
+        else np.zeros(0, dtype=float)
+    )
+    sigma_values = (
+        np.sqrt(np.maximum(np.diag(covariance), 0.0))
+        if covariance.size
+        else np.zeros(len(class_items))
+    )
     correlation = _correlation_from_covariance(covariance)
     corrections = {name: float(value) for name, value in zip(class_names, solution)}
     sigma = {name: float(value) for name, value in zip(class_names, sigma_values)}
@@ -464,7 +506,9 @@ def _ensemble_molecule_design(
     synthon_zeff = _synthon_zeff(coords, z_numbers)
     backend = _make_gicforge_backend(atoms, root / _safe_name(molecule.name))
     prims, u_matrix, labels = _gic_model(coords, z_numbers, request, backend)
-    fixed_parameters = _combined_fixed_parameters(request.fixed_parameters, geometry_input.fixed_parameters)
+    fixed_parameters = _combined_fixed_parameters(
+        request.fixed_parameters, geometry_input.fixed_parameters
+    )
     fixed_gic_patterns = _gic_fixed_patterns(fixed_parameters)
     fixed_primitives = _symmetry_expanded_fixed_primitives(
         atoms,
@@ -472,7 +516,9 @@ def _ensemble_molecule_design(
         prims,
         _fixed_primitives_from_patterns(fixed_parameters),
     )
-    active = _active_mask(labels, fixed_gic_patterns, request.parameter_classes) & _gicforge_a1_mask(labels)
+    active = _active_mask(
+        labels, fixed_gic_patterns, request.parameter_classes
+    ) & _gicforge_a1_mask(labels)
     q_values = _gic_values(prims, u_matrix, coords)
     measurement = _build_measurement_model(request, atoms, coords, prims, u_matrix, labels)
     calculated = _measurement_vector(atoms, coords, request, q_values, labels, measurement)
@@ -488,7 +534,9 @@ def _ensemble_molecule_design(
         measurement,
         step=step,
     )
-    transform, matched_counts = _ensemble_class_transform(atoms, coords, labels, active, classes, synthon_signatures, synthon_zeff)
+    transform, matched_counts = _ensemble_class_transform(
+        atoms, coords, labels, active, classes, synthon_signatures, synthon_zeff
+    )
     design = jac_active @ transform
     if fixed_primitives:
         # Hard primitive constraints stay local to the molecule.  They remove
@@ -580,7 +628,8 @@ def _class_projection(
         return float(sum(term[2] for term in matching_kind))
     if item.atom_symbols:
         wanted_atoms_by_kind = {
-            kind: _class_atom_signature(kind, item.atom_symbols) for kind in {term[0] for term in terms}
+            kind: _class_atom_signature(kind, item.atom_symbols)
+            for kind in {term[0] for term in terms}
         }
         matching_atoms = [
             term
@@ -641,7 +690,14 @@ def _primitive_terms(label: str) -> tuple[tuple[str, tuple[int, ...], float], ..
     bracket = re.search(r"\[(.*)\]", text)
     source = bracket.group(1) if bracket else text
     terms: list[tuple[str, tuple[int, ...], float]] = []
-    kind_map = {"R": "stretch", "A": "bend", "L": "linear_bend", "D": "torsion", "U": "out_of_plane", "O": "out_of_plane"}
+    kind_map = {
+        "R": "stretch",
+        "A": "bend",
+        "L": "linear_bend",
+        "D": "torsion",
+        "U": "out_of_plane",
+        "O": "out_of_plane",
+    }
     pattern = re.compile(
         r"([+-]?\s*(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)\s*\*\s*([RALDUO])\(\s*([0-9,\s]+?)\s*\)"
     )
@@ -688,13 +744,17 @@ def _term_value_in_range(
     return True
 
 
-def _primitive_value(kind: str, indices: tuple[int, ...], coords: np.ndarray | None) -> float | None:
+def _primitive_value(
+    kind: str, indices: tuple[int, ...], coords: np.ndarray | None
+) -> float | None:
     if coords is None or kind != "stretch" or len(indices) != 2:
         return None
     i, j = indices[0] - 1, indices[1] - 1
     if i < 0 or j < 0 or i >= len(coords) or j >= len(coords):
         return None
-    return float(np.linalg.norm(np.asarray(coords[i], dtype=float) - np.asarray(coords[j], dtype=float)))
+    return float(
+        np.linalg.norm(np.asarray(coords[i], dtype=float) - np.asarray(coords[j], dtype=float))
+    )
 
 
 def _term_synthon_matches(
@@ -710,7 +770,10 @@ def _term_synthon_matches(
     if not wanted:
         return True
     for atom_index in _synthon_relevant_atoms(term[0], term[1]):
-        if 1 <= atom_index <= len(synthon_signatures) and synthon_signatures[atom_index - 1] in wanted:
+        if (
+            1 <= atom_index <= len(synthon_signatures)
+            and synthon_signatures[atom_index - 1] in wanted
+        ):
             return True
     return False
 
@@ -781,7 +844,9 @@ def _class_synthon_zeff_signature(kind: str, values: tuple[float, ...]) -> tuple
 
 def _synthon_signatures(coords: np.ndarray, z_numbers: np.ndarray) -> tuple[str, ...]:
     try:
-        _continuous, _graph, _ringset, synthons, _aromaticity = build_topology_objects(coords, z_numbers)
+        _continuous, _graph, _ringset, synthons, _aromaticity = build_topology_objects(
+            coords, z_numbers
+        )
         return tuple(str(synthons.canonical_signature_str(i)) for i in range(len(z_numbers)))
     except Exception:
         return ()
@@ -789,13 +854,17 @@ def _synthon_signatures(coords: np.ndarray, z_numbers: np.ndarray) -> tuple[str,
 
 def _synthon_zeff(coords: np.ndarray, z_numbers: np.ndarray) -> tuple[float, ...]:
     try:
-        _continuous, _graph, _ringset, synthons, _aromaticity = build_topology_objects(coords, z_numbers)
+        _continuous, _graph, _ringset, synthons, _aromaticity = build_topology_objects(
+            coords, z_numbers
+        )
         return tuple(float(synthons.Zeff(i)) for i in range(len(z_numbers)))
     except Exception:
         return ()
 
 
-def _primitive_signature(kind: str, indices: tuple[int, ...], atoms: tuple[str, ...]) -> tuple[str, ...]:
+def _primitive_signature(
+    kind: str, indices: tuple[int, ...], atoms: tuple[str, ...]
+) -> tuple[str, ...]:
     symbols = _primitive_ordered_symbols(indices, atoms)
     if not symbols:
         return ()
@@ -857,7 +926,9 @@ def _ensemble_molecules_from_mapping(path: Path, items: object) -> list[Ensemble
         if is_msr_legacy_file(resolved_job):
             legacy = read_msr_legacy_input(resolved_job)
             if not legacy.observations:
-                raise ValueError(f"Ensemble molecule {name or resolved_job.stem!r} has no observations")
+                raise ValueError(
+                    f"Ensemble molecule {name or resolved_job.stem!r} has no observations"
+                )
             request = SemiexperimentalFitRequest(
                 initial_geometry=legacy.path,
                 observations=tuple(legacy.observations),
@@ -916,7 +987,9 @@ def _ensemble_classes_from_mapping(items: object) -> list[EnsembleClassCorrectio
                     data.get("synthon_signatures", data.get("synthons", data.get("synthon")))
                 ),
                 synthon_zeff=_float_tuple(data.get("synthon_zeff", data.get("zeff"))),
-                synthon_threshold=_optional_float(data.get("synthon_threshold", data.get("zeff_threshold"))),
+                synthon_threshold=_optional_float(
+                    data.get("synthon_threshold", data.get("zeff_threshold"))
+                ),
                 prior_value=_optional_float(data.get("prior_value", data.get("prior"))),
                 prior_sigma=_optional_float(data.get("prior_sigma", data.get("sigma"))),
             )
@@ -930,8 +1003,12 @@ def _acceptance_policy_from_mapping(data: dict) -> EnsembleAcceptancePolicy:
         max_condition_number=float(data.get("max_condition_number", 1.0e8)),
         min_residual_degrees_of_freedom=int(data.get("min_residual_degrees_of_freedom", 1)),
         min_molecule_support=int(data.get("min_molecule_support", 2)),
-        high_correlation_review_threshold=float(data.get("high_correlation_review_threshold", 0.98)),
-        high_correlation_reject_threshold=float(data.get("high_correlation_reject_threshold", 0.9999)),
+        high_correlation_review_threshold=float(
+            data.get("high_correlation_review_threshold", 0.98)
+        ),
+        high_correlation_reject_threshold=float(
+            data.get("high_correlation_reject_threshold", 0.9999)
+        ),
     )
     policy.validate()
     return policy
@@ -960,7 +1037,12 @@ def _prior_equations(
             np.zeros(0, dtype=float),
             (),
         )
-    return np.vstack(rows), np.asarray(residuals, dtype=float), np.asarray(weights, dtype=float), tuple(names)
+    return (
+        np.vstack(rows),
+        np.asarray(residuals, dtype=float),
+        np.asarray(weights, dtype=float),
+        tuple(names),
+    )
 
 
 def _optional_float(value: object) -> float | None:
@@ -1024,18 +1106,27 @@ def _solve_scaled_weighted_lstsq(
     column_norms = np.linalg.norm(weighted_design, axis=0)
     zero = [name for name, norm in zip(class_names, column_norms) if norm <= 0.0]
     if zero:
-        raise ValueError("Ensemble class corrections have zero weighted sensitivity: " + ", ".join(zero))
+        raise ValueError(
+            "Ensemble class corrections have zero weighted sensitivity: " + ", ".join(zero)
+        )
     scaled_design = weighted_design / column_norms[None, :]
     u, s, vt = np.linalg.svd(scaled_design, full_matrices=False)
     cutoff = _svd_cutoff(s, scaled_design.shape, rcond=rcond)
     keep = s > cutoff
     if not np.any(keep):
-        raise ValueError("Ensemble design matrix has no numerically significant singular directions")
+        raise ValueError(
+            "Ensemble design matrix has no numerically significant singular directions"
+        )
     scaled_solution = vt[keep, :].T @ ((u[:, keep].T @ weighted_residual) / s[keep])
     solution = scaled_solution / column_norms
     scaled_covariance = _covariance_from_svd(s, vt, keep)
     covariance = scaled_covariance / np.outer(column_norms, column_norms)
-    return solution, covariance, _rank_condition_from_svd(s, scaled_design.shape, rcond=rcond), column_norms
+    return (
+        solution,
+        covariance,
+        _rank_condition_from_svd(s, scaled_design.shape, rcond=rcond),
+        column_norms,
+    )
 
 
 def _covariance_from_weighted_design(weighted_design: np.ndarray, *, rcond: float) -> np.ndarray:
@@ -1045,7 +1136,9 @@ def _covariance_from_weighted_design(weighted_design: np.ndarray, *, rcond: floa
     if not len(s):
         return np.zeros((weighted_design.shape[1], weighted_design.shape[1]), dtype=float)
     cutoff = _svd_cutoff(s, weighted_design.shape, rcond=rcond)
-    inv_s2 = np.array([1.0 / (value * value) if value > cutoff else 0.0 for value in s], dtype=float)
+    inv_s2 = np.array(
+        [1.0 / (value * value) if value > cutoff else 0.0 for value in s], dtype=float
+    )
     return (vt.T * inv_s2) @ vt
 
 
@@ -1062,7 +1155,9 @@ def _svd_cutoff(singular: np.ndarray, shape: tuple[int, int], *, rcond: float) -
     return relative * float(singular[0])
 
 
-def _rank_condition_from_svd(singular: np.ndarray, shape: tuple[int, int], *, rcond: float) -> RankCondition:
+def _rank_condition_from_svd(
+    singular: np.ndarray, shape: tuple[int, int], *, rcond: float
+) -> RankCondition:
     if singular.size == 0:
         return RankCondition(rank=0, condition_number=float("inf"), singular_values=np.array(()))
     cutoff = _svd_cutoff(singular, shape, rcond=rcond)
@@ -1071,7 +1166,9 @@ def _rank_condition_from_svd(singular: np.ndarray, shape: tuple[int, int], *, rc
         condition = float(singular[0] / singular[-1])
     else:
         condition = float("inf")
-    return RankCondition(rank=rank, condition_number=condition, singular_values=np.asarray(singular, dtype=float))
+    return RankCondition(
+        rank=rank, condition_number=condition, singular_values=np.asarray(singular, dtype=float)
+    )
 
 
 def _correlation_from_covariance(covariance: np.ndarray) -> np.ndarray:
@@ -1101,7 +1198,9 @@ def _ensemble_numerical_diagnostics(
     if not np.isfinite(conditioning.condition_number):
         warnings.append("singular scaled design matrix")
     elif conditioning.condition_number > 1.0e8:
-        warnings.append(f"ill-conditioned scaled design matrix ({conditioning.condition_number:.3g})")
+        warnings.append(
+            f"ill-conditioned scaled design matrix ({conditioning.condition_number:.3g})"
+        )
     if n_rows <= conditioning.rank:
         warnings.append("no residual degrees of freedom after numerical rank determination")
 
@@ -1140,7 +1239,9 @@ def _evaluate_ensemble_acceptance(
     failures: list[str] = []
     review: list[str] = []
     if policy.require_full_rank and diagnostics.rank < diagnostics.n_columns:
-        failures.append(f"global class model is rank deficient ({diagnostics.rank}/{diagnostics.n_columns})")
+        failures.append(
+            f"global class model is rank deficient ({diagnostics.rank}/{diagnostics.n_columns})"
+        )
     if not np.isfinite(diagnostics.condition_number):
         failures.append("scaled design matrix is singular")
     elif diagnostics.condition_number > policy.max_condition_number:
@@ -1205,7 +1306,9 @@ def _safe_name(name: str) -> str:
     return text or "molecule"
 
 
-def write_ensemble_class_correction_outputs(outdir: Path, result: EnsembleClassCorrectionFit) -> None:
+def write_ensemble_class_correction_outputs(
+    outdir: Path, result: EnsembleClassCorrectionFit
+) -> None:
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "ensemble_class_corrections.txt").write_text(result.text + "\n", encoding="utf-8")
     (outdir / "ensemble_class_corrections.csv").write_text(_class_csv(result), encoding="utf-8")
@@ -1242,7 +1345,9 @@ def _class_csv(result: EnsembleClassCorrectionFit) -> str:
 
 
 def _blocks_csv(result: EnsembleClassCorrectionFit) -> str:
-    lines = ["molecule,n_rows,n_active_gics,rank_contribution,weighted_rms_before,weighted_rms_after,matched_counts"]
+    lines = [
+        "molecule,n_rows,n_active_gics,rank_contribution,weighted_rms_before,weighted_rms_after,matched_counts"
+    ]
     for block in result.molecule_blocks:
         counts = ";".join(f"{name}:{count}" for name, count in block.matched_counts.items())
         lines.append(
@@ -1261,7 +1366,9 @@ def _class_report_csv(result: EnsembleClassCorrectionFit) -> str:
     column_norms = result.diagnostics.column_norms or tuple(0.0 for _ in result.classes)
     for index, item in enumerate(result.classes):
         matched = sum(block.matched_counts.get(item.name, 0) for block in result.molecule_blocks)
-        molecule_count = sum(1 for block in result.molecule_blocks if block.matched_counts.get(item.name, 0) > 0)
+        molecule_count = sum(
+            1 for block in result.molecule_blocks if block.matched_counts.get(item.name, 0) > 0
+        )
         prior_residual = result.prior_residual_after.get(item.name)
         ratio = ""
         if item.prior_sigma is not None and prior_residual is not None:

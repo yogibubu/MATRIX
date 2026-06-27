@@ -34,7 +34,9 @@ class VPT2VCIGuiState:
 
 def load_vpt2_vci_gui_state(path: Path | str, *, refresh: bool = False) -> VPT2VCIGuiState:
     target = Path(path)
-    snapshot = refresh_vpt2_vci_section(target) if refresh else collect_vpt2_vci_outputs_from_xyzin(target)
+    snapshot = (
+        refresh_vpt2_vci_section(target) if refresh else collect_vpt2_vci_outputs_from_xyzin(target)
+    )
     return VPT2VCIGuiState(xyzin=target, snapshot=snapshot)
 
 

@@ -103,9 +103,7 @@ def _assert_symmetry_operations_closed(symmetry_section: list[str]) -> None:
     }
     for _left_label, left_permutation, left_matrix in operations:
         for _right_label, right_permutation, right_matrix in operations:
-            product_permutation = tuple(
-                right_permutation[atom - 1] for atom in left_permutation
-            )
+            product_permutation = tuple(right_permutation[atom - 1] for atom in left_permutation)
             product_matrix = left_matrix @ right_matrix
             key = (
                 product_permutation,
@@ -149,10 +147,7 @@ def _rpck_test_primitive(
         "RING_PUCKER_COMPONENT",
         "RPCK",
         ring,
-        refs=tuple(
-            _encode_ring_pucker_term(coefficient, atoms)
-            for coefficient, atoms in terms
-        ),
+        refs=tuple(_encode_ring_pucker_term(coefficient, atoms) for coefficient, atoms in terms),
     )
 
 
@@ -171,7 +166,9 @@ def _tetrahedral_operations() -> tuple[GICPointGroupOperation, ...]:
                 matrix[row, column] = signs[row]
             operation_class = _tetrahedral_operation_class(matrix)
             counters[operation_class] += 1
-            label = "E" if operation_class == "E" else f"{operation_class}_{counters[operation_class]}"
+            label = (
+                "E" if operation_class == "E" else f"{operation_class}_{counters[operation_class]}"
+            )
             operations.append(
                 GICPointGroupOperation(
                     label,
@@ -262,9 +259,7 @@ def _d2d_stretch_operations() -> tuple[GICPointGroupOperation, ...]:
         transformed = ligand_coords @ matrix.T
         permutation = [1]
         for position in transformed:
-            matches = np.where(
-                np.all(np.isclose(ligand_coords, position, atol=1.0e-8), axis=1)
-            )[0]
+            matches = np.where(np.all(np.isclose(ligand_coords, position, atol=1.0e-8), axis=1))[0]
             assert len(matches) == 1
             permutation.append(int(matches[0]) + 2)
         operations.append(
@@ -322,10 +317,9 @@ def _assert_character_rows_orthonormal(
     names = tuple(irreps)
     for left in names:
         for right in names:
-            overlap = sum(
-                float(a) * float(b)
-                for a, b in zip(irreps[left], irreps[right])
-            ) / float(group_order)
+            overlap = sum(float(a) * float(b) for a, b in zip(irreps[left], irreps[right])) / float(
+                group_order
+            )
             assert overlap == pytest.approx(1.0 if left == right else 0.0, abs=1.0e-8)
 
 
@@ -594,8 +588,7 @@ def test_gicforge_build_writes_frozen_gics_and_sycart(tmp_path):
     assert "Mode: NONE" in report_lines
     assert "Policy: no built fragments were consumed by this GIC definition." in report_lines
     assert (
-        "STRETCH OPS=E,sigma_yz,sigma_xy,C2y^1: "
-        "Stre0001,Stre0002 -> A1Str001,B2Str001"
+        "STRETCH OPS=E,sigma_yz,sigma_xy,C2y^1: Stre0001,Stre0002 -> A1Str001,B2Str001"
     ) in report_lines
     assert "Selected by family: BEND:1, STRETCH:2" in report_lines
     assert any(
@@ -735,9 +728,7 @@ def test_gicforge_generates_out_of_plane_or_improper_dihedral_mode():
         improper_dihedrals=True,
     )
     improper = next(
-        primitive
-        for primitive in improper_candidates
-        if primitive.family == "IMPROPER_DIHEDRAL"
+        primitive for primitive in improper_candidates if primitive.family == "IMPROPER_DIHEDRAL"
     )
     assert improper.function == "IMPD"
     assert improper.name == "ImpD0001"
@@ -745,9 +736,12 @@ def test_gicforge_generates_out_of_plane_or_improper_dihedral_mode():
     assert _primitive_value(improper, coords) == pytest.approx(
         _test_dihedral_value(coords, (2, 1, 4, 3))
     )
-    assert np.max(
-        np.abs(_analytic_b_row(improper, coords) - _finite_difference_b_row(improper, coords))
-    ) < 1.0e-5
+    assert (
+        np.max(
+            np.abs(_analytic_b_row(improper, coords) - _finite_difference_b_row(improper, coords))
+        )
+        < 1.0e-5
+    )
 
 
 def test_gicforge_skips_all_cyclic_out_of_plane_candidates_like_merlino():
@@ -778,9 +772,7 @@ def test_gicforge_skips_all_cyclic_out_of_plane_candidates_like_merlino():
     )
 
     assert "OUT_OF_PLANE" not in {primitive.family for primitive in oop_candidates}
-    assert "IMPROPER_DIHEDRAL" not in {
-        primitive.family for primitive in improper_candidates
-    }
+    assert "IMPROPER_DIHEDRAL" not in {primitive.family for primitive in improper_candidates}
 
 
 def test_gicforge_build_handles_corpus_zmatrix_case(tmp_path):
@@ -884,11 +876,7 @@ def test_gicforge_ring_puckering_numeric_corpus_fused(
     preprocess_to_enriched_xyz(source, xyzin)
     write_validation_section(xyzin)
     definition = write_gicforge_build_sections(xyzin)
-    rpck_gics = [
-        gic
-        for gic in definition.gics
-        if gic.family == "RING_PUCKER_COMPONENT"
-    ]
+    rpck_gics = [gic for gic in definition.gics if gic.family == "RING_PUCKER_COMPONENT"]
     gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
 
     assert definition.target_rank == expected_rank
@@ -942,10 +930,7 @@ def test_gicforge_build_uses_built_fragments_for_relative_coordinates(tmp_path):
     assert definition.rank == 12
     assert len(definition.gics) == 12
     assert "RANK_METHOD analytic_b_matrix_mgs_greedy" in gic
-    assert (
-        "REDUCTION_POLICY SPECIAL_PROTECTED_FIRST_THEN_ORDINARY_ANALYTIC_RANK"
-        in gic
-    )
+    assert "REDUCTION_POLICY SPECIAL_PROTECTED_FIRST_THEN_ORDINARY_ANALYTIC_RANK" in gic
     assert "[REDUCTION_DIAGNOSTICS]" in gic
     assert any(line.startswith("SELECTED P") for line in gic)
     assert any(
@@ -953,8 +938,7 @@ def test_gicforge_build_uses_built_fragments_for_relative_coordinates(tmp_path):
         for line in primitive_lines
     )
     assert any(
-        "FAMILY=FRAG_CENTER_ATOM_DISTANCE CLASS=SPECIAL_PROTECTED FUNCTION=FCA_DIST"
-        in line
+        "FAMILY=FRAG_CENTER_ATOM_DISTANCE CLASS=SPECIAL_PROTECTED FUNCTION=FCA_DIST" in line
         for line in primitive_lines
     )
     assert any(
@@ -1243,9 +1227,7 @@ def test_gicforge_b_matrix_includes_fragment_coordinate_rows(tmp_path):
     assert "DERIVATIVE_MODE ANALYTIC" in lines
     assert "ROW_COUNT 12" in lines
     assert "COLUMN_COUNT 18" in lines
-    center_distance_label = matrix.coordinate_labels[
-        matrix.coordinate_names.index("FCDi0001")
-    ]
+    center_distance_label = matrix.coordinate_labels[matrix.coordinate_names.index("FCDi0001")]
     assert any(
         line.startswith(f"{center_distance_label} NAME=FCDi0001 IRREP=UNASSIGNED VALUES=")
         for line in lines
@@ -1644,17 +1626,15 @@ def test_gicforge_polyhedral_irrep_characters_use_operation_matrices():
     )
 
     assert tuple(irreps) == ("A1", "A2", "E", "T1", "T2")
-    assert Counter(round(value) for value in irreps["E"]) == Counter(
-        {2: 4, -1: 8, 0: 12}
-    )
-    assert Counter(round(value) for value in irreps["T2"]) == Counter(
-        {3: 1, 0: 8, -1: 9, 1: 6}
-    )
+    assert Counter(round(value) for value in irreps["E"]) == Counter({2: 4, -1: 8, 0: 12})
+    assert Counter(round(value) for value in irreps["T2"]) == Counter({3: 1, 0: 8, -1: 9, 1: 6})
 
 
 def test_gicforge_octahedral_irrep_characters_use_operation_matrices():
     matrices = _octahedral_operation_matrices()
-    labels = tuple("E" if np.allclose(matrix, np.eye(3)) else f"Oh{idx}" for idx, matrix in enumerate(matrices))
+    labels = tuple(
+        "E" if np.allclose(matrix, np.eye(3)) else f"Oh{idx}" for idx, matrix in enumerate(matrices)
+    )
     irreps = dict(
         irrep_characters_for_operations(
             labels,
@@ -1863,13 +1843,11 @@ def test_gicforge_point_group_projector_symmetrizes_ring_puckering_components():
     assert total_symmetric_gic_names(symmetrized) == ("ARPck001", "ARPck002")
     assert any(line.startswith("ARPck001(Inactive)") for line in gaussian_lines)
     assert any(
-        line == "QPck0001 = SQRT(ARPck001*ARPck001+ARPck002*ARPck002)"
-        for line in gaussian_lines
+        line == "QPck0001 = SQRT(ARPck001*ARPck001+ARPck002*ARPck002)" for line in gaussian_lines
     )
     assert any(line == "PhiP0001 = ATAN2(ARPck002,ARPck001)" for line in gaussian_lines)
     assert any(
-        line == "QPck0002 = SQRT(BRPck001*BRPck001+BRPck002*BRPck002)"
-        for line in gaussian_lines
+        line == "QPck0002 = SQRT(BRPck001*BRPck001+BRPck002*BRPck002)" for line in gaussian_lines
     )
     assert any(line == "PhiP0002 = ATAN2(BRPck002,BRPck001)" for line in gaussian_lines)
 
@@ -2118,9 +2096,7 @@ def test_gicforge_ferrocene_uses_metal_ring_center_coordinates(tmp_path):
         for primitive in definition.primitives
         if primitive.family == "CENTER_ATOM_DISTANCE"
     )
-    center_atom_gics = tuple(
-        gic for gic in definition.gics if gic.family == "CENTER_ATOM_DISTANCE"
-    )
+    center_atom_gics = tuple(gic for gic in definition.gics if gic.family == "CENTER_ATOM_DISTANCE")
 
     assert definition.point_group == "D5h"
     assert any(line == "POINT_GROUP D5h" for line in symmetry_section)
@@ -2154,9 +2130,7 @@ def test_gicforge_staggered_ferrocene_d5d_projector_closes_b_rank(tmp_path):
     symmetry_section = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "SYMMETRY")
     rows = np.asarray(matrix.rows, dtype=float)
     ring_centers = tuple(center for center in centers.centers if center.kind == "RING_CENTER")
-    center_atom_gics = tuple(
-        gic for gic in definition.gics if gic.family == "CENTER_ATOM_DISTANCE"
-    )
+    center_atom_gics = tuple(gic for gic in definition.gics if gic.family == "CENTER_ATOM_DISTANCE")
 
     assert definition.point_group == "D5d"
     assert any(line == "POINT_GROUP D5d" for line in symmetry_section)
@@ -2273,9 +2247,7 @@ def test_gicforge_point_group_projector_handles_dnd_even_group():
 
     assert symmetrized.symmetry_diagnostics is not None
     assert symmetrized.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
-    assert Counter(gic.irrep for gic in symmetrized.gics) == Counter(
-        {"A1": 1, "B2": 1, "E": 2}
-    )
+    assert Counter(gic.irrep for gic in symmetrized.gics) == Counter({"A1": 1, "B2": 1, "E": 2})
     assert total_symmetric_gic_names(symmetrized) == ("A1Str001",)
 
 
@@ -2395,9 +2367,7 @@ def test_gicforge_projector_symmetrizes_special_fragment_center_atom_coordinates
     assert symmetrized.symmetry_diagnostics.method == "POINT_GROUP_PROJECTOR"
     assert [gic.name for gic in symmetrized.gics] == ["AFCAt001", "BFCAt001"]
     assert [gic.irrep for gic in symmetrized.gics] == ["A", "B"]
-    assert symmetrized.symmetry_diagnostics.groups[0].block == (
-        "SPECIAL_FRAGMENT_CENTER_ATOM"
-    )
+    assert symmetrized.symmetry_diagnostics.groups[0].block == ("SPECIAL_FRAGMENT_CENTER_ATOM")
     assert total_symmetric_gic_names(symmetrized) == ("AFCAt001",)
 
 

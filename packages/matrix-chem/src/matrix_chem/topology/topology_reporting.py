@@ -24,31 +24,123 @@ except Exception:  # pragma: no cover - fallback when `survibfit` is not top-lev
 # ============================================================
 
 _PERIODIC_TABLE = {
-    1: "H",   2: "He",
-    3: "Li",  4: "Be",  5: "B",   6: "C",   7: "N",   8: "O",
-    9: "F",  10: "Ne",
-    11: "Na", 12: "Mg", 13: "Al", 14: "Si", 15: "P",  16: "S",
-    17: "Cl", 18: "Ar",
-    19: "K",  20: "Ca", 21: "Sc", 22: "Ti", 23: "V",  24: "Cr",
-    25: "Mn", 26: "Fe", 27: "Co", 28: "Ni", 29: "Cu", 30: "Zn",
-    31: "Ga", 32: "Ge", 33: "As", 34: "Se", 35: "Br", 36: "Kr",
-    37: "Rb", 38: "Sr", 39: "Y",  40: "Zr", 41: "Nb", 42: "Mo",
-    43: "Tc", 44: "Ru", 45: "Rh", 46: "Pd", 47: "Ag", 48: "Cd",
-    49: "In", 50: "Sn", 51: "Sb", 52: "Te", 53: "I",  54: "Xe",
-    55: "Cs", 56: "Ba",
-    57: "La", 58: "Ce", 59: "Pr", 60: "Nd", 61: "Pm", 62: "Sm",
-    63: "Eu", 64: "Gd", 65: "Tb", 66: "Dy", 67: "Ho", 68: "Er",
-    69: "Tm", 70: "Yb", 71: "Lu",
-    72: "Hf", 73: "Ta", 74: "W",  75: "Re", 76: "Os", 77: "Ir",
-    78: "Pt", 79: "Au", 80: "Hg",
-    81: "Tl", 82: "Pb", 83: "Bi", 84: "Po", 85: "At", 86: "Rn",
-    87: "Fr", 88: "Ra",
-    89: "Ac", 90: "Th", 91: "Pa", 92: "U",  93: "Np", 94: "Pu",
-    95: "Am", 96: "Cm", 97: "Bk", 98: "Cf", 99: "Es", 100: "Fm",
-    101: "Md", 102: "No", 103: "Lr",
-    104: "Rf", 105: "Db", 106: "Sg", 107: "Bh", 108: "Hs",
-    109: "Mt", 110: "Ds", 111: "Rg", 112: "Cn",
-    113: "Nh", 114: "Fl", 115: "Mc", 116: "Lv", 117: "Ts",
+    1: "H",
+    2: "He",
+    3: "Li",
+    4: "Be",
+    5: "B",
+    6: "C",
+    7: "N",
+    8: "O",
+    9: "F",
+    10: "Ne",
+    11: "Na",
+    12: "Mg",
+    13: "Al",
+    14: "Si",
+    15: "P",
+    16: "S",
+    17: "Cl",
+    18: "Ar",
+    19: "K",
+    20: "Ca",
+    21: "Sc",
+    22: "Ti",
+    23: "V",
+    24: "Cr",
+    25: "Mn",
+    26: "Fe",
+    27: "Co",
+    28: "Ni",
+    29: "Cu",
+    30: "Zn",
+    31: "Ga",
+    32: "Ge",
+    33: "As",
+    34: "Se",
+    35: "Br",
+    36: "Kr",
+    37: "Rb",
+    38: "Sr",
+    39: "Y",
+    40: "Zr",
+    41: "Nb",
+    42: "Mo",
+    43: "Tc",
+    44: "Ru",
+    45: "Rh",
+    46: "Pd",
+    47: "Ag",
+    48: "Cd",
+    49: "In",
+    50: "Sn",
+    51: "Sb",
+    52: "Te",
+    53: "I",
+    54: "Xe",
+    55: "Cs",
+    56: "Ba",
+    57: "La",
+    58: "Ce",
+    59: "Pr",
+    60: "Nd",
+    61: "Pm",
+    62: "Sm",
+    63: "Eu",
+    64: "Gd",
+    65: "Tb",
+    66: "Dy",
+    67: "Ho",
+    68: "Er",
+    69: "Tm",
+    70: "Yb",
+    71: "Lu",
+    72: "Hf",
+    73: "Ta",
+    74: "W",
+    75: "Re",
+    76: "Os",
+    77: "Ir",
+    78: "Pt",
+    79: "Au",
+    80: "Hg",
+    81: "Tl",
+    82: "Pb",
+    83: "Bi",
+    84: "Po",
+    85: "At",
+    86: "Rn",
+    87: "Fr",
+    88: "Ra",
+    89: "Ac",
+    90: "Th",
+    91: "Pa",
+    92: "U",
+    93: "Np",
+    94: "Pu",
+    95: "Am",
+    96: "Cm",
+    97: "Bk",
+    98: "Cf",
+    99: "Es",
+    100: "Fm",
+    101: "Md",
+    102: "No",
+    103: "Lr",
+    104: "Rf",
+    105: "Db",
+    106: "Sg",
+    107: "Bh",
+    108: "Hs",
+    109: "Mt",
+    110: "Ds",
+    111: "Rg",
+    112: "Cn",
+    113: "Nh",
+    114: "Fl",
+    115: "Mc",
+    116: "Lv",
+    117: "Ts",
     118: "Og",
 }
 
@@ -75,13 +167,13 @@ def _uf_union(parent, a, b):
 def _primitive_label(p):
     if p.kind == "bond":
         i, j = p.atoms
-        return f"({i+1}-{j+1})"
+        return f"({i + 1}-{j + 1})"
     if p.kind == "angle":
         i, j, k = p.atoms
-        return f"({i+1}-{j+1}-{k+1})"
+        return f"({i + 1}-{j + 1}-{k + 1})"
     if p.kind == "dihedral":
         i, j, k, l = p.atoms
-        return f"({i+1}-{j+1}-{k+1}-{l+1})"
+        return f"({i + 1}-{j + 1}-{k + 1}-{l + 1})"
     return "(" + ",".join(str(a + 1) for a in p.atoms) + ")"
 
 
@@ -111,6 +203,7 @@ def _symmetry_summary(
     def _mass_weights(Zvals):
         try:
             from matrix_chem.average_atomic_masses import atomic_mass
+
             return np.array([atomic_mass(int(z)) for z in Zvals], dtype=float)
         except Exception:
             return np.array(Zvals, dtype=float)
@@ -192,6 +285,7 @@ def _symmetry_summary(
 # Topology reporting
 # ============================================================
 
+
 def print_topology_report(
     cg,
     dg,
@@ -234,7 +328,7 @@ def print_topology_report(
         fh.write("\nBOND ORDERS (bonded pairs, heavy atoms only)\n")
         fh.write("------------------------------------------\n")
 
-        for (i, j) in dg.bonds:
+        for i, j in dg.bonds:
             if Z[i] <= 1 or Z[j] <= 1:
                 continue
 
@@ -246,10 +340,7 @@ def print_topology_report(
             bo = synthons.bond_order(i, j)
 
             fh.write(
-                f"({i+1:2d},{j+1:2d})  "
-                f"{zi:>2s}–{zj:<2s}   "
-                f"r = {rij:6.3f} Å   "
-                f"BO = {bo:6.3f}\n"
+                f"({i + 1:2d},{j + 1:2d})  {zi:>2s}–{zj:<2s}   r = {rij:6.3f} Å   BO = {bo:6.3f}\n"
             )
 
         # ========================================================
@@ -269,7 +360,7 @@ def print_topology_report(
             edom = synthons._electron_domains(i)
             cn_strain = int(round(edom))
 
-            fh.write(f"\nAtom {i+1:2d}  {zi}  (Z={Z[i]})\n")
+            fh.write(f"\nAtom {i + 1:2d}  {zi}  (Z={Z[i]})\n")
             fh.write(f"  Zeff              = {synthons.Zeff(i):8.3f}\n")
             fh.write(f"  CNA               = {cna:8.3f}\n")
             fh.write(f"  Electron domains  = {edom:8.3f}\n")
@@ -305,17 +396,14 @@ def print_topology_report(
             fh.write("-----------\n")
 
             if arom.aromatic_atoms:
-                fh.write(
-                    "Aromatic atoms: "
-                    f"{sorted([i+1 for i in arom.aromatic_atoms])}\n"
-                )
+                fh.write(f"Aromatic atoms: {sorted([i + 1 for i in arom.aromatic_atoms])}\n")
             else:
                 fh.write("Aromatic atoms: none\n")
 
             if arom.aromatic_bonds:
                 fh.write(
                     "Aromatic bonds: "
-                    f"{sorted([(i+1, j+1) for (i, j) in arom.aromatic_bonds])}\n"
+                    f"{sorted([(i + 1, j + 1) for (i, j) in arom.aromatic_bonds])}\n"
                 )
             else:
                 fh.write("Aromatic bonds: none\n")
@@ -348,9 +436,7 @@ def print_topology_report(
             fh.write("---------------\n")
             fh.write(f"Point group: {sym['point_group']}\n")
 
-            atom_classes = [
-                [i + 1 for i in cls] for cls in sym["atom_classes"] if len(cls) > 1
-            ]
+            atom_classes = [[i + 1 for i in cls] for cls in sym["atom_classes"] if len(cls) > 1]
             if atom_classes:
                 fh.write("Equivalent atom classes (1-based):\n")
                 for icls, cls in enumerate(atom_classes, start=1):

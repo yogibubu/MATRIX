@@ -190,7 +190,9 @@ def _run_xyzin_gf_report_from_hessian_input(
         charges = None
         labels: list[str] = []
         if subtract_electrostatic:
-            charges, charge_source = synthon_charges_from_xyzin(xyzin, len(hessian_input.atomic_numbers))
+            charges, charge_source = synthon_charges_from_xyzin(
+                xyzin, len(hessian_input.atomic_numbers)
+            )
             labels.append(f"ELECTROSTATIC({charge_source})")
         if subtract_uff_vdw:
             labels.append("UFF_VDW")
@@ -205,7 +207,9 @@ def _run_xyzin_gf_report_from_hessian_input(
         )
         correction_label = "+".join(labels) + f"; 1-4 scale={float(nonbonded_14_scale):g}"
     names = tuple(gic.name for gic in definition.gics)
-    labels = tuple(_gic_display_label(gic.identifier, gic.gaussian_expression) for gic in definition.gics)
+    labels = tuple(
+        _gic_display_label(gic.identifier, gic.gaussian_expression) for gic in definition.gics
+    )
     scaling = pulay_scaling_factors(
         len(definition.gics),
         labels=labels,
@@ -290,7 +294,9 @@ def format_gf_report(
         lines.append(f"  GIC{idx:03d}: {name:12s} irrep={irrep:6s} {label}")
 
     lines.extend(["", "PED (%) rows=GIC cols=modes:"])
-    header = "          " + " ".join(f"M{idx:02d}" for idx in range(1, len(result.frequencies_cm) + 1))
+    header = "          " + " ".join(
+        f"M{idx:02d}" for idx in range(1, len(result.frequencies_cm) + 1)
+    )
     lines.append(header)
     for idx, row in enumerate(result.ped.values, start=1):
         values = " ".join(f"{value:7.2f}" for value in row)
@@ -307,15 +313,28 @@ def gf_csv_tables(report: GFReport) -> dict[str, str]:
 
     label_rows = [["gic", "name", "irrep", "label"]]
     for idx, label in enumerate(report.result.gic_labels, start=1):
-        name = report.result.gic_names[idx - 1] if idx <= len(report.result.gic_names) else f"GIC{idx:03d}"
+        name = (
+            report.result.gic_names[idx - 1]
+            if idx <= len(report.result.gic_names)
+            else f"GIC{idx:03d}"
+        )
         irrep = report.result.gic_irreps[idx - 1] if idx <= len(report.result.gic_irreps) else "UNK"
         label_rows.append([f"GIC{idx:03d}", name, irrep, label])
 
     ped_rows = [
-        ["gic", "name", "irrep", *[f"mode_{idx}" for idx in range(1, len(report.result.frequencies_cm) + 1)]]
+        [
+            "gic",
+            "name",
+            "irrep",
+            *[f"mode_{idx}" for idx in range(1, len(report.result.frequencies_cm) + 1)],
+        ]
     ]
     for idx, row in enumerate(report.result.ped.values, start=1):
-        name = report.result.gic_names[idx - 1] if idx <= len(report.result.gic_names) else f"GIC{idx:03d}"
+        name = (
+            report.result.gic_names[idx - 1]
+            if idx <= len(report.result.gic_names)
+            else f"GIC{idx:03d}"
+        )
         irrep = report.result.gic_irreps[idx - 1] if idx <= len(report.result.gic_irreps) else "UNK"
         ped_rows.append([f"GIC{idx:03d}", name, irrep, *[f"{value:.10g}" for value in row]])
 
@@ -323,8 +342,12 @@ def gf_csv_tables(report: GFReport) -> dict[str, str]:
         "frequencies.csv": _csv_text(freq_rows),
         "gic_labels.csv": _csv_text(label_rows),
         "ped.csv": _csv_text(ped_rows),
-        "normal_modes.csv": _csv_text(_gic_mode_table(report.result.modes_internal, "mode", report.result)),
-        "force_constants.csv": _csv_text(_square_gic_table(report.result.force_constants, report.result)),
+        "normal_modes.csv": _csv_text(
+            _gic_mode_table(report.result.modes_internal, "mode", report.result)
+        ),
+        "force_constants.csv": _csv_text(
+            _square_gic_table(report.result.force_constants, report.result)
+        ),
         "g_matrix.csv": _csv_text(_square_gic_table(report.result.g_matrix, report.result)),
     }
 
@@ -385,7 +408,9 @@ def gf_scaling_preview_from_xyzin(
     xyzin = Path(xyzin_path)
     definition = read_gic_definition_from_xyzin(xyzin)
     names = tuple(gic.name for gic in definition.gics)
-    labels = tuple(_gic_display_label(gic.identifier, gic.gaussian_expression) for gic in definition.gics)
+    labels = tuple(
+        _gic_display_label(gic.identifier, gic.gaussian_expression) for gic in definition.gics
+    )
     return pulay_scaling_preview(
         len(definition.gics),
         labels=labels,
@@ -471,7 +496,9 @@ def pulay_scaling_preview(
         )
         for index in range(n_gics)
     )
-    return GFScalingPreview(None if xyzin_path is None else Path(xyzin_path), assignments, tuple(rule_previews))
+    return GFScalingPreview(
+        None if xyzin_path is None else Path(xyzin_path), assignments, tuple(rule_previews)
+    )
 
 
 def format_gf_scaling_preview(preview: GFScalingPreview) -> str:
@@ -589,7 +616,9 @@ def _parse_scaling_class_record(record: str) -> GFScalingClass:
     if "=" in factor_text:
         _key, factor_text = factor_text.split("=", 1)
     patterns = tuple(pattern.strip() for pattern in patterns_text.split("|") if pattern.strip())
-    scaling_class = GFScalingClass(name=name.strip(), factor=float(factor_text.strip()), patterns=patterns)
+    scaling_class = GFScalingClass(
+        name=name.strip(), factor=float(factor_text.strip()), patterns=patterns
+    )
     scaling_class.validate()
     return scaling_class
 
@@ -642,10 +671,7 @@ def _resolve_scaling_class(
     if not unique:
         raise ValueError(f"Pulay scaling class {scaling_class.name!r} did not match any GIC")
     padded_names = _padded_names(names, len(labels))
-    families = {
-        _gic_coordinate_family(padded_names[index], labels[index])
-        for index in unique
-    }
+    families = {_gic_coordinate_family(padded_names[index], labels[index]) for index in unique}
     known_families = {family for family in families if family}
     if len(known_families) > 1:
         raise ValueError(
@@ -701,7 +727,12 @@ def _gic_coordinate_family(name: str, label: str) -> str:
         return "bend"
     if re.search(r"\bd\s*\(", text) or "tors" in text or "dih" in text or "dihedral(" in text:
         return "torsion"
-    if re.search(r"\bu\s*\(", text) or "oop" in text or "improper" in text or "out_of_plane(" in text:
+    if (
+        re.search(r"\bu\s*\(", text)
+        or "oop" in text
+        or "improper" in text
+        or "out_of_plane(" in text
+    ):
         return "oop"
     if re.search(r"\bl\s*\(", text) or "linear_bend" in text or "lin" in text:
         return "linear"
@@ -714,10 +745,7 @@ def _common_family(
     labels: tuple[str, ...],
     names: tuple[str, ...],
 ) -> str:
-    families = {
-        _gic_coordinate_family(names[index], labels[index])
-        for index in indices
-    }
+    families = {_gic_coordinate_family(names[index], labels[index]) for index in indices}
     known = {family for family in families if family}
     if len(known) == 1:
         return next(iter(known))

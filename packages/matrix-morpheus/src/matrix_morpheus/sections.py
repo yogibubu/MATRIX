@@ -85,11 +85,7 @@ def morpheus_section_from_result(
     run_dir = Path(outdir)
     diagnostics = result.diagnostics
     rot_diffs = tuple(row.difference_MHz for row in result.rotational_constants)
-    rotational_mse = (
-        sum(diff * diff for diff in rot_diffs) / len(rot_diffs)
-        if rot_diffs
-        else 0.0
-    )
+    rotational_mse = sum(diff * diff for diff in rot_diffs) / len(rot_diffs) if rot_diffs else 0.0
     rotational_rms = rotational_mse**0.5
     return MorpheusSection(
         status=status,
@@ -149,9 +145,7 @@ def morpheus_section_lines(section: MorpheusSection) -> list[str]:
             "COMPONENTS": ",".join(section.components),
             "RMS_MHZ": _format_float(section.rms_MHz),
             "ROTATIONAL_RMS_MHZ": _format_float(section.rotational_rms_MHz),
-            "ROTATIONAL_MEAN_SQUARE_MHZ2": _format_float(
-                section.rotational_mean_square_MHz2
-            ),
+            "ROTATIONAL_MEAN_SQUARE_MHZ2": _format_float(section.rotational_mean_square_MHz2),
             "ITERATIONS": section.iterations,
             "STATIONARY_POINT": section.stationary_point,
             "CONVERGENCE": section.convergence,

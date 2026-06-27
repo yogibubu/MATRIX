@@ -130,9 +130,7 @@ def dihedral_grad(i, j, k, l, coords):
 
 
 def _cross_matrix(a):
-    return np.array(
-        [[0.0, -a[2], a[1]], [a[2], 0.0, -a[0]], [-a[1], a[0], 0.0]]
-    )
+    return np.array([[0.0, -a[2], a[1]], [a[2], 0.0, -a[0]], [-a[1], a[0], 0.0]])
 
 
 def oop_grad(i, j, k, l, coords):
@@ -205,7 +203,7 @@ def linear_grad(i, j, k, coords, mode=-1):
     Ju = (I - np.outer(u, u)) / rji_n
     Jv = (I - np.outer(v, v)) / rjk_n
 
-    P = (I / wn) - np.outer(w, w) / (wn ** 3)
+    P = (I / wn) - np.outer(w, w) / (wn**3)
     A = -_cross_matrix(axis)
     de1_du = P @ A
 

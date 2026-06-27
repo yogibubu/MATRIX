@@ -55,6 +55,7 @@ def internal_to_cart_grad(gq_or_gs, B, U=None, masses=None, mass_weighted=False)
 
 def cart_to_internal_coords(coords, prims, U=None):
     from .primitives import eval_primitives
+
     s = eval_primitives(prims, coords)
     if U is None:
         return s
@@ -237,7 +238,11 @@ def _ring_index_for_atoms(ringset, atoms):
     for ring in ringset:
         rset = set(ring.atoms)
         if aset.issubset(rset):
-            if best is None or len(rset) < best_len or (len(rset) == best_len and ring.index < best):
+            if (
+                best is None
+                or len(rset) < best_len
+                or (len(rset) == best_len and ring.index < best)
+            ):
                 best = ring.index
                 best_len = len(rset)
     return best
@@ -615,7 +620,11 @@ def valence_angle_u(
 
 
 def _ring_u(prims, coords, ringset, kind, tol=1e-8, fd_step=1e-4):
-    idxs = [i for i, p in enumerate(prims) if p.kind == kind and _ring_index_for_atoms(ringset, p.atoms) is not None]
+    idxs = [
+        i
+        for i, p in enumerate(prims)
+        if p.kind == kind and _ring_index_for_atoms(ringset, p.atoms) is not None
+    ]
     if not idxs:
         return np.zeros((0, 0), dtype=float), []
 
@@ -898,7 +907,7 @@ def dihedral_u(
                         "selected": [int(x) for x in idxs],
                         "reason": "combine",
                     }
-            )
+                )
             continue
 
         if mode == "orbit":
@@ -922,7 +931,11 @@ def dihedral_u(
                 cols.append(col)
                 continue
             ref_sig = primitive_signature(prims[best_idx], atom_class, Z, ringset=ringset)
-            orbit = [idx for idx in idxs if primitive_signature(prims[idx], atom_class, Z, ringset=ringset) == ref_sig]
+            orbit = [
+                idx
+                for idx in idxs
+                if primitive_signature(prims[idx], atom_class, Z, ringset=ringset) == ref_sig
+            ]
             if not orbit:
                 orbit = [best_idx]
             col = np.zeros(len(dihedral_indices), dtype=float)
@@ -983,6 +996,7 @@ def linear_u(prims):
 
 def oop_u(prims, coords, tol=1e-8, fd_step=1e-4, linear_threshold=np.deg2rad(170.0)):
     from .geometry import angle as geom_angle
+
     indices = [i for i, p in enumerate(prims) if p.kind == "out_of_plane"]
     if not indices:
         return np.zeros((0, 0), dtype=float), []
@@ -1177,6 +1191,7 @@ def _build_u_blocks_symmetry(
         raise ValueError("Z array required for symmetry_mode != 'gblock'")
     if ringset is None:
         import warnings
+
         warnings.warn("ringset is None: ring-specific symmetry blocks will be skipped")
 
     atom_class, class_meta, zeff, ringset, quasi = atom_classes(coords, Z, zeff_tol=zeff_tol)
@@ -1237,7 +1252,9 @@ def _build_u_blocks_symmetry(
     # out-of-plane (grouped by signature)
     oop_idx = [i for i, p in enumerate(prims) if p.kind == "out_of_plane"]
     if oop_idx:
-        groups = group_primitives([prims[i] for i in oop_idx], atom_class, Z, ringset=ringset, idx_map=oop_idx)
+        groups = group_primitives(
+            [prims[i] for i in oop_idx], atom_class, Z, ringset=ringset, idx_map=oop_idx
+        )
         for sig, local in groups.items():
             idxs = [oop_idx[i] for i in local]
             U = _orthonormal_basis_sumdiff(len(idxs))
@@ -1339,11 +1356,20 @@ def _build_u_blocks_symmetry(
                         nz.append({"prim_idx": int(idxs[r]), "coeff": float(coeff)})
                 cols.append(nz)
             block_reports.append(
-                {"label": label, "indices": [int(i) for i in idxs], "ncols": int(Ub.shape[1]), "columns": cols}
+                {
+                    "label": label,
+                    "indices": [int(i) for i in idxs],
+                    "ncols": int(Ub.shape[1]),
+                    "columns": cols,
+                }
             )
         pattern_report["blocks"] = block_reports
         write_pattern_report(pattern_report_path, pattern_report)
-        txt_path = pattern_report_path[:-5] + ".txt" if pattern_report_path.endswith(".json") else pattern_report_path + ".txt"
+        txt_path = (
+            pattern_report_path[:-5] + ".txt"
+            if pattern_report_path.endswith(".json")
+            else pattern_report_path + ".txt"
+        )
         write_pattern_report_txt(txt_path, pattern_report)
 
     return blocks
@@ -1388,8 +1414,10 @@ def build_u(
 ):
     """Assemble a full non-redundant U from primitive coordinates."""
     import os
+
     if os.environ.get("ORACLE_GICFORGE_PROFILE") == "1":
         import time
+
         t0 = time.perf_counter()
     nprim = len(prims)
     blocks = build_u_blocks(
@@ -1414,6 +1442,7 @@ def build_u(
     U = U_raw[:, keep]
     if symmetrize_global:
         from .symmetry_global import symmetrize_u
+
         U, symm_info = symmetrize_u(
             U,
             prims,
@@ -1446,6 +1475,7 @@ def build_u(
             symm_info["confidence"] = float(conf)
         if assign_symmetry_labels and pattern_report_path and os.path.exists(pattern_report_path):
             import json
+
             with open(pattern_report_path, "r", encoding="utf-8") as fh:
                 rep = json.load(fh)
             rep["global_symmetry"] = symm_info
@@ -1453,6 +1483,7 @@ def build_u(
                 json.dump(rep, fh, indent=2)
     if os.environ.get("ORACLE_GICFORGE_PROFILE") == "1":
         import time
+
         t1 = time.perf_counter()
         print(f"build_u: {t1 - t0:.6f}s, nprim={nprim}, ncols={U.shape[1]}")
     return U
@@ -1489,6 +1520,7 @@ def _rank_pruned_column_indices(prims, coords, U, column_labels, fd_step=1e-4, t
     max_rank = int(np.linalg.matrix_rank(rows, tol=tol))
     if max_rank < target:
         import warnings
+
         warnings.warn(
             f"non-redundant GIC basis reaches rank {max_rank} instead of vibrational target {target}; "
             "returning the maximal rank-preserving subset"
@@ -1507,7 +1539,9 @@ def _rank_pruned_column_indices(prims, coords, U, column_labels, fd_step=1e-4, t
         "butterfly": 9,
         "hinge": 10,
     }
-    candidates = sorted(range(U.shape[1]), key=lambda col: (priorities.get(column_labels[col], 99), col))
+    candidates = sorted(
+        range(U.shape[1]), key=lambda col: (priorities.get(column_labels[col], 99), col)
+    )
     basis: list[np.ndarray] = []
     keep: list[int] = []
     for col in candidates:
@@ -1536,7 +1570,9 @@ def _vibrational_rank(coords) -> int:
         vec[axis::3] = 1.0
         external.append(vec)
     for axis in np.eye(3):
-        vec = np.array([component for coord in coords for component in np.cross(axis, coord)], dtype=float)
+        vec = np.array(
+            [component for coord in coords for component in np.cross(axis, coord)], dtype=float
+        )
         external.append(vec)
     rank = int(np.linalg.matrix_rank(np.vstack(external), tol=1.0e-10))
     return max(0, 3 * natoms - rank)
@@ -1550,7 +1586,9 @@ def _vibrational_projector_local(coords) -> np.ndarray:
         vec[axis::3] = 1.0
         basis.append(vec)
     for axis in np.eye(3):
-        vec = np.array([component for coord in coords for component in np.cross(axis, coord)], dtype=float)
+        vec = np.array(
+            [component for coord in coords for component in np.cross(axis, coord)], dtype=float
+        )
         basis.append(vec)
     ortho: list[np.ndarray] = []
     for vec in basis:
@@ -1569,22 +1607,22 @@ def _vibrational_projector_local(coords) -> np.ndarray:
 def _primitive_label(p):
     if p.kind == "bond":
         i, j = p.atoms
-        return f"R({i+1:3d},{j+1:3d})"
+        return f"R({i + 1:3d},{j + 1:3d})"
     if p.kind == "angle":
         i, j, k = p.atoms
-        return f"A({i+1:3d},{j+1:3d},{k+1:3d})"
+        return f"A({i + 1:3d},{j + 1:3d},{k + 1:3d})"
     if p.kind == "dihedral":
         i, j, k, l = p.atoms
-        return f"D({i+1:3d},{j+1:3d},{k+1:3d},{l+1:3d})"
+        return f"D({i + 1:3d},{j + 1:3d},{k + 1:3d},{l + 1:3d})"
     if p.kind == "out_of_plane":
         i, j, k, l = p.atoms
-        return f"U({i+1:3d},{j+1:3d},{k+1:3d},{l+1:3d})"
+        return f"U({i + 1:3d},{j + 1:3d},{k + 1:3d},{l + 1:3d})"
     if p.kind == "linear_bend":
         i, j, k = p.atoms
         comp = 1 if p.mode == -1 else 2
-        return f"L{comp}({i+1:3d},{j+1:3d},{k+1:3d})"
+        return f"L{comp}({i + 1:3d},{j + 1:3d},{k + 1:3d})"
     if p.kind.startswith("frag_"):
-        return f"X({','.join(str(a+1) for a in p.atoms)})"
+        return f"X({','.join(str(a + 1) for a in p.atoms)})"
     return f"{p.kind}"
 
 
@@ -1653,6 +1691,7 @@ def build_u_with_names(
     U = U_raw[:, keep]
     if symmetrize_global:
         from .symmetry_global import symmetrize_u
+
         U, symm_info = symmetrize_u(
             U,
             prims,
@@ -1685,6 +1724,7 @@ def build_u_with_names(
             symm_info["confidence"] = float(conf)
         if assign_symmetry_labels and pattern_report_path and os.path.exists(pattern_report_path):
             import json
+
             with open(pattern_report_path, "r", encoding="utf-8") as fh:
                 rep = json.load(fh)
             rep["global_symmetry"] = symm_info

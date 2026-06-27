@@ -9,16 +9,12 @@ from .models import ThermoContribution
 
 def qrot_quantum_linear(Beff_Hz: float, T_K: float, Jmax: int = 200) -> float:
     beta = _h() / (_kB() * T_K)
-    return sum(
-        (2 * J + 1) * exp(-beta * Beff_Hz * J * (J + 1)) for J in range(Jmax + 1)
-    )
+    return sum((2 * J + 1) * exp(-beta * Beff_Hz * J * (J + 1)) for J in range(Jmax + 1))
 
 
 def qrot_quantum_spherical(B_Hz: float, T_K: float, Jmax: int = 200) -> float:
     beta = _h() / (_kB() * T_K)
-    return sum(
-        (2 * J + 1) ** 2 * exp(-beta * B_Hz * J * (J + 1)) for J in range(Jmax + 1)
-    )
+    return sum((2 * J + 1) ** 2 * exp(-beta * B_Hz * J * (J + 1)) for J in range(Jmax + 1))
 
 
 def qrot_quantum_symmetric(
@@ -112,12 +108,7 @@ def rotational_thermo(
         dlnQc, d2lnQc = _dlnq_classical(T_K, kind)
         lnQ = (1.0 - w) * lnQq + w * lnQc
         dlnQ = (1.0 - w) * dlnQq + w * dlnQc + wp * (lnQc - lnQq)
-        d2lnQ = (
-            (1.0 - w) * d2lnQq
-            + w * d2lnQc
-            + 2.0 * wp * (dlnQc - dlnQq)
-            + wpp * (lnQc - lnQq)
-        )
+        d2lnQ = (1.0 - w) * d2lnQq + w * d2lnQc + 2.0 * wp * (dlnQc - dlnQq) + wpp * (lnQc - lnQq)
         regime = "mixed"
 
     R = _R()
@@ -225,12 +216,7 @@ def _lnq_classical(
         return 0.5 * log(pi) + 1.5 * log(T_K / theta) - log(float(sigma))
     thetaA = h * A_Hz / kB
     thetaB = h * Beff_Hz / kB
-    return (
-        0.5 * log(pi)
-        + 1.5 * log(T_K)
-        - log(float(sigma))
-        - 0.5 * log(thetaA * thetaB * thetaB)
-    )
+    return 0.5 * log(pi) + 1.5 * log(T_K) - log(float(sigma)) - 0.5 * log(thetaA * thetaB * thetaB)
 
 
 def _dlnq_classical(T_K: float, kind: str) -> tuple[float, float]:
@@ -246,9 +232,7 @@ def _dlnQ_num(lnQ_func, T_K: float, *, dT: float = 0.05) -> tuple[float, float]:
     lnQ0 = lnQ_func(T_K)
     lnQm = lnQ_func(Tm)
     d1 = (lnQp - lnQm) / (Tp - Tm)
-    d2 = 2.0 * (
-        (lnQp - lnQ0) / (Tp - T_K) - (lnQ0 - lnQm) / (T_K - Tm)
-    ) / (Tp - Tm)
+    d2 = 2.0 * ((lnQp - lnQ0) / (Tp - T_K) - (lnQ0 - lnQm) / (T_K - Tm)) / (Tp - Tm)
     return d1, d2
 
 

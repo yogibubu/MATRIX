@@ -42,7 +42,12 @@ from .contracts import (
     SemiexperimentalFitRequest,
 )
 from .geometry_input import read_geometry_input
-from .kraitchman import KraitchmanComparison, KraitchmanSeedResult, kraitchman_comparison, kraitchman_seed_geometry
+from .kraitchman import (
+    KraitchmanComparison,
+    KraitchmanSeedResult,
+    kraitchman_comparison,
+    kraitchman_seed_geometry,
+)
 from .cartesian_coordinates import CartesianCoordinateModel, cartesian_symmetry_coordinate_model
 
 
@@ -390,7 +395,9 @@ def fit_semiexperimental_geometry(
     if restart is not None:
         coords = _read_semiexp_checkpoint(Path(restart), expected_atoms=len(atoms))
     coords0 = coords.copy()
-    fixed_parameters = _combined_fixed_parameters(request.fixed_parameters, geometry_input.fixed_parameters)
+    fixed_parameters = _combined_fixed_parameters(
+        request.fixed_parameters, geometry_input.fixed_parameters
+    )
     fixed_gic_patterns = _gic_fixed_patterns(fixed_parameters)
     fixed_primitives = _fixed_primitives_from_patterns(fixed_parameters)
     linear_constraints = _linear_primitive_constraints_from_patterns(fixed_parameters)
@@ -438,7 +445,9 @@ def fit_semiexperimental_geometry(
     topology_lock = _topology_lock(atoms, coords)
     reference_gic_signature = _gic_model_signature(labels)
     measurement_model = _build_measurement_model(request, atoms, coords, prims, u_matrix, labels)
-    active_mask = _active_mask(labels, fixed_gic_patterns, request.parameter_classes) & _gicforge_a1_mask(labels)
+    active_mask = _active_mask(
+        labels, fixed_gic_patterns, request.parameter_classes
+    ) & _gicforge_a1_mask(labels)
     initial_transform, _initial_names, _initial_classes = _parameter_class_transform(
         labels, active_mask, request.parameter_classes
     )
@@ -470,8 +479,12 @@ def fit_semiexperimental_geometry(
                 measurement_model,
                 step=step,
             )
-            initial_weighted_jac = (initial_jac_gic @ initial_transform) * np.sqrt(measurement_model.weights)[:, None]
-            auto_pruned_patterns = _weak_parameter_patterns(_initial_names, initial_weighted_jac, prune_condition)
+            initial_weighted_jac = (initial_jac_gic @ initial_transform) * np.sqrt(
+                measurement_model.weights
+            )[:, None]
+            auto_pruned_patterns = _weak_parameter_patterns(
+                _initial_names, initial_weighted_jac, prune_condition
+            )
             if auto_pruned_patterns:
                 active_mask &= _auto_pruned_active_mask(labels, auto_pruned_patterns)
                 initial_transform, _initial_names, _initial_classes = _parameter_class_transform(
@@ -495,7 +508,9 @@ def fit_semiexperimental_geometry(
             # Pruning is an observability refinement; unsupported mock/legacy primitives must not block the fit.
             auto_pruned_patterns = ()
     n_optimized_parameters = initial_transform.shape[1]
-    loop_max_iter = _resolve_max_iterations(max_iter, n_optimized_parameters) if n_optimized_parameters else 0
+    loop_max_iter = (
+        _resolve_max_iterations(max_iter, n_optimized_parameters) if n_optimized_parameters else 0
+    )
 
     current_damping = max(float(damping), 0.0)
     trust_radius = float(max_step) if max_step > 0.0 else 0.0
@@ -560,7 +575,9 @@ def fit_semiexperimental_geometry(
             step=step,
             cartesian_from_q=projector_state.cartesian_from_q,
         )
-        transform, _reduced_names, _class_by_gic = _parameter_class_transform(labels, active_mask, request.parameter_classes)
+        transform, _reduced_names, _class_by_gic = _parameter_class_transform(
+            labels, active_mask, request.parameter_classes
+        )
         transform, _reduced_names = _primitive_constrained_transform(
             coords,
             prims,
@@ -586,13 +603,17 @@ def fit_semiexperimental_geometry(
         if np.sqrt(np.mean(residual * residual)) < tolerance_MHz:
             convergence_reason = "rms_tolerance"
             break
-        jac_weighted_scaled = jac_weighted * reduced_scales[None, :] if reduced_scales.size else jac_weighted
+        jac_weighted_scaled = (
+            jac_weighted * reduced_scales[None, :] if reduced_scales.size else jac_weighted
+        )
         gradient = jac_weighted_scaled.T @ weighted_residual
         gradient_inf_norm = float(np.linalg.norm(gradient, ord=np.inf))
         if float(np.linalg.norm(gradient, ord=np.inf)) < gradient_tolerance:
             convergence_reason = "gradient_tolerance"
             break
-        trust_step = _adaptive_lm_step(jac_weighted_scaled, weighted_residual, current_damping, trust_radius)
+        trust_step = _adaptive_lm_step(
+            jac_weighted_scaled, weighted_residual, current_damping, trust_radius
+        )
         dq_scaled = trust_step.step
         current_damping = trust_step.shift
         dq_reduced = reduced_scales * dq_scaled if reduced_scales.size else dq_scaled
@@ -637,13 +658,19 @@ def fit_semiexperimental_geometry(
             )
             last_b_projector_secant_error = secant_update.relative_error
             try:
-                _validate_locked_topology(atoms, line_search.coords, topology_lock, context="GIC semiexperimental fit")
-                validation_model = _gic_model(line_search.coords, z_numbers, request, gicforge_backend)
+                _validate_locked_topology(
+                    atoms, line_search.coords, topology_lock, context="GIC semiexperimental fit"
+                )
+                validation_model = _gic_model(
+                    line_search.coords, z_numbers, request, gicforge_backend
+                )
                 _validate_gic_model_signature(validation_model[2], reference_gic_signature)
             except Exception:
                 rejected_steps += 1
                 stalled_rejections += 1
-                current_damping, trust_radius = _rejected_trust_update(current_damping, trust_radius, max_step)
+                current_damping, trust_radius = _rejected_trust_update(
+                    current_damping, trust_radius, max_step
+                )
                 iteration_traces.append(
                     _iteration_trace_row(
                         iteration,
@@ -724,7 +751,10 @@ def fit_semiexperimental_geometry(
                     linear_solver=trust_step.solver,
                 )
             )
-            if previous_objective is not None and abs(previous_objective - line_search.objective) < tolerance_MHz * tolerance_MHz:
+            if (
+                previous_objective is not None
+                and abs(previous_objective - line_search.objective) < tolerance_MHz * tolerance_MHz
+            ):
                 convergence_reason = "objective_tolerance"
                 break
             previous_objective = line_search.objective
@@ -736,7 +766,9 @@ def fit_semiexperimental_geometry(
                 model_age = 0
             else:
                 if not secant_update.accepted or secant_update.cartesian_from_q is None:
-                    projector_state = _gic_projector_state(prims, u_matrix, coords, line_search.q_values)
+                    projector_state = _gic_projector_state(
+                        prims, u_matrix, coords, line_search.q_values
+                    )
                     b_projector_analytic_refreshes += 1
                     b_projector_secant_rejections += 1
                 else:
@@ -768,7 +800,9 @@ def fit_semiexperimental_geometry(
         else:
             rejected_steps += 1
             stalled_rejections += 1
-            current_damping, trust_radius = _rejected_trust_update(current_damping, trust_radius, max_step)
+            current_damping, trust_radius = _rejected_trust_update(
+                current_damping, trust_radius, max_step
+            )
             iteration_traces.append(
                 _iteration_trace_row(
                     iteration,
@@ -806,17 +840,23 @@ def fit_semiexperimental_geometry(
                 b_projector_analytic_refreshes += 1
                 model_age = 0
                 stalled_rejections = 0
-            if _trust_region_is_stalled(current_damping, trust_radius, stalled_rejections, max_step):
+            if _trust_region_is_stalled(
+                current_damping, trust_radius, stalled_rejections, max_step
+            ):
                 convergence_reason = (
                     "step_tolerance"
-                    if _objective_has_stabilized(previous_objective, current_objective, tolerance_MHz)
+                    if _objective_has_stabilized(
+                        previous_objective, current_objective, tolerance_MHz
+                    )
                     else "line_search_stalled"
                 )
                 break
     else:
         iteration = loop_max_iter
 
-    _validate_locked_topology(atoms, coords, topology_lock, context="final GIC semiexperimental fit")
+    _validate_locked_topology(
+        atoms, coords, topology_lock, context="final GIC semiexperimental fit"
+    )
     try:
         final_model = _gic_model(coords, z_numbers, request, gicforge_backend)
         _validate_gic_model_signature(final_model[2], reference_gic_signature)
@@ -840,7 +880,9 @@ def fit_semiexperimental_geometry(
     jac_gic = _jacobian_constants_wrt_gics(
         atoms, coords, request, prims, u_matrix, active_mask, labels, measurement_model, step=step
     )
-    transform, reduced_names, class_by_gic = _parameter_class_transform(labels, active_mask, request.parameter_classes)
+    transform, reduced_names, class_by_gic = _parameter_class_transform(
+        labels, active_mask, request.parameter_classes
+    )
     transform, reduced_names = _primitive_constrained_transform(
         coords,
         prims,
@@ -908,7 +950,14 @@ def fit_semiexperimental_geometry(
         robust_downweighted_isotopologues=robust_downweighted_isotopologues,
     )
     class_by_gic = _mark_auto_pruned_classes(labels, class_by_gic, auto_pruned_patterns)
-    parameters = _parameters(labels, q_final, active_mask, transform=transform, covariance=covariance, class_by_gic=class_by_gic)
+    parameters = _parameters(
+        labels,
+        q_final,
+        active_mask,
+        transform=transform,
+        covariance=covariance,
+        class_by_gic=class_by_gic,
+    )
     residual_rows = _residual_rows(measurement_model, calc, obs)
     rotational_constant_rows = _rotational_constant_rows(atoms, coords, request.observations)
     geometry_parameters = _geometry_parameters(
@@ -924,18 +973,22 @@ def fit_semiexperimental_geometry(
     kraitchman_rows = kraitchman_comparison(atoms, coords, request.observations)
     kraitchman_seed = kraitchman_seed_geometry(atoms, coords, request.observations, kraitchman_rows)
     rms = float(np.sqrt(np.mean(residual * residual))) if residual.size else 0.0
-    leave_one_out_rows = _leave_one_out_refits(
-        request,
-        atoms,
-        coords,
-        max_iter=max_iter,
-        step=step,
-        damping=damping,
-        max_step=max_step,
-        prune_condition=prune_condition,
-        tolerance_MHz=tolerance_MHz,
-        gradient_tolerance=gradient_tolerance,
-    ) if request.leave_one_out else ()
+    leave_one_out_rows = (
+        _leave_one_out_refits(
+            request,
+            atoms,
+            coords,
+            max_iter=max_iter,
+            step=step,
+            damping=damping,
+            max_step=max_step,
+            prune_condition=prune_condition,
+            tolerance_MHz=tolerance_MHz,
+            gradient_tolerance=gradient_tolerance,
+        )
+        if request.leave_one_out
+        else ()
+    )
     _write_semiexp_checkpoint(
         checkpoint_file,
         atoms,
@@ -1033,7 +1086,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
         coords = _read_semiexp_checkpoint(Path(restart), expected_atoms=len(atoms))
     coords, _sycart_workdir = _gicforge_sycart_coordinates(tuple(atoms), coords, outdir)
     coords0 = coords.copy()
-    fixed_parameters = _combined_fixed_parameters(request.fixed_parameters, geometry_input.fixed_parameters)
+    fixed_parameters = _combined_fixed_parameters(
+        request.fixed_parameters, geometry_input.fixed_parameters
+    )
     fixed_mode_patterns = _gic_fixed_patterns(fixed_parameters)
     fixed_primitives = _fixed_primitives_from_patterns(fixed_parameters)
     linear_constraints = _linear_primitive_constraints_from_patterns(fixed_parameters)
@@ -1043,7 +1098,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
         expression_constraints
         and any(_gic_expression_uses_gic_names(item.expression) for item in expression_constraints)
     ) or any(_gic_expression_uses_gic_names(item.expression) for item in expression_definitions):
-        raise ScientificValidationError("GIC### expression constraints require coordinate_model='gic'")
+        raise ScientificValidationError(
+            "GIC### expression constraints require coordinate_model='gic'"
+        )
     expression_targets = _gic_expression_constraint_targets(
         expression_constraints,
         coords,
@@ -1074,7 +1131,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
         fixed_primitives,
         _hydrogen_fixed_primitives(atoms, constraint_prims, fixed_parameters, coords=coords),
     )
-    fixed_primitives = _symmetry_expanded_fixed_primitives(atoms, coords, constraint_prims, fixed_primitives)
+    fixed_primitives = _symmetry_expanded_fixed_primitives(
+        atoms, coords, constraint_prims, fixed_primitives
+    )
     fixed_primitive_targets = _fixed_primitive_targets(fixed_primitives, coords)
 
     measurement_model = _build_measurement_model_cartesian_basis(
@@ -1086,7 +1145,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
     )
     active_mask = _active_mask(labels, fixed_mode_patterns, request.parameter_classes)
     active_mask &= mode_model.active_totally_symmetric_mask
-    transform, reduced_names, class_by_mode = _parameter_class_transform(labels, active_mask, request.parameter_classes)
+    transform, reduced_names, class_by_mode = _parameter_class_transform(
+        labels, active_mask, request.parameter_classes
+    )
     transform, reduced_names = _primitive_constrained_cartesian_transform(
         coords,
         mode_model.cartesian_from_q,
@@ -1109,7 +1170,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
             measurement_model,
             mode_model.cartesian_from_q,
         )
-        weighted = (_active_coordinate_jacobian(jac_modes, active_mask) @ transform) * np.sqrt(measurement_model.weights)[:, None]
+        weighted = (_active_coordinate_jacobian(jac_modes, active_mask) @ transform) * np.sqrt(
+            measurement_model.weights
+        )[:, None]
         auto_pruned_patterns = _weak_parameter_patterns(reduced_names, weighted, prune_condition)
         if auto_pruned_patterns:
             active_mask &= _auto_pruned_active_mask(labels, auto_pruned_patterns)
@@ -1130,7 +1193,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
             )
 
     n_optimized_parameters = transform.shape[1]
-    loop_max_iter = _resolve_max_iterations(max_iter, n_optimized_parameters) if n_optimized_parameters else 0
+    loop_max_iter = (
+        _resolve_max_iterations(max_iter, n_optimized_parameters) if n_optimized_parameters else 0
+    )
     current_damping = max(float(damping), 0.0)
     trust_radius = float(max_step) if max_step > 0.0 else 0.0
     accepted_steps = 0
@@ -1146,7 +1211,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
     robust_sqrt = np.ones_like(measurement_model.observed, dtype=float)
     checkpoint_file = _checkpoint_path(outdir, checkpoint)
     previous_objective = None
-    convergence_reason = "max_iter" if loop_max_iter else "no_active_totally_symmetric_cartesian_coordinates"
+    convergence_reason = (
+        "max_iter" if loop_max_iter else "no_active_totally_symmetric_cartesian_coordinates"
+    )
     iteration_traces: list[SemiexperimentalIterationTrace] = []
     iteration = 0
 
@@ -1183,7 +1250,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
             measurement_model,
             mode_model.cartesian_from_q,
         )
-        transform, reduced_names, class_by_mode = _parameter_class_transform(labels, active_mask, request.parameter_classes)
+        transform, reduced_names, class_by_mode = _parameter_class_transform(
+            labels, active_mask, request.parameter_classes
+        )
         transform, reduced_names = _primitive_constrained_cartesian_transform(
             coords,
             mode_model.cartesian_from_q,
@@ -1206,13 +1275,17 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
         if np.sqrt(np.mean(residual * residual)) < tolerance_MHz:
             convergence_reason = "rms_tolerance"
             break
-        jac_weighted_scaled = jac_weighted * reduced_scales[None, :] if reduced_scales.size else jac_weighted
+        jac_weighted_scaled = (
+            jac_weighted * reduced_scales[None, :] if reduced_scales.size else jac_weighted
+        )
         gradient = jac_weighted_scaled.T @ weighted_residual
         gradient_inf_norm = float(np.linalg.norm(gradient, ord=np.inf))
         if gradient_inf_norm < gradient_tolerance:
             convergence_reason = "gradient_tolerance"
             break
-        trust_step = _adaptive_lm_step(jac_weighted_scaled, weighted_residual, current_damping, trust_radius)
+        trust_step = _adaptive_lm_step(
+            jac_weighted_scaled, weighted_residual, current_damping, trust_radius
+        )
         dq_scaled = trust_step.step
         current_damping = trust_step.shift
         dq_reduced = reduced_scales * dq_scaled if reduced_scales.size else dq_scaled
@@ -1253,7 +1326,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
             except Exception:
                 rejected_steps += 1
                 stalled_rejections += 1
-                current_damping, trust_radius = _rejected_trust_update(current_damping, trust_radius, max_step)
+                current_damping, trust_radius = _rejected_trust_update(
+                    current_damping, trust_radius, max_step
+                )
                 iteration_traces.append(
                     _iteration_trace_row(
                         iteration,
@@ -1283,7 +1358,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
                         linear_solver=trust_step.solver,
                     )
                 )
-                if _trust_region_is_stalled(current_damping, trust_radius, stalled_rejections, max_step):
+                if _trust_region_is_stalled(
+                    current_damping, trust_radius, stalled_rejections, max_step
+                ):
                     convergence_reason = "line_search_stalled"
                     break
                 continue
@@ -1327,7 +1404,10 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
                     linear_solver=trust_step.solver,
                 )
             )
-            if previous_objective is not None and abs(previous_objective - line_search.objective) < tolerance_MHz * tolerance_MHz:
+            if (
+                previous_objective is not None
+                and abs(previous_objective - line_search.objective) < tolerance_MHz * tolerance_MHz
+            ):
                 convergence_reason = "objective_tolerance"
                 break
             previous_objective = line_search.objective
@@ -1351,7 +1431,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
         else:
             rejected_steps += 1
             stalled_rejections += 1
-            current_damping, trust_radius = _rejected_trust_update(current_damping, trust_radius, max_step)
+            current_damping, trust_radius = _rejected_trust_update(
+                current_damping, trust_radius, max_step
+            )
             iteration_traces.append(
                 _iteration_trace_row(
                     iteration,
@@ -1381,17 +1463,23 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
                     linear_solver=trust_step.solver,
                 )
             )
-            if _trust_region_is_stalled(current_damping, trust_radius, stalled_rejections, max_step):
+            if _trust_region_is_stalled(
+                current_damping, trust_radius, stalled_rejections, max_step
+            ):
                 convergence_reason = (
                     "step_tolerance"
-                    if _objective_has_stabilized(previous_objective, current_objective, tolerance_MHz)
+                    if _objective_has_stabilized(
+                        previous_objective, current_objective, tolerance_MHz
+                    )
                     else "line_search_stalled"
                 )
                 break
     else:
         iteration = loop_max_iter
 
-    _validate_locked_topology(atoms, coords, topology_lock, context="final symmetry-Cartesian semiexperimental fit")
+    _validate_locked_topology(
+        atoms, coords, topology_lock, context="final symmetry-Cartesian semiexperimental fit"
+    )
     active_mask = _active_mask(labels, fixed_mode_patterns, request.parameter_classes)
     active_mask &= mode_model.active_totally_symmetric_mask
     active_mask &= _auto_pruned_active_mask(labels, auto_pruned_patterns)
@@ -1408,7 +1496,9 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
         measurement_model,
         mode_model.cartesian_from_q,
     )
-    transform, reduced_names, class_by_mode = _parameter_class_transform(labels, active_mask, request.parameter_classes)
+    transform, reduced_names, class_by_mode = _parameter_class_transform(
+        labels, active_mask, request.parameter_classes
+    )
     transform, reduced_names = _primitive_constrained_cartesian_transform(
         coords,
         mode_model.cartesian_from_q,
@@ -1469,10 +1559,19 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
         coordinate_model=request.coordinate_model,
     )
     class_by_mode = _mark_auto_pruned_classes(labels, class_by_mode, auto_pruned_patterns)
-    parameters = _parameters(labels, q_final, active_mask, transform=transform, covariance=covariance, class_by_gic=class_by_mode)
+    parameters = _parameters(
+        labels,
+        q_final,
+        active_mask,
+        transform=transform,
+        covariance=covariance,
+        class_by_gic=class_by_mode,
+    )
     residual_rows = _residual_rows(measurement_model, calc, obs)
     rotational_constant_rows = _rotational_constant_rows(atoms, coords, request.observations)
-    cartesian_from_parameters = _cartesian_from_reduced_coordinates(mode_model.cartesian_from_q, active_mask, transform)
+    cartesian_from_parameters = _cartesian_from_reduced_coordinates(
+        mode_model.cartesian_from_q, active_mask, transform
+    )
     geometry_parameters = _geometry_parameters(
         atoms,
         coords,
@@ -1483,18 +1582,22 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
     kraitchman_rows = kraitchman_comparison(atoms, coords, request.observations)
     kraitchman_seed = kraitchman_seed_geometry(atoms, coords, request.observations, kraitchman_rows)
     rms = float(np.sqrt(np.mean(residual * residual))) if residual.size else 0.0
-    leave_one_out_rows = _leave_one_out_refits(
-        request,
-        atoms,
-        coords,
-        max_iter=max_iter,
-        step=step,
-        damping=damping,
-        max_step=max_step,
-        prune_condition=prune_condition,
-        tolerance_MHz=tolerance_MHz,
-        gradient_tolerance=gradient_tolerance,
-    ) if request.leave_one_out else ()
+    leave_one_out_rows = (
+        _leave_one_out_refits(
+            request,
+            atoms,
+            coords,
+            max_iter=max_iter,
+            step=step,
+            damping=damping,
+            max_step=max_step,
+            prune_condition=prune_condition,
+            tolerance_MHz=tolerance_MHz,
+            gradient_tolerance=gradient_tolerance,
+        )
+        if request.leave_one_out
+        else ()
+    )
     _write_semiexp_checkpoint(
         checkpoint_file,
         atoms,
@@ -1622,7 +1725,11 @@ def write_semiexperimental_outputs(
     warnings_csv = outdir / "semiexp_warnings.csv"
     leave_one_out_csv = outdir / "semiexp_leave_one_out.csv"
     active_names = effective_parameter_names or _effective_parameter_names(parameters)
-    geometry_rows = geometry_parameters if geometry_parameters is not None else _geometry_parameters(atoms, coords)
+    geometry_rows = (
+        geometry_parameters
+        if geometry_parameters is not None
+        else _geometry_parameters(atoms, coords)
+    )
     rotconst_rows = (
         rotational_constants
         if rotational_constants is not None
@@ -1630,7 +1737,9 @@ def write_semiexperimental_outputs(
     )
     fixed_parameters = _combined_fixed_parameters(request.fixed_parameters, input_fixed_parameters)
     svd_summary = _svd_summary_lines(active_names, weighted_jacobian)
-    constraint_summary = _constraint_summary_lines(fixed_parameters, fixed_primitives, request.parameter_classes, parameters)
+    constraint_summary = _constraint_summary_lines(
+        fixed_parameters, fixed_primitives, request.parameter_classes, parameters
+    )
     diagnostic_warnings = (
         preflight_warnings
         + _isotopic_mapping_warning_rows(atoms, coords, request.observations)
@@ -1687,8 +1796,12 @@ def write_semiexperimental_outputs(
         _influence_csv(measurement_model, residuals, weighted_jacobian, weighted_residual),
         encoding="utf-8",
     )
-    high_correlation_csv.write_text(_high_correlations_csv(active_names, correlation), encoding="utf-8")
-    svd_diagnostics_csv.write_text(_svd_diagnostics_csv(active_names, weighted_jacobian), encoding="utf-8")
+    high_correlation_csv.write_text(
+        _high_correlations_csv(active_names, correlation), encoding="utf-8"
+    )
+    svd_diagnostics_csv.write_text(
+        _svd_diagnostics_csv(active_names, weighted_jacobian), encoding="utf-8"
+    )
     uncertainty_diagnostics_csv.write_text(
         _uncertainty_diagnostics_csv(active_names, weighted_jacobian, weighted_residual),
         encoding="utf-8",
@@ -1770,9 +1883,13 @@ def write_semiexperimental_outputs(
             ),
             "stationary_point": stationary_point,
             "convergence_reason": diagnostics.convergence_reason if diagnostics else "not_reported",
-            "coordinate_model": diagnostics.coordinate_model if diagnostics else request.coordinate_model,
+            "coordinate_model": diagnostics.coordinate_model
+            if diagnostics
+            else request.coordinate_model,
             "observable": diagnostics.observable if diagnostics else request.observable,
-            "rotational_components": diagnostics.components if diagnostics else request.rotational_components,
+            "rotational_components": diagnostics.components
+            if diagnostics
+            else request.rotational_components,
             "isotopologues": tuple(obs.label for obs in request.observations),
             "n_isotopologues": len(request.observations),
             "n_qm_predicates": len(request.qm_predicates),
@@ -1785,8 +1902,12 @@ def write_semiexperimental_outputs(
             "prune_condition_target": diagnostics.prune_condition_target if diagnostics else 0.0,
             "max_iterations": diagnostics.max_iterations if diagnostics else None,
             "n_kraitchman_rows": len(kraitchman),
-            "kraitchman_seed_method": kraitchman_seed.method if kraitchman_seed else "not_available",
-            "n_kraitchman_seed_atoms": len(kraitchman_seed.fitted_atom_indices) if kraitchman_seed else 0,
+            "kraitchman_seed_method": kraitchman_seed.method
+            if kraitchman_seed
+            else "not_available",
+            "n_kraitchman_seed_atoms": len(kraitchman_seed.fitted_atom_indices)
+            if kraitchman_seed
+            else 0,
             "rank": diagnostics.rank if diagnostics else None,
             "incremental_rank": diagnostics.incremental_rank if diagnostics else None,
             "condition_number": diagnostics.condition_number if diagnostics else None,
@@ -1796,21 +1917,37 @@ def write_semiexperimental_outputs(
             "n_warnings": len(diagnostic_warnings),
             "warning_codes": tuple(item.code for item in diagnostic_warnings),
             "gicforge_calls": diagnostics.gicforge_calls if diagnostics else None,
-            "coordinate_model_reuse_steps": diagnostics.coordinate_model_reuse_steps if diagnostics else None,
+            "coordinate_model_reuse_steps": diagnostics.coordinate_model_reuse_steps
+            if diagnostics
+            else None,
             "trust_radius": diagnostics.trust_radius if diagnostics else None,
             "last_trust_ratio": diagnostics.last_trust_ratio if diagnostics else None,
             "last_line_search_scale": diagnostics.last_line_search_scale if diagnostics else None,
-            "b_projector_analytic_refreshes": diagnostics.b_projector_analytic_refreshes if diagnostics else None,
-            "b_projector_secant_updates": diagnostics.b_projector_secant_updates if diagnostics else None,
-            "b_projector_secant_rejections": diagnostics.b_projector_secant_rejections if diagnostics else None,
-            "last_b_projector_secant_error": diagnostics.last_b_projector_secant_error if diagnostics else None,
+            "b_projector_analytic_refreshes": diagnostics.b_projector_analytic_refreshes
+            if diagnostics
+            else None,
+            "b_projector_secant_updates": diagnostics.b_projector_secant_updates
+            if diagnostics
+            else None,
+            "b_projector_secant_rejections": diagnostics.b_projector_secant_rejections
+            if diagnostics
+            else None,
+            "last_b_projector_secant_error": diagnostics.last_b_projector_secant_error
+            if diagnostics
+            else None,
             "parameter_scale_min": diagnostics.parameter_scale_min if diagnostics else None,
             "parameter_scale_max": diagnostics.parameter_scale_max if diagnostics else None,
             "robust_loss": diagnostics.robust_loss if diagnostics else request.robust_loss,
             "robust_scale": diagnostics.robust_scale if diagnostics else request.robust_scale,
-            "robust_downweighted_observations": diagnostics.robust_downweighted_observations if diagnostics else 0,
-            "robust_downweighted_isotopologues": diagnostics.robust_downweighted_isotopologues if diagnostics else 0,
-            "linear_solver": diagnostics.linear_solver if diagnostics else "svd_more_hebden_trust_region",
+            "robust_downweighted_observations": diagnostics.robust_downweighted_observations
+            if diagnostics
+            else 0,
+            "robust_downweighted_isotopologues": diagnostics.robust_downweighted_isotopologues
+            if diagnostics
+            else 0,
+            "linear_solver": diagnostics.linear_solver
+            if diagnostics
+            else "svd_more_hebden_trust_region",
             "n_iteration_trace_rows": len(iteration_trace),
             "leave_one_out": bool(leave_one_out),
             "n_leave_one_out_rows": len(leave_one_out),
@@ -1836,38 +1973,46 @@ def parameters_csv(parameters: tuple[SemiexperimentalParameter, ...]) -> str:
     writer = csv.writer(stream)
     writer.writerow(["name", "value", "sigma", "active", "parameter_class"])
     for p in parameters:
-        writer.writerow([p.name, f"{p.value:.12g}", f"{p.sigma:.12g}", int(p.active), p.parameter_class])
+        writer.writerow(
+            [p.name, f"{p.value:.12g}", f"{p.sigma:.12g}", int(p.active), p.parameter_class]
+        )
     return stream.getvalue()
 
 
 def geometry_parameters_csv(parameters: tuple[SemiexperimentalGeometryParameter, ...]) -> str:
     stream = StringIO()
     writer = csv.writer(stream)
-    writer.writerow([
-        "kind",
-        "label",
-        "atoms",
-        "symbols",
-        "value_angstrom",
-        "sigma_angstrom",
-        "value_degree",
-        "sigma_degree",
-    ])
+    writer.writerow(
+        [
+            "kind",
+            "label",
+            "atoms",
+            "symbols",
+            "value_angstrom",
+            "sigma_angstrom",
+            "value_degree",
+            "sigma_degree",
+        ]
+    )
     for item in parameters:
-        writer.writerow([
-            item.kind,
-            item.label,
-            "-".join(str(idx) for idx in item.atom_indices),
-            "-".join(item.atom_symbols),
-            "" if item.value_angstrom is None else f"{item.value_angstrom:.12g}",
-            "" if item.sigma_angstrom is None else f"{item.sigma_angstrom:.12g}",
-            "" if item.value_degree is None else f"{item.value_degree:.12g}",
-            "" if item.sigma_degree is None else f"{item.sigma_degree:.12g}",
-        ])
+        writer.writerow(
+            [
+                item.kind,
+                item.label,
+                "-".join(str(idx) for idx in item.atom_indices),
+                "-".join(item.atom_symbols),
+                "" if item.value_angstrom is None else f"{item.value_angstrom:.12g}",
+                "" if item.sigma_angstrom is None else f"{item.sigma_angstrom:.12g}",
+                "" if item.value_degree is None else f"{item.value_degree:.12g}",
+                "" if item.sigma_degree is None else f"{item.sigma_degree:.12g}",
+            ]
+        )
     return stream.getvalue()
 
 
-def _effective_parameter_names(parameters: tuple[SemiexperimentalParameter, ...]) -> tuple[str, ...]:
+def _effective_parameter_names(
+    parameters: tuple[SemiexperimentalParameter, ...],
+) -> tuple[str, ...]:
     names: list[str] = []
     seen: set[str] = set()
     for parameter in parameters:
@@ -1924,7 +2069,9 @@ def _write_semiexp_checkpoint(
         return
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    active_labels = [label for label, active in zip(labels, np.asarray(active_mask, dtype=bool)) if active]
+    active_labels = [
+        label for label, active in zip(labels, np.asarray(active_mask, dtype=bool)) if active
+    ]
     payload = {
         "schema": SEMIEXP_CHECKPOINT_SCHEMA,
         "coordinate_model": coordinate_model,
@@ -1993,10 +2140,17 @@ def _leave_one_out_refits(
             )
         except Exception:
             continue
-        omitted_rows = _rotational_constant_rows(atoms, sub_result.final_coordinates_angstrom, (omitted,))
+        omitted_rows = _rotational_constant_rows(
+            atoms, sub_result.final_coordinates_angstrom, (omitted,)
+        )
         diffs = np.asarray([row.difference_MHz for row in omitted_rows], dtype=float)
-        delta = np.asarray(sub_result.final_coordinates_angstrom, dtype=float) - np.asarray(full_coords, dtype=float)
-        sigmas = np.asarray([parameter.sigma for parameter in sub_result.parameters if parameter.active], dtype=float)
+        delta = np.asarray(sub_result.final_coordinates_angstrom, dtype=float) - np.asarray(
+            full_coords, dtype=float
+        )
+        sigmas = np.asarray(
+            [parameter.sigma for parameter in sub_result.parameters if parameter.active],
+            dtype=float,
+        )
         rows.append(
             SemiexperimentalLeaveOneOutRow(
                 omitted.label,
@@ -2022,34 +2176,40 @@ def residuals_csv(residuals: tuple[SemiexperimentalResidual, ...]) -> str:
     writer = csv.writer(stream)
     writer.writerow(["isotopologue", "observable", "observed", "calculated", "residual"])
     for r in residuals:
-        writer.writerow([
-            r.isotopologue,
-            r.constant,
-            f"{r.observed_equilibrium_MHz:.12g}",
-            f"{r.calculated_MHz:.12g}",
-            f"{r.residual_MHz:.12g}",
-        ])
+        writer.writerow(
+            [
+                r.isotopologue,
+                r.constant,
+                f"{r.observed_equilibrium_MHz:.12g}",
+                f"{r.calculated_MHz:.12g}",
+                f"{r.residual_MHz:.12g}",
+            ]
+        )
     return stream.getvalue()
 
 
 def rotational_constants_csv(rows: tuple[SemiexperimentalRotationalConstantComparison, ...]) -> str:
     stream = StringIO()
     writer = csv.writer(stream)
-    writer.writerow([
-        "isotopologue",
-        "component",
-        "corrected_experimental_MHz",
-        "calculated_MHz",
-        "difference_MHz",
-    ])
+    writer.writerow(
+        [
+            "isotopologue",
+            "component",
+            "corrected_experimental_MHz",
+            "calculated_MHz",
+            "difference_MHz",
+        ]
+    )
     for item in rows:
-        writer.writerow([
-            item.isotopologue,
-            item.component,
-            f"{item.corrected_experimental_MHz:.12g}",
-            f"{item.calculated_MHz:.12g}",
-            f"{item.difference_MHz:.12g}",
-        ])
+        writer.writerow(
+            [
+                item.isotopologue,
+                item.component,
+                f"{item.corrected_experimental_MHz:.12g}",
+                f"{item.calculated_MHz:.12g}",
+                f"{item.difference_MHz:.12g}",
+            ]
+        )
     return stream.getvalue()
 
 
@@ -2123,7 +2283,9 @@ def semiexperimental_text_report(
         lines.append("fixed_parameter = none")
     if request.parameter_classes:
         for item in request.parameter_classes:
-            lines.append(f"parameter_class = {item.name}; mode={item.mode}; patterns={'|'.join(item.patterns)}")
+            lines.append(
+                f"parameter_class = {item.name}; mode={item.mode}; patterns={'|'.join(item.patterns)}"
+            )
     else:
         lines.append("parameter_class = none")
     if request.qm_predicates:
@@ -2138,9 +2300,13 @@ def semiexperimental_text_report(
     lines.extend(constraint_summary or ("constraint_diagnostics = not_available",))
     lines.extend(["", "[fit_statistics]"])
     if diagnostics is not None:
-        nrot, rotational_rms, rotational_mean_square, rotational_mean_square_scaled, rotational_max = (
-            _rotational_residual_stats(rotational_constants)
-        )
+        (
+            nrot,
+            rotational_rms,
+            rotational_mean_square,
+            rotational_mean_square_scaled,
+            rotational_max,
+        ) = _rotational_residual_stats(rotational_constants)
         lines.extend(
             [
                 f"convergence = {diagnostics.convergence_reason}",
@@ -2206,7 +2372,13 @@ def semiexperimental_text_report(
     lines.extend(["", "[rank_diagnostics]"])
     lines.extend(svd_summary or ("svd_diagnostics = not_available",))
 
-    lines.extend(["", "[iteration_trace]", "iter status objective_before objective_after rho damping trust_radius step_norm rank smin rel_smin constraint_max"])
+    lines.extend(
+        [
+            "",
+            "[iteration_trace]",
+            "iter status objective_before objective_after rho damping trust_radius step_norm rank smin rel_smin constraint_max",
+        ]
+    )
     if iteration_trace:
         selected_trace = iteration_trace[-min(12, len(iteration_trace)) :]
         for item in selected_trace:
@@ -2275,7 +2447,9 @@ def semiexperimental_text_report(
         )
 
     lines.extend(["", "[rotational_constants]", "Rotational constants (MHz)"])
-    lines.append("isotopologue component corrected_experimental_MHz calculated_MHz exp_minus_calc_MHz")
+    lines.append(
+        "isotopologue component corrected_experimental_MHz calculated_MHz exp_minus_calc_MHz"
+    )
     for item in rotational_constants:
         lines.append(
             " ".join(
@@ -2304,7 +2478,13 @@ def semiexperimental_text_report(
             )
         )
     if leave_one_out:
-        lines.extend(["", "[leave_one_out]", "omitted training_rms omitted_rms max_abs cart_rms_shift convergence"])
+        lines.extend(
+            [
+                "",
+                "[leave_one_out]",
+                "omitted training_rms omitted_rms max_abs cart_rms_shift convergence",
+            ]
+        )
         for item in leave_one_out:
             lines.append(
                 " ".join(
@@ -2343,11 +2523,18 @@ def _geometry_parameters(
     if topology_lock is None:
         z_numbers = np.array([_atomic_number(symbol) for symbol in atoms], dtype=int)
         try:
-            _continuous, graph, _ringset, _synthons, _aromaticity = build_topology_objects(coords, z_numbers)
+            _continuous, graph, _ringset, _synthons, _aromaticity = build_topology_objects(
+                coords, z_numbers
+            )
         except Exception as exc:
-            raise ScientificValidationError(f"Cannot build final geometry parameter table: {exc}") from exc
+            raise ScientificValidationError(
+                f"Cannot build final geometry parameter table: {exc}"
+            ) from exc
         bonds = tuple(sorted(tuple(sorted((int(i), int(j)))) for i, j in graph.bonds))
-        adjacency = tuple(tuple(sorted(int(item) for item in graph.adjacency[index])) for index in range(len(atoms)))
+        adjacency = tuple(
+            tuple(sorted(int(item) for item in graph.adjacency[index]))
+            for index in range(len(atoms))
+        )
     else:
         _validate_locked_topology(atoms, coords, topology_lock, context="final geometry reporting")
         bonds = topology_lock.bonds
@@ -2366,7 +2553,16 @@ def _geometry_parameters(
                 label = f"A({left + 1},{center + 1},{right + 1})"
                 symbols = (str(atoms[left]), str(atoms[center]), str(atoms[right]))
                 primitive = Primitive("angle", (left, center, right))
-                specs.append(("angle", label, (left + 1, center + 1, right + 1), symbols, primitive, 180.0 / np.pi))
+                specs.append(
+                    (
+                        "angle",
+                        label,
+                        (left + 1, center + 1, right + 1),
+                        symbols,
+                        primitive,
+                        180.0 / np.pi,
+                    )
+                )
 
     for center_left, center_right in bonds:
         left_neighbors = sorted(atom for atom in adjacency[center_left] if atom != center_right)
@@ -2446,11 +2642,7 @@ def _geometry_parameter_sigmas(
     covariance: np.ndarray | None,
     cartesian_from_parameters: np.ndarray | None = None,
 ) -> list[float | None] | None:
-    if (
-        not geometry_prims
-        or covariance is None
-        or covariance.size == 0
-    ):
+    if not geometry_prims or covariance is None or covariance.size == 0:
         return None
     covariance = np.asarray(covariance, dtype=float)
     if cartesian_from_parameters is not None:
@@ -2482,27 +2674,31 @@ def _geometry_parameter_sigmas(
 def kraitchman_csv_rows(rows: tuple[KraitchmanComparison, ...]) -> str:
     stream = StringIO()
     writer = csv.writer(stream)
-    writer.writerow([
-        "isotopologue",
-        "atom_index",
-        "atom",
-        "isotope_A",
-        "axis",
-        "kraitchman_abs_A",
-        "fitted_abs_A",
-        "difference_A",
-    ])
+    writer.writerow(
+        [
+            "isotopologue",
+            "atom_index",
+            "atom",
+            "isotope_A",
+            "axis",
+            "kraitchman_abs_A",
+            "fitted_abs_A",
+            "difference_A",
+        ]
+    )
     for row in rows:
-        writer.writerow([
-            row.isotopologue,
-            row.atom_index,
-            row.atom,
-            row.isotope_mass_number,
-            row.coordinate,
-            f"{row.kraitchman_abs_angstrom:.12g}",
-            f"{row.fitted_abs_angstrom:.12g}",
-            f"{row.difference_angstrom:.12g}",
-        ])
+        writer.writerow(
+            [
+                row.isotopologue,
+                row.atom_index,
+                row.atom,
+                row.isotope_mass_number,
+                row.coordinate,
+                f"{row.kraitchman_abs_angstrom:.12g}",
+                f"{row.fitted_abs_angstrom:.12g}",
+                f"{row.difference_angstrom:.12g}",
+            ]
+        )
     return stream.getvalue()
 
 
@@ -2520,7 +2716,15 @@ def _svd_diagnostics_csv(labels: tuple[str, ...], weighted_jac: np.ndarray | Non
     rows = _svd_diagnostic_rows(labels, weighted_jac)
     stream = StringIO()
     writer = csv.writer(stream)
-    writer.writerow(["index", "singular_value", "relative_singular_value", "near_null", "dominant_coordinate_combination"])
+    writer.writerow(
+        [
+            "index",
+            "singular_value",
+            "relative_singular_value",
+            "near_null",
+            "dominant_coordinate_combination",
+        ]
+    )
     for idx, singular, relative, near_null, combination in rows:
         writer.writerow([idx, f"{singular:.12g}", f"{relative:.12g}", int(near_null), combination])
     return stream.getvalue()
@@ -2543,7 +2747,9 @@ def _svd_diagnostic_rows(
     labels: tuple[str, ...],
     weighted_jac: np.ndarray | None,
 ) -> tuple[tuple[int, float, float, bool, str], ...]:
-    jac = np.asarray(weighted_jac if weighted_jac is not None else np.zeros((0, len(labels))), dtype=float)
+    jac = np.asarray(
+        weighted_jac if weighted_jac is not None else np.zeros((0, len(labels))), dtype=float
+    )
     if jac.ndim != 2 or jac.shape[1] == 0:
         return ()
     try:
@@ -2559,7 +2765,15 @@ def _svd_diagnostic_rows(
         relative = singular_value / s0 if s0 > 0.0 else 0.0
         vector = vh[col, :] if col < vh.shape[0] else np.zeros(ncols, dtype=float)
         near_null = singular_value <= max(threshold, s0 * 1.0e-8)
-        rows.append((col + 1, singular_value, relative, bool(near_null), _format_svd_combination(labels, vector)))
+        rows.append(
+            (
+                col + 1,
+                singular_value,
+                relative,
+                bool(near_null),
+                _format_svd_combination(labels, vector),
+            )
+        )
     return tuple(rows)
 
 
@@ -2570,20 +2784,31 @@ def _uncertainty_diagnostics_csv(
 ) -> str:
     stream = StringIO()
     writer = csv.writer(stream)
-    writer.writerow(["cutoff", "relative_cutoff", "rank", "parameter", "sigma", "sigma_ratio_to_default"])
-    for cutoff_label, relative_cutoff, rank, parameter, sigma, ratio in _uncertainty_diagnostic_rows(
+    writer.writerow(
+        ["cutoff", "relative_cutoff", "rank", "parameter", "sigma", "sigma_ratio_to_default"]
+    )
+    for (
+        cutoff_label,
+        relative_cutoff,
+        rank,
+        parameter,
+        sigma,
+        ratio,
+    ) in _uncertainty_diagnostic_rows(
         labels,
         weighted_jac,
         weighted_residual,
     ):
-        writer.writerow([
-            cutoff_label,
-            f"{relative_cutoff:.12g}",
-            rank,
-            parameter,
-            f"{sigma:.12g}",
-            f"{ratio:.12g}",
-        ])
+        writer.writerow(
+            [
+                cutoff_label,
+                f"{relative_cutoff:.12g}",
+                rank,
+                parameter,
+                f"{sigma:.12g}",
+                f"{ratio:.12g}",
+            ]
+        )
     return stream.getvalue()
 
 
@@ -2609,8 +2834,12 @@ def _uncertainty_diagnostic_rows(
     weighted_jac: np.ndarray | None,
     weighted_residual: np.ndarray | None,
 ) -> tuple[tuple[str, float, int, str, float, float], ...]:
-    jac = np.asarray(weighted_jac if weighted_jac is not None else np.zeros((0, len(labels))), dtype=float)
-    residual = np.asarray(weighted_residual if weighted_residual is not None else np.zeros(0), dtype=float)
+    jac = np.asarray(
+        weighted_jac if weighted_jac is not None else np.zeros((0, len(labels))), dtype=float
+    )
+    residual = np.asarray(
+        weighted_residual if weighted_residual is not None else np.zeros(0), dtype=float
+    )
     if jac.ndim != 2 or jac.shape[1] == 0:
         return ()
     try:
@@ -2619,7 +2848,9 @@ def _uncertainty_diagnostic_rows(
         return ()
     if not singular.size:
         return ()
-    sigma2 = float(residual @ residual) / max(jac.shape[0] - jac.shape[1], 1) if residual.size else 0.0
+    sigma2 = (
+        float(residual @ residual) / max(jac.shape[0] - jac.shape[1], 1) if residual.size else 0.0
+    )
     s0 = max(float(singular[0]), 1.0)
     default_relative = max(jac.shape) * np.finfo(float).eps * 100.0
     cutoffs = (
@@ -2678,7 +2909,16 @@ def _constraints_csv(
 ) -> str:
     stream = StringIO()
     writer = csv.writer(stream)
-    writer.writerow(["kind", "name", "mode", "pattern_or_primitive", "matched_active_parameters", "matched_labels"])
+    writer.writerow(
+        [
+            "kind",
+            "name",
+            "mode",
+            "pattern_or_primitive",
+            "matched_active_parameters",
+            "matched_labels",
+        ]
+    )
     active_labels = tuple(item.name for item in parameters if item.active)
     expression_definitions = _gic_expression_definitions_from_patterns(fixed_parameters)
     for item in fixed_parameters:
@@ -2686,17 +2926,28 @@ def _constraints_csv(
         kind, mode = _input_constraint_record_kind(item, expression_definitions)
         writer.writerow([kind, item, mode, item, len(matches), ";".join(matches)])
     for primitive in fixed_primitives:
-        writer.writerow(["expanded_primitive", _primitive_text(primitive), "fixed", _primitive_text(primitive), "", ""])
+        writer.writerow(
+            [
+                "expanded_primitive",
+                _primitive_text(primitive),
+                "fixed",
+                _primitive_text(primitive),
+                "",
+                "",
+            ]
+        )
     for parameter_class in parameter_classes:
         matches = tuple(label for label in active_labels if _class_matches(parameter_class, label))
-        writer.writerow([
-            "parameter_class",
-            parameter_class.name,
-            parameter_class.mode,
-            "|".join(parameter_class.patterns),
-            len(matches),
-            ";".join(matches),
-        ])
+        writer.writerow(
+            [
+                "parameter_class",
+                parameter_class.name,
+                parameter_class.mode,
+                "|".join(parameter_class.patterns),
+                len(matches),
+                ";".join(matches),
+            ]
+        )
     return stream.getvalue()
 
 
@@ -2709,13 +2960,16 @@ def _constraint_summary_lines(
     active_labels = tuple(item.name for item in parameters if item.active)
     expression_definitions = _gic_expression_definitions_from_patterns(fixed_parameters)
     n_expression_constraints = sum(
-        1 for item in fixed_parameters if _parse_gic_expression_constraint_pattern(item, definitions=expression_definitions)
+        1
+        for item in fixed_parameters
+        if _parse_gic_expression_constraint_pattern(item, definitions=expression_definitions)
     )
     n_definitions = sum(
         1
         for item in fixed_parameters
         if _parse_gic_expression_definition_pattern(item) is not None
-        and _parse_gic_expression_constraint_pattern(item, definitions=expression_definitions) is None
+        and _parse_gic_expression_constraint_pattern(item, definitions=expression_definitions)
+        is None
     )
     lines = [
         f"input_records = {len(fixed_parameters)}",
@@ -2773,37 +3027,41 @@ def _primitive_text(primitive: Primitive) -> str:
 def _leave_one_out_csv(rows: tuple[SemiexperimentalLeaveOneOutRow, ...]) -> str:
     stream = StringIO()
     writer = csv.writer(stream)
-    writer.writerow([
-        "omitted_isotopologue",
-        "training_isotopologues",
-        "training_rms",
-        "omitted_rotational_rms_MHz",
-        "omitted_rotational_max_abs_MHz",
-        "cartesian_rms_shift_angstrom",
-        "cartesian_max_shift_angstrom",
-        "mean_parameter_sigma",
-        "max_parameter_sigma",
-        "iterations",
-        "convergence_reason",
-        "rank",
-        "condition_number",
-    ])
+    writer.writerow(
+        [
+            "omitted_isotopologue",
+            "training_isotopologues",
+            "training_rms",
+            "omitted_rotational_rms_MHz",
+            "omitted_rotational_max_abs_MHz",
+            "cartesian_rms_shift_angstrom",
+            "cartesian_max_shift_angstrom",
+            "mean_parameter_sigma",
+            "max_parameter_sigma",
+            "iterations",
+            "convergence_reason",
+            "rank",
+            "condition_number",
+        ]
+    )
     for row in rows:
-        writer.writerow([
-            row.omitted_isotopologue,
-            row.training_isotopologues,
-            f"{row.training_rms:.12g}",
-            f"{row.omitted_rotational_rms_MHz:.12g}",
-            f"{row.omitted_rotational_max_abs_MHz:.12g}",
-            f"{row.cartesian_rms_shift_angstrom:.12g}",
-            f"{row.cartesian_max_shift_angstrom:.12g}",
-            f"{row.mean_parameter_sigma:.12g}",
-            f"{row.max_parameter_sigma:.12g}",
-            row.iterations,
-            row.convergence_reason,
-            row.rank,
-            f"{row.condition_number:.12g}",
-        ])
+        writer.writerow(
+            [
+                row.omitted_isotopologue,
+                row.training_isotopologues,
+                f"{row.training_rms:.12g}",
+                f"{row.omitted_rotational_rms_MHz:.12g}",
+                f"{row.omitted_rotational_max_abs_MHz:.12g}",
+                f"{row.cartesian_rms_shift_angstrom:.12g}",
+                f"{row.cartesian_max_shift_angstrom:.12g}",
+                f"{row.mean_parameter_sigma:.12g}",
+                f"{row.max_parameter_sigma:.12g}",
+                row.iterations,
+                row.convergence_reason,
+                row.rank,
+                f"{row.condition_number:.12g}",
+            ]
+        )
     return stream.getvalue()
 
 
@@ -2811,7 +3069,9 @@ def _eigenvalues_csv(values: np.ndarray | None) -> str:
     stream = StringIO()
     writer = csv.writer(stream)
     writer.writerow(["index", "eigenvalue"])
-    for idx, value in enumerate(np.asarray(values if values is not None else (), dtype=float), start=1):
+    for idx, value in enumerate(
+        np.asarray(values if values is not None else (), dtype=float), start=1
+    ):
         writer.writerow([idx, f"{value:.12g}"])
     return stream.getvalue()
 
@@ -2901,7 +3161,9 @@ def _request_with_auto_resolved_isotopologues(
     atoms: list[str] | tuple[str, ...],
     coords: np.ndarray,
 ) -> tuple[SemiexperimentalFitRequest, tuple[SemiexperimentalDiagnosticWarning, ...]]:
-    observations, warnings = _auto_resolve_isotopic_substitutions(atoms, coords, request.observations)
+    observations, warnings = _auto_resolve_isotopic_substitutions(
+        atoms, coords, request.observations
+    )
     if observations == request.observations:
         return request, warnings
     return replace(request, observations=observations), warnings
@@ -3037,7 +3299,9 @@ def _isotopic_mapping_warning_rows(
             continue
         try:
             exp_shift = np.asarray(obs.corrected.as_tuple(), dtype=float) - parent_exp
-            current_calc = _rotational_constants_for_substitution(atoms, coords, {atom_index: isotope})
+            current_calc = _rotational_constants_for_substitution(
+                atoms, coords, {atom_index: isotope}
+            )
         except Exception:
             continue
         current_shift = current_calc - parent_calc
@@ -3048,7 +3312,9 @@ def _isotopic_mapping_warning_rows(
             if candidate == atom_index:
                 continue
             try:
-                candidate_calc = _rotational_constants_for_substitution(atoms, coords, {candidate: isotope})
+                candidate_calc = _rotational_constants_for_substitution(
+                    atoms, coords, {candidate: isotope}
+                )
             except Exception:
                 continue
             candidate_shift = candidate_calc - parent_calc
@@ -3209,7 +3475,10 @@ def _semiexp_warning_rows(
                 "Final accepted step required a very small line-search scale.",
                 f"line_search_scale={diagnostics.last_line_search_scale:.6g}",
             )
-        if np.isfinite(diagnostics.reduced_chi_square) and diagnostics.reduced_chi_square > DIAGNOSTIC_REDUCED_CHI_SQUARE_WARNING:
+        if (
+            np.isfinite(diagnostics.reduced_chi_square)
+            and diagnostics.reduced_chi_square > DIAGNOSTIC_REDUCED_CHI_SQUARE_WARNING
+        ):
             add(
                 "warning",
                 "large_reduced_chi_square",
@@ -3266,7 +3535,9 @@ def _semiexp_warning_rows(
     for warning in _large_geometry_uncertainty_warnings(geometry_parameters):
         add(warning.severity, warning.code, warning.message, warning.context)
 
-    sensitivity = _uncertainty_cutoff_sensitivity(active_names, weighted_jacobian, weighted_residual)
+    sensitivity = _uncertainty_cutoff_sensitivity(
+        active_names, weighted_jacobian, weighted_residual
+    )
     if sensitivity > 10.0:
         add(
             "warning",
@@ -3419,10 +3690,18 @@ def _robust_group_weights(
         return ()
     result: list[tuple[str, float]] = []
     for group in _experimental_isotopologue_row_groups(measurement_model):
-        valid = tuple(idx for idx in group if 0 <= idx < min(measurement_model.n_experimental_rows, sqrt_weights.size))
+        valid = tuple(
+            idx
+            for idx in group
+            if 0 <= idx < min(measurement_model.n_experimental_rows, sqrt_weights.size)
+        )
         if not valid:
             continue
-        label = measurement_model.labels[valid[0]][0] if valid[0] < len(measurement_model.labels) else f"row_{valid[0] + 1}"
+        label = (
+            measurement_model.labels[valid[0]][0]
+            if valid[0] < len(measurement_model.labels)
+            else f"row_{valid[0] + 1}"
+        )
         weights = sqrt_weights[np.asarray(valid, dtype=int)] ** 2
         result.append((label, float(np.mean(weights))))
     return tuple(result)
@@ -3466,31 +3745,41 @@ def _influence_csv(
 ) -> str:
     stream = StringIO()
     writer = csv.writer(stream)
-    writer.writerow([
-        "row",
-        "isotopologue",
-        "observable",
-        "residual",
-        "weighted_residual",
-        "chi_square_contribution",
-        "leverage",
-    ])
-    labels = model.labels if model is not None else tuple((item.isotopologue, item.constant) for item in residuals)
+    writer.writerow(
+        [
+            "row",
+            "isotopologue",
+            "observable",
+            "residual",
+            "weighted_residual",
+            "chi_square_contribution",
+            "leverage",
+        ]
+    )
+    labels = (
+        model.labels
+        if model is not None
+        else tuple((item.isotopologue, item.constant) for item in residuals)
+    )
     weighted = np.asarray(weighted_residual if weighted_residual is not None else (), dtype=float)
-    leverage = _leverage_values(np.asarray(weighted_jac if weighted_jac is not None else np.zeros((0, 0)), dtype=float))
+    leverage = _leverage_values(
+        np.asarray(weighted_jac if weighted_jac is not None else np.zeros((0, 0)), dtype=float)
+    )
     for idx, item in enumerate(residuals):
         weighted_value = float(weighted[idx]) if idx < weighted.size else 0.0
         leverage_value = float(leverage[idx]) if idx < leverage.size else 0.0
         iso, obs = labels[idx] if idx < len(labels) else (item.isotopologue, item.constant)
-        writer.writerow([
-            idx + 1,
-            iso,
-            obs,
-            f"{item.residual_MHz:.12g}",
-            f"{weighted_value:.12g}",
-            f"{weighted_value * weighted_value:.12g}",
-            f"{leverage_value:.12g}",
-        ])
+        writer.writerow(
+            [
+                idx + 1,
+                iso,
+                obs,
+                f"{item.residual_MHz:.12g}",
+                f"{weighted_value:.12g}",
+                f"{weighted_value * weighted_value:.12g}",
+                f"{leverage_value:.12g}",
+            ]
+        )
     return stream.getvalue()
 
 
@@ -3502,7 +3791,9 @@ def _leverage_values(weighted_jac: np.ndarray) -> np.ndarray:
     return np.einsum("ij,jk,ik->i", jac, normal_inv, jac)
 
 
-def _high_correlations_csv(labels: tuple[str, ...], correlation: np.ndarray | None, threshold: float = 0.90) -> str:
+def _high_correlations_csv(
+    labels: tuple[str, ...], correlation: np.ndarray | None, threshold: float = 0.90
+) -> str:
     corr = np.asarray(correlation if correlation is not None else np.zeros((0, 0)), dtype=float)
     stream = StringIO()
     writer = csv.writer(stream)
@@ -3616,7 +3907,9 @@ def _gicforge_a1_mask(labels: tuple[str, ...]) -> np.ndarray:
     return np.array([irrep in {"A1", "A", "Ag", "A'"} for irrep in irreps], dtype=bool)
 
 
-def _gic_model_signature(labels: tuple[str, ...]) -> tuple[int, tuple[tuple[str, int], ...], tuple[tuple[str, int], ...]]:
+def _gic_model_signature(
+    labels: tuple[str, ...],
+) -> tuple[int, tuple[tuple[str, int], ...], tuple[tuple[str, int], ...]]:
     irrep_counts: dict[str, int] = {}
     family_counts: dict[str, int] = {}
     for label in labels:
@@ -3634,7 +3927,9 @@ def _validate_gic_model_signature(
 ) -> None:
     current = _gic_model_signature(labels)
     if current != reference:
-        raise ScientificValidationError(f"GICForge coordinate model changed from {reference} to {current}")
+        raise ScientificValidationError(
+            f"GICForge coordinate model changed from {reference} to {current}"
+        )
 
 
 def _gic_label_family(label: str) -> str:
@@ -3699,7 +3994,9 @@ def _fixed_primitives_from_patterns(fixed: tuple[str, ...]) -> tuple[Primitive, 
     return tuple(primitives)
 
 
-def _linear_primitive_constraints_from_patterns(fixed: tuple[str, ...]) -> tuple[PrimitiveLinearConstraint, ...]:
+def _linear_primitive_constraints_from_patterns(
+    fixed: tuple[str, ...],
+) -> tuple[PrimitiveLinearConstraint, ...]:
     constraints: list[PrimitiveLinearConstraint] = []
     for item in fixed:
         parsed = _parse_linear_constraint_pattern(item)
@@ -3708,7 +4005,9 @@ def _linear_primitive_constraints_from_patterns(fixed: tuple[str, ...]) -> tuple
     return tuple(constraints)
 
 
-def _gic_expression_constraints_from_patterns(fixed: tuple[str, ...]) -> tuple[GICExpressionConstraint, ...]:
+def _gic_expression_constraints_from_patterns(
+    fixed: tuple[str, ...],
+) -> tuple[GICExpressionConstraint, ...]:
     constraints: list[GICExpressionConstraint] = []
     definitions = _gic_expression_definitions_from_patterns(fixed)
     for item in fixed:
@@ -3718,7 +4017,9 @@ def _gic_expression_constraints_from_patterns(fixed: tuple[str, ...]) -> tuple[G
     return tuple(constraints)
 
 
-def _gic_expression_definitions_from_patterns(fixed: tuple[str, ...]) -> tuple[GICExpressionDefinition, ...]:
+def _gic_expression_definitions_from_patterns(
+    fixed: tuple[str, ...],
+) -> tuple[GICExpressionDefinition, ...]:
     definitions: list[GICExpressionDefinition] = []
     seen: set[str] = set()
     for item in fixed:
@@ -3727,7 +4028,9 @@ def _gic_expression_definitions_from_patterns(fixed: tuple[str, ...]) -> tuple[G
             continue
         key = parsed.name.lower()
         if key in seen:
-            definitions = [definition for definition in definitions if definition.name.lower() != key]
+            definitions = [
+                definition for definition in definitions if definition.name.lower() != key
+            ]
         definitions.append(parsed)
         seen.add(key)
     return tuple(definitions)
@@ -3743,7 +4046,9 @@ def _hydrogen_fixed_primitives(
     """Return a deterministic local coordinate frame for each H/D/T atom."""
     if not any(_is_hydrogen_parameter_constraint(item) for item in fixed):
         return ()
-    h_atoms = {idx for idx, atom in enumerate(atoms) if str(atom).strip().upper() in {"H", "D", "T"}}
+    h_atoms = {
+        idx for idx, atom in enumerate(atoms) if str(atom).strip().upper() in {"H", "D", "T"}
+    }
     if not h_atoms:
         return ()
     supported = {"bond", "angle", "dihedral", "out_of_plane", "linear_bend"}
@@ -3789,7 +4094,9 @@ def _hydrogen_fixed_primitives(
                 h_atom,
                 anchor,
                 h_atoms,
-                exclude={_primitive_constraint_key(first_angle)} if first_angle is not None else set(),
+                exclude={_primitive_constraint_key(first_angle)}
+                if first_angle is not None
+                else set(),
             )
         add(orientation)
     return tuple(primitives)
@@ -3839,7 +4146,14 @@ def _bond_adjacency(prims: list[Primitive]) -> dict[int, set[int]]:
 
 def _bond_primitive(prims: list[Primitive], atom_a: int, atom_b: int) -> Primitive | None:
     wanted = {atom_a, atom_b}
-    return next((primitive for primitive in prims if primitive.kind == "bond" and set(primitive.atoms) == wanted), None)
+    return next(
+        (
+            primitive
+            for primitive in prims
+            if primitive.kind == "bond" and set(primitive.atoms) == wanted
+        ),
+        None,
+    )
 
 
 def _hydrogen_linear_pair(
@@ -3884,7 +4198,9 @@ def _hydrogen_angle_primitive(
         if _primitive_constraint_key(primitive) in excluded:
             continue
         other = k if i == h_atom else i
-        candidates.append((1 if other in h_atoms else 0, other, _primitive_constraint_key(primitive), primitive))
+        candidates.append(
+            (1 if other in h_atoms else 0, other, _primitive_constraint_key(primitive), primitive)
+        )
     return min(candidates, default=(None, None, None, None))[3]
 
 
@@ -3899,7 +4215,9 @@ def _hydrogen_orientation_primitive(
         if primitive.kind != "dihedral" or len(primitive.atoms) != 4:
             continue
         atoms = primitive.atoms
-        terminal_h = (atoms[0] == h_atom and atoms[1] == anchor) or (atoms[3] == h_atom and atoms[2] == anchor)
+        terminal_h = (atoms[0] == h_atom and atoms[1] == anchor) or (
+            atoms[3] == h_atom and atoms[2] == anchor
+        )
         if not terminal_h:
             continue
         other_h_count = sum(1 for atom in atoms if atom != h_atom and atom in h_atoms)
@@ -3920,10 +4238,14 @@ def _hydrogen_orientation_primitive(
 
 def _hydrogen_fallback_primitives(prims: list[Primitive], h_atom: int) -> tuple[Primitive, ...]:
     candidates = [primitive for primitive in prims if h_atom in primitive.atoms]
-    candidates.sort(key=lambda primitive: (
-        {"bond": 0, "angle": 1, "linear_bend": 2, "dihedral": 3, "out_of_plane": 4}.get(primitive.kind, 9),
-        _primitive_constraint_key(primitive),
-    ))
+    candidates.sort(
+        key=lambda primitive: (
+            {"bond": 0, "angle": 1, "linear_bend": 2, "dihedral": 3, "out_of_plane": 4}.get(
+                primitive.kind, 9
+            ),
+            _primitive_constraint_key(primitive),
+        )
+    )
     return tuple(candidates[:3])
 
 
@@ -4033,7 +4355,10 @@ def _symmetry_expanded_fixed_primitives(
                 try:
                     perm_idx, _sign = primitive_permutation(basis, mapping)
                     permuted = basis[perm_idx[seed_index]]
-                    if permuted.kind == primitive.kind and _primitive_constraint_key(permuted) == mapped_key:
+                    if (
+                        permuted.kind == primitive.kind
+                        and _primitive_constraint_key(permuted) == mapped_key
+                    ):
                         candidate = available_by_key.get(mapped_key, permuted)
                 except Exception:
                     pass
@@ -4140,9 +4465,14 @@ def _parse_linear_constraint_pattern(pattern: str) -> PrimitiveLinearConstraint 
         raise ValueError(f"Linear primitive constraint has no primitive terms: {pattern}")
     primitives = tuple(item[1] for item in terms)
     coefficients = tuple(item[0] for item in terms)
-    angular = any(primitive.kind in {"angle", "dihedral", "out_of_plane", "linear_bend"} for primitive in primitives)
+    angular = any(
+        primitive.kind in {"angle", "dihedral", "out_of_plane", "linear_bend"}
+        for primitive in primitives
+    )
     if angular and any(primitive.kind == "bond" for primitive in primitives):
-        raise ValueError(f"Linear primitive constraint cannot mix bond and angular primitives: {pattern}")
+        raise ValueError(
+            f"Linear primitive constraint cannot mix bond and angular primitives: {pattern}"
+        )
     target = _parse_linear_constraint_target(target_text, angular=angular)
     return PrimitiveLinearConstraint(text, primitives, coefficients, target, angular)
 
@@ -4167,7 +4497,9 @@ def _parse_linear_constraint_terms(expr_text: str) -> list[tuple[float, Primitiv
         primitive_text = f"{match.group('kind')}({match.group('args')})"
         primitives = _primitives_from_fixed_pattern(primitive_text)
         if len(primitives) != 1:
-            raise ValueError(f"Linear primitive terms must resolve to one primitive: {primitive_text}")
+            raise ValueError(
+                f"Linear primitive terms must resolve to one primitive: {primitive_text}"
+            )
         terms.append((sign * coeff, primitives[0]))
         pos = match.end()
     if pos != len(expr):
@@ -4208,9 +4540,13 @@ def _parse_gic_expression_constraint_pattern(
         return None
     if _primitives_from_gaussian_current_freeze(text):
         return None
-    wrapper = re.match(r"^(gic|constraint|freeze|fixed)\((.*)\)$", text, flags=re.IGNORECASE | re.DOTALL)
+    wrapper = re.match(
+        r"^(gic|constraint|freeze|fixed)\((.*)\)$", text, flags=re.IGNORECASE | re.DOTALL
+    )
     if wrapper:
-        return _parse_gic_expression_constraint_body(wrapper.group(2).strip(), text, definitions=definitions)
+        return _parse_gic_expression_constraint_body(
+            wrapper.group(2).strip(), text, definitions=definitions
+        )
     named = _parse_gaussian_named_expression(text, definitions=definitions)
     if named is not None:
         return named
@@ -4288,7 +4624,9 @@ def _parse_gic_expression_constraint_body(
             expression = body[:split_at].strip()
             target = _parse_expression_constraint_target(
                 body[split_at + 1 :],
-                angular_default=_gic_expression_uses_angular_default_units(expression, definitions=definitions),
+                angular_default=_gic_expression_uses_angular_default_units(
+                    expression, definitions=definitions
+                ),
             )
     expression = _strip_outer_square_brackets(expression)
     if not expression:
@@ -4308,7 +4646,9 @@ def _split_value_option_from_expression(
     expression = text[:marker].strip(" \t,;")
     target, has_constraint = _parse_gaussian_constraint_options(
         text[marker:],
-        angular_default=_gic_expression_uses_angular_default_units(expression, definitions=definitions),
+        angular_default=_gic_expression_uses_angular_default_units(
+            expression, definitions=definitions
+        ),
     )
     if not has_constraint or target is None:
         raise ValueError(f"Gaussian Value= constraint needs a numeric target: {text}")
@@ -4335,7 +4675,12 @@ def _top_level_value_marker(text: str) -> int | None:
             brace_depth += 1
         elif char == "}" and brace_depth > 0:
             brace_depth -= 1
-        if round_depth == 0 and square_depth == 0 and brace_depth == 0 and lower.startswith("value", idx):
+        if (
+            round_depth == 0
+            and square_depth == 0
+            and brace_depth == 0
+            and lower.startswith("value", idx)
+        ):
             before_ok = idx == 0 or not (lower[idx - 1].isalnum() or lower[idx - 1] == "_")
             after = idx + len("value")
             probe = after
@@ -4368,7 +4713,9 @@ _GAUSSIAN_NONCONSTRAINT_OPTIONS = {
 }
 
 
-def _parse_gaussian_constraint_options(rest: str, *, angular_default: bool = False) -> tuple[float | None, bool]:
+def _parse_gaussian_constraint_options(
+    rest: str, *, angular_default: bool = False
+) -> tuple[float | None, bool]:
     text = str(rest).strip()
     if not text:
         return None, False
@@ -4380,7 +4727,9 @@ def _parse_gaussian_constraint_options(rest: str, *, angular_default: bool = Fal
     target: float | None = None
     cleaned = text
     if match:
-        target = _parse_expression_constraint_target(match.group("target"), angular_default=angular_default)
+        target = _parse_expression_constraint_target(
+            match.group("target"), angular_default=angular_default
+        )
         cleaned = text[: match.start()] + text[match.end() :]
     elif text.startswith("="):
         target = _parse_expression_constraint_target(text[1:], angular_default=angular_default)
@@ -4425,7 +4774,9 @@ def _parse_gaussian_expression_options(
     try:
         target, has_constraint = _parse_gaussian_constraint_options(
             raw[option_at:],
-            angular_default=_gic_expression_uses_angular_default_units(expression, definitions=definitions),
+            angular_default=_gic_expression_uses_angular_default_units(
+                expression, definitions=definitions
+            ),
         )
     except ValueError:
         return None
@@ -4463,13 +4814,17 @@ def _parse_gaussian_named_expression(
     if not expression:
         raise ValueError(f"GIC expression constraint has no expression: {text}")
     _validate_gic_expression(expression)
-    angular_default = _gic_expression_uses_angular_default_units(expression, definitions=definitions)
+    angular_default = _gic_expression_uses_angular_default_units(
+        expression, definitions=definitions
+    )
     target = None
     has_constraint = False
     option = (name_match.group("option") or "").strip()
     if option:
         try:
-            target, has_constraint = _parse_gaussian_constraint_options(option, angular_default=angular_default)
+            target, has_constraint = _parse_gaussian_constraint_options(
+                option, angular_default=angular_default
+            )
         except ValueError:
             return None
     rest = rest.strip()
@@ -4486,7 +4841,9 @@ def _parse_gaussian_named_expression(
         has_constraint = has_constraint or rest_has_constraint
     if not has_constraint:
         return None
-    return GICExpressionConstraint(name=name_match.group("name"), expression=expression, target=target)
+    return GICExpressionConstraint(
+        name=name_match.group("name"), expression=expression, target=target
+    )
 
 
 def _parse_gaussian_named_definition(text: str) -> GICExpressionDefinition | None:
@@ -4697,7 +5054,9 @@ def _strip_outer_square_brackets(text: str) -> str:
     return stripped
 
 
-def _parse_expression_constraint_target(target_text: str, *, angular_default: bool = False) -> float:
+def _parse_expression_constraint_target(
+    target_text: str, *, angular_default: bool = False
+) -> float:
     text = str(target_text).strip()
     if not text:
         raise ValueError("GIC expression constraint target cannot be empty")
@@ -4729,7 +5088,16 @@ def _parse_gic_expression_ast(expression: str) -> ast.Expression:
     except SyntaxError as exc:
         raise ValueError(f"Invalid GIC expression syntax: {expression}") from exc
     for node in ast.walk(tree):
-        if isinstance(node, ast.Expression | ast.Load | ast.BinOp | ast.UnaryOp | ast.Call | ast.Name | ast.Constant):
+        if isinstance(
+            node,
+            ast.Expression
+            | ast.Load
+            | ast.BinOp
+            | ast.UnaryOp
+            | ast.Call
+            | ast.Name
+            | ast.Constant,
+        ):
             continue
         if isinstance(node, ast.operator | ast.unaryop | ast.keyword):
             continue
@@ -4790,12 +5158,40 @@ def _gic_expression_uses_angular_default_units(
             if not isinstance(node.func, ast.Name):
                 return False
             kind = node.func.id.lower()
-            if kind in {"a", "angle", "bend", "d", "dihedral", "torsion", "u", "out_of_plane", "l", "linear", "linear_bend"}:
+            if kind in {
+                "a",
+                "angle",
+                "bend",
+                "d",
+                "dihedral",
+                "torsion",
+                "u",
+                "out_of_plane",
+                "l",
+                "linear",
+                "linear_bend",
+            }:
                 has_angular = True
                 continue
             if kind in {"r", "b", "bond", "stretch"}:
                 return False
-            if kind in {"sin", "cos", "tan", "asin", "acos", "atan", "arcsin", "arccos", "arctan", "sqrt", "exp", "log", "abs", "min", "max"}:
+            if kind in {
+                "sin",
+                "cos",
+                "tan",
+                "asin",
+                "acos",
+                "atan",
+                "arcsin",
+                "arccos",
+                "arctan",
+                "sqrt",
+                "exp",
+                "log",
+                "abs",
+                "min",
+                "max",
+            }:
                 return False
             return False
         return has_angular
@@ -4825,7 +5221,9 @@ def _gic_expression_constraint_targets(
 ) -> np.ndarray:
     if not constraints:
         return np.zeros(0, dtype=float)
-    current = _gic_expression_constraint_values(constraints, coords, prims, u_matrix, labels, definitions=definitions)
+    current = _gic_expression_constraint_values(
+        constraints, coords, prims, u_matrix, labels, definitions=definitions
+    )
     targets = [
         float(constraint.target) if constraint.target is not None else float(current[idx])
         for idx, constraint in enumerate(constraints)
@@ -4843,7 +5241,9 @@ def _gic_expression_constraint_values(
     definitions: tuple[GICExpressionDefinition, ...] = (),
 ) -> np.ndarray:
     values = [
-        _evaluate_gic_expression(constraint.expression, coords, prims, u_matrix, labels, definitions=definitions)
+        _evaluate_gic_expression(
+            constraint.expression, coords, prims, u_matrix, labels, definitions=definitions
+        )
         for constraint in constraints
     ]
     return np.asarray(values, dtype=float)
@@ -4936,7 +5336,9 @@ def _evaluate_gic_expression(
     return float(value)
 
 
-def _gic_expression_symbol_values(labels: tuple[str, ...], q_values: np.ndarray) -> dict[str, float]:
+def _gic_expression_symbol_values(
+    labels: tuple[str, ...], q_values: np.ndarray
+) -> dict[str, float]:
     symbols: dict[str, float] = {"pi": float(np.pi), "PI": float(np.pi)}
     for idx, value in enumerate(np.asarray(q_values, dtype=float), start=1):
         default = f"GIC{idx:03d}"
@@ -5039,7 +5441,9 @@ def _evaluate_gic_expression_node(
         if not isinstance(node.func, ast.Name):
             raise ValueError("GIC expression functions must be named functions")
         name = node.func.id
-        return _evaluate_gic_expression_call(name, node.args, node.keywords, coords, symbols, definitions, stack)
+        return _evaluate_gic_expression_call(
+            name, node.args, node.keywords, coords, symbols, definitions, stack
+        )
     raise ValueError("Unsupported syntax in GIC expression")
 
 
@@ -5079,7 +5483,9 @@ def _evaluate_gic_expression_call(
     if lowered in {"min", "max"}:
         if keywords or len(args) < 1:
             raise ValueError(f"Function {name} expects positional arguments")
-        values = [_evaluate_gic_expression_node(arg, coords, symbols, definitions, stack) for arg in args]
+        values = [
+            _evaluate_gic_expression_node(arg, coords, symbols, definitions, stack) for arg in args
+        ]
         return float(min(values) if lowered == "min" else max(values))
     if lowered in {"x", "y", "z"}:
         if keywords or len(args) != 1:
@@ -5096,9 +5502,13 @@ def _evaluate_gic_expression_call(
     if lowered == "dotdiff":
         if keywords or len(args) != 4:
             raise ValueError("DotDiff expects four atom indices")
-        i, j, k, l = [_gic_expression_atom_index(arg, coords, symbols, definitions, stack) for arg in args]
+        i, j, k, l = [
+            _gic_expression_atom_index(arg, coords, symbols, definitions, stack) for arg in args
+        ]
         return float(np.dot(coords[i] - coords[j], coords[k] - coords[l]))
-    primitive = _primitive_from_gic_expression_call(name, args, keywords, coords, symbols, definitions, stack)
+    primitive = _primitive_from_gic_expression_call(
+        name, args, keywords, coords, symbols, definitions, stack
+    )
     return float(eval_primitives([primitive], coords)[0])
 
 
@@ -5150,7 +5560,9 @@ def _primitive_from_gic_expression_call(
     stack: tuple[str, ...] = (),
 ) -> Primitive:
     lowered = name.lower()
-    numeric_args = [_evaluate_gic_expression_node(arg, coords, symbols, definitions, stack) for arg in args]
+    numeric_args = [
+        _evaluate_gic_expression_node(arg, coords, symbols, definitions, stack) for arg in args
+    ]
     int_args = [int(round(value)) for value in numeric_args]
     if any(abs(value - round(value)) > 1.0e-10 for value in numeric_args):
         raise ValueError(f"Primitive function {name} needs integer atom indices")
@@ -5184,7 +5596,13 @@ def _primitive_from_gic_expression_call(
         for keyword in keywords:
             if keyword.arg != "mode":
                 raise ValueError(f"Unsupported keyword for {name}: {keyword.arg}")
-            mode = int(round(_evaluate_gic_expression_node(keyword.value, coords, symbols, definitions, stack)))
+            mode = int(
+                round(
+                    _evaluate_gic_expression_node(
+                        keyword.value, coords, symbols, definitions, stack
+                    )
+                )
+            )
         if len(int_args) == 5:
             mode = int_args[4]
         elif len(int_args) == 4:
@@ -5211,10 +5629,14 @@ def _primitive_constraint_key(primitive: Primitive) -> tuple[str, tuple[int, ...
     return (primitive.kind, tuple(atoms), primitive.mode)
 
 
-def _fixed_primitive_targets(fixed_primitives: tuple[Primitive, ...], coords: np.ndarray) -> np.ndarray:
+def _fixed_primitive_targets(
+    fixed_primitives: tuple[Primitive, ...], coords: np.ndarray
+) -> np.ndarray:
     if not fixed_primitives:
         return np.zeros(0, dtype=float)
-    return np.asarray(eval_primitives(list(fixed_primitives), np.asarray(coords, dtype=float)), dtype=float)
+    return np.asarray(
+        eval_primitives(list(fixed_primitives), np.asarray(coords, dtype=float)), dtype=float
+    )
 
 
 def _project_fixed_primitives(
@@ -5459,7 +5881,9 @@ def _linear_constraint_values(
 ) -> np.ndarray:
     values = []
     for constraint in constraints:
-        primitive_values = np.asarray(eval_primitives(list(constraint.primitives), coords), dtype=float)
+        primitive_values = np.asarray(
+            eval_primitives(list(constraint.primitives), coords), dtype=float
+        )
         coeffs = np.asarray(constraint.coefficients, dtype=float)
         values.append(float(coeffs @ primitive_values))
     return np.asarray(values, dtype=float)
@@ -5509,7 +5933,9 @@ def _primitive_constrained_transform(
     labels: tuple[str, ...] = (),
 ) -> tuple[np.ndarray, tuple[str, ...]]:
     """Project reduced GIC increments onto the null space of fixed primitives."""
-    if (not fixed_primitives and not linear_constraints and not expression_constraints) or transform.size == 0:
+    if (
+        not fixed_primitives and not linear_constraints and not expression_constraints
+    ) or transform.size == 0:
         return transform, names
     active_indices = np.where(active_mask)[0]
     if not len(active_indices):
@@ -5535,7 +5961,9 @@ def _primitive_constrained_transform(
     constrained = transform @ null
     if constrained.shape[1] == len(names):
         return constrained, names
-    return constrained, tuple(f"constrained_{idx:03d}" for idx in range(1, constrained.shape[1] + 1))
+    return constrained, tuple(
+        f"constrained_{idx:03d}" for idx in range(1, constrained.shape[1] + 1)
+    )
 
 
 def _primitive_constrained_cartesian_transform(
@@ -5555,7 +5983,9 @@ def _primitive_constrained_cartesian_transform(
     expression_labels: tuple[str, ...] = (),
 ) -> tuple[np.ndarray, tuple[str, ...]]:
     """Project reduced Cartesian-basis increments onto fixed primitive constraints."""
-    if (not fixed_primitives and not linear_constraints and not expression_constraints) or transform.size == 0:
+    if (
+        not fixed_primitives and not linear_constraints and not expression_constraints
+    ) or transform.size == 0:
         return transform, names
     active_indices = np.where(active_mask)[0]
     if not len(active_indices):
@@ -5580,7 +6010,9 @@ def _primitive_constrained_cartesian_transform(
     constrained = transform @ null
     if constrained.shape[1] == len(names):
         return constrained, names
-    return constrained, tuple(f"constrained_{idx:03d}" for idx in range(1, constrained.shape[1] + 1))
+    return constrained, tuple(
+        f"constrained_{idx:03d}" for idx in range(1, constrained.shape[1] + 1)
+    )
 
 
 def _cartesian_from_reduced_coordinates(
@@ -5657,7 +6089,9 @@ def _auto_pruned_active_mask(labels: tuple[str, ...], patterns: tuple[str, ...])
     if not patterns:
         return np.ones(len(labels), dtype=bool)
     lowered = tuple(pattern.lower() for pattern in patterns)
-    return np.array([not any(pattern in label.lower() for pattern in lowered) for label in labels], dtype=bool)
+    return np.array(
+        [not any(pattern in label.lower() for pattern in lowered) for label in labels], dtype=bool
+    )
 
 
 def _mark_auto_pruned_classes(
@@ -5689,7 +6123,10 @@ def _weak_parameter_patterns(
     while len(remaining) > 1:
         current = weighted_jac[:, remaining]
         conditioning = rank_condition(current)
-        if np.isfinite(conditioning.condition_number) and conditioning.condition_number <= condition_target:
+        if (
+            np.isfinite(conditioning.condition_number)
+            and conditioning.condition_number <= condition_target
+        ):
             break
         best: tuple[float, int] | None = None
         for col in remaining:
@@ -5726,7 +6163,14 @@ def _parameter_class_transform(
 ) -> tuple[np.ndarray, tuple[str, ...], tuple[str, ...]]:
     active_indices = np.where(active_mask)[0]
     class_by_gic = [
-        next((item.name for item in parameter_classes if item.mode == "fixed" and _class_matches(item, label)), "")
+        next(
+            (
+                item.name
+                for item in parameter_classes
+                if item.mode == "fixed" and _class_matches(item, label)
+            ),
+            "",
+        )
         for label in labels
     ]
     if not len(active_indices):
@@ -5736,7 +6180,11 @@ def _parameter_class_transform(
     shared_classes = tuple(item for item in parameter_classes if item.mode == "shared")
     assigned = np.zeros(len(active_indices), dtype=bool)
     for parameter_class in shared_classes:
-        local = [pos for pos, idx in enumerate(active_indices) if _class_matches(parameter_class, labels[idx])]
+        local = [
+            pos
+            for pos, idx in enumerate(active_indices)
+            if _class_matches(parameter_class, labels[idx])
+        ]
         if not local:
             continue
         col = np.zeros(len(active_indices), dtype=float)
@@ -5756,11 +6204,15 @@ def _parameter_class_transform(
     return np.column_stack(columns), tuple(names), tuple(class_by_gic)
 
 
-def _reduced_parameter_scales(labels: tuple[str, ...], active_mask: np.ndarray, transform: np.ndarray) -> np.ndarray:
+def _reduced_parameter_scales(
+    labels: tuple[str, ...], active_mask: np.ndarray, transform: np.ndarray
+) -> np.ndarray:
     if transform.size == 0:
         return np.ones(transform.shape[1], dtype=float)
     active_indices = np.where(active_mask)[0]
-    gic_scales = np.array([_gic_coordinate_scale(labels[idx]) for idx in active_indices], dtype=float)
+    gic_scales = np.array(
+        [_gic_coordinate_scale(labels[idx]) for idx in active_indices], dtype=float
+    )
     scales = np.ones(transform.shape[1], dtype=float)
     for col in range(transform.shape[1]):
         weights = np.abs(transform[:, col])
@@ -5774,7 +6226,20 @@ def _gic_coordinate_scale(label: str) -> float:
     low = label.lower()
     if "bond(" in low or re.search(r"\br\s*\(", low) or "str" in low:
         return 1.0
-    if any(token in low for token in ("angle(", "dihedral(", "out_of_plane(", "linear_bend(", "ang", "dih", "oop", "lin", "pck")):
+    if any(
+        token in low
+        for token in (
+            "angle(",
+            "dihedral(",
+            "out_of_plane(",
+            "linear_bend(",
+            "ang",
+            "dih",
+            "oop",
+            "lin",
+            "pck",
+        )
+    ):
         return 0.5
     if re.search(r"\b[adul]\s*\(", low):
         return 0.5
@@ -5814,10 +6279,18 @@ def _robust_sqrt_weights(
     sqrt_weights = np.ones_like(residual, dtype=float)
     if str(loss).lower() == "none" or residual.size == 0:
         return sqrt_weights, 0.0, 0, 0
-    nrows = residual.size if experimental_rows is None else max(0, min(int(experimental_rows), residual.size))
+    nrows = (
+        residual.size
+        if experimental_rows is None
+        else max(0, min(int(experimental_rows), residual.size))
+    )
     if nrows == 0:
         return sqrt_weights, 0.0, 0, 0
-    groups = row_groups if row_groups is not None else _robust_isotopologue_groups(nrows, loss_rows=nrows)
+    groups = (
+        row_groups
+        if row_groups is not None
+        else _robust_isotopologue_groups(nrows, loss_rows=nrows)
+    )
     groups = tuple(tuple(idx for idx in group if 0 <= idx < nrows) for group in groups)
     groups = tuple(group for group in groups if group)
     if not groups:
@@ -5956,10 +6429,14 @@ def _analytic_measurement_jacobian_wrt_gics(
 ) -> np.ndarray | None:
     if measurement_model.observable == "moments":
         cartesian = _moments_cartesian_jacobian(atoms, coords, request.observations)
-        selected = _select_raw_components(cartesian, MOMENT_COMPONENTS, measurement_model.components)
+        selected = _select_raw_components(
+            cartesian, MOMENT_COMPONENTS, measurement_model.components
+        )
     elif measurement_model.observable == "rotational_constants":
         cartesian = _rotational_constants_cartesian_jacobian(atoms, coords, request.observations)
-        selected = _select_raw_components(cartesian, ROTATIONAL_COMPONENTS, measurement_model.components)
+        selected = _select_raw_components(
+            cartesian, ROTATIONAL_COMPONENTS, measurement_model.components
+        )
     else:
         return None
     gic_jac = selected @ cartesian_from_q
@@ -6019,12 +6496,18 @@ def _jacobian_constants_wrt_cartesian_basis(
 ) -> np.ndarray:
     if measurement_model.observable == "moments":
         cartesian = _moments_cartesian_jacobian(atoms, coords, request.observations)
-        selected = _select_raw_components(cartesian, MOMENT_COMPONENTS, measurement_model.components)
+        selected = _select_raw_components(
+            cartesian, MOMENT_COMPONENTS, measurement_model.components
+        )
     elif measurement_model.observable == "rotational_constants":
         cartesian = _rotational_constants_cartesian_jacobian(atoms, coords, request.observations)
-        selected = _select_raw_components(cartesian, ROTATIONAL_COMPONENTS, measurement_model.components)
+        selected = _select_raw_components(
+            cartesian, ROTATIONAL_COMPONENTS, measurement_model.components
+        )
     else:
-        raise ScientificValidationError(f"Unsupported observable for Cartesian-basis SEfit: {measurement_model.observable}")
+        raise ScientificValidationError(
+            f"Unsupported observable for Cartesian-basis SEfit: {measurement_model.observable}"
+        )
     jac = selected @ cartesian_from_q
     predicate = _predicate_jacobian(request.qm_predicates, labels, coords, cartesian_from_q)
     if predicate.size:
@@ -6081,7 +6564,9 @@ def _principal_moments_and_cartesian_jacobian(
     for atom_idx, (mass, xyz) in enumerate(zip(masses, centered)):
         for axis_idx in range(3):
             unit = eye[axis_idx]
-            derivative = mass * (2.0 * xyz[axis_idx] * eye - np.outer(unit, xyz) - np.outer(xyz, unit))
+            derivative = mass * (
+                2.0 * xyz[axis_idx] * eye - np.outer(unit, xyz) - np.outer(xyz, unit)
+            )
             col = 3 * atom_idx + axis_idx
             for moment_idx in range(3):
                 vector = axes[:, moment_idx]
@@ -6090,11 +6575,15 @@ def _principal_moments_and_cartesian_jacobian(
 
 
 def _principal_moments_from_masses(coords: np.ndarray, masses: np.ndarray) -> np.ndarray:
-    _centered, inertia = _centered_coords_and_inertia(np.asarray(coords, dtype=float), np.asarray(masses, dtype=float))
+    _centered, inertia = _centered_coords_and_inertia(
+        np.asarray(coords, dtype=float), np.asarray(masses, dtype=float)
+    )
     return np.linalg.eigvalsh(inertia)
 
 
-def _centered_coords_and_inertia(coords: np.ndarray, masses: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _centered_coords_and_inertia(
+    coords: np.ndarray, masses: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     arr = np.asarray(coords, dtype=float)
     mass = np.asarray(masses, dtype=float)
     total_mass = float(np.sum(mass))
@@ -6153,7 +6642,9 @@ def _secant_projector_update(
     current_q: np.ndarray,
 ) -> SecantProjectorUpdate:
     q_delta = np.asarray(current_q, dtype=float) - np.asarray(previous_q, dtype=float)
-    x_delta = np.asarray(current_coords, dtype=float).reshape(-1) - np.asarray(previous_coords, dtype=float).reshape(-1)
+    x_delta = np.asarray(current_coords, dtype=float).reshape(-1) - np.asarray(
+        previous_coords, dtype=float
+    ).reshape(-1)
     if cartesian_from_q.shape != (x_delta.size, q_delta.size):
         return SecantProjectorUpdate(None, float("inf"), False)
     denom = float(q_delta @ q_delta)
@@ -6245,7 +6736,9 @@ def _line_search_update(
             scale=scale,
             current_objective=current_objective,
         )
-        candidate = _displace_along_gics(coords, prims, u_matrix, scale * dq, cartesian_from_q=cartesian_from_q)
+        candidate = _displace_along_gics(
+            coords, prims, u_matrix, scale * dq, cartesian_from_q=cartesian_from_q
+        )
         try:
             if fixed_primitives or linear_constraints or expression_constraints:
                 candidate = _project_fixed_primitives(
@@ -6263,7 +6756,9 @@ def _line_search_update(
                     expression_definitions=expression_definitions,
                 )
             q_candidate = _gic_values(prims, u_matrix, candidate)
-            calc = _measurement_vector(atoms, candidate, request, q_candidate, labels, measurement_model)
+            calc = _measurement_vector(
+                atoms, candidate, request, q_candidate, labels, measurement_model
+            )
         except Exception:
             continue
         if calc.shape != observed.shape:
@@ -6352,7 +6847,9 @@ def _line_search_update_cartesian_basis(
                     expression_definitions=expression_definitions,
                 )
             q_candidate = mode_model.values(candidate)
-            calc = _measurement_vector(atoms, candidate, request, q_candidate, labels, measurement_model)
+            calc = _measurement_vector(
+                atoms, candidate, request, q_candidate, labels, measurement_model
+            )
         except Exception:
             continue
         if calc.shape != observed.shape:
@@ -6407,7 +6904,9 @@ def _iteration_trace_row(
     b_projector_secant_error: float = 0.0,
     linear_solver: str = "svd_more_hebden_trust_region",
 ) -> SemiexperimentalIterationTrace:
-    rank, smallest, relative = _jacobian_singular_trace(np.asarray(jac_weighted_scaled, dtype=float))
+    rank, smallest, relative = _jacobian_singular_trace(
+        np.asarray(jac_weighted_scaled, dtype=float)
+    )
     return SemiexperimentalIterationTrace(
         iteration=int(iteration),
         status=str(status),
@@ -6504,7 +7003,9 @@ def _adaptive_lm_step(
     trust_radius: float,
 ) -> TrustRegionStep:
     if jac_weighted.size == 0 or jac_weighted.shape[1] == 0:
-        return TrustRegionStep(np.zeros((0,), dtype=float), max(float(damping), 0.0), False, "empty")
+        return TrustRegionStep(
+            np.zeros((0,), dtype=float), max(float(damping), 0.0), False, "empty"
+        )
     step_result = _svd_trust_region_lm_step(jac_weighted, weighted_residual, damping, trust_radius)
     step = step_result.step
     predicted = _predicted_reduction(
@@ -6544,7 +7045,9 @@ def _svd_trust_region_lm_step(
     residual = np.asarray(weighted_residual, dtype=float)
     ncols = jac.shape[1]
     if ncols == 0:
-        return TrustRegionStep(np.zeros((0,), dtype=float), max(float(damping), 0.0), False, "empty")
+        return TrustRegionStep(
+            np.zeros((0,), dtype=float), max(float(damping), 0.0), False, "empty"
+        )
     delta = float(trust_radius)
     if delta <= 0.0 or not np.isfinite(delta):
         step = _rank_revealing_lm_step(jac, residual, damping)
@@ -6637,7 +7140,9 @@ def _rank_revealing_lm_step(
     return step
 
 
-def _augmented_qr_lm_step(jac_weighted: np.ndarray, weighted_residual: np.ndarray, damping: float) -> np.ndarray:
+def _augmented_qr_lm_step(
+    jac_weighted: np.ndarray, weighted_residual: np.ndarray, damping: float
+) -> np.ndarray:
     jac = np.asarray(jac_weighted, dtype=float)
     residual = np.asarray(weighted_residual, dtype=float)
     ncols = jac.shape[1]
@@ -6710,11 +7215,11 @@ def _accepted_trust_update(
     return new_damping, new_radius
 
 
-def _rejected_trust_update(damping: float, trust_radius: float, max_step: float) -> tuple[float, float]:
+def _rejected_trust_update(
+    damping: float, trust_radius: float, max_step: float
+) -> tuple[float, float]:
     damping_floor = max(float(damping), DAMPING_MIN)
-    return min(damping_floor * 8.0, DAMPING_MAX), _scaled_trust_radius(
-        trust_radius, max_step, 0.35
-    )
+    return min(damping_floor * 8.0, DAMPING_MAX), _scaled_trust_radius(trust_radius, max_step, 0.35)
 
 
 def _scaled_trust_radius(trust_radius: float, max_step: float, scale: float) -> float:
@@ -6724,7 +7229,9 @@ def _scaled_trust_radius(trust_radius: float, max_step: float, scale: float) -> 
     return max(float(current) * float(scale), _minimum_trust_radius(max_step))
 
 
-def _contracted_trust_radius(trust_radius: float, max_step: float, step_norm: float, scale: float) -> float:
+def _contracted_trust_radius(
+    trust_radius: float, max_step: float, step_norm: float, scale: float
+) -> float:
     if max_step <= 0.0:
         return trust_radius
     current = trust_radius if trust_radius > 0.0 else max_step
@@ -6756,7 +7263,9 @@ def _step_near_trust_boundary(step_norm: float, trust_radius: float) -> bool:
     return float(step_norm) >= 0.80 * float(trust_radius)
 
 
-def _trust_region_is_stalled(damping: float, trust_radius: float, stalled_rejections: int, max_step: float) -> bool:
+def _trust_region_is_stalled(
+    damping: float, trust_radius: float, stalled_rejections: int, max_step: float
+) -> bool:
     if stalled_rejections < 5:
         return False
     if damping >= 0.999 * DAMPING_MAX:
@@ -6764,7 +7273,9 @@ def _trust_region_is_stalled(damping: float, trust_radius: float, stalled_reject
     return trust_radius > 0.0 and trust_radius <= 10.0 * _minimum_trust_radius(max_step)
 
 
-def _objective_has_stabilized(previous_objective: float | None, current_objective: float, tolerance_MHz: float) -> bool:
+def _objective_has_stabilized(
+    previous_objective: float | None, current_objective: float, tolerance_MHz: float
+) -> bool:
     if previous_objective is None:
         return False
     if not np.isfinite(previous_objective) or not np.isfinite(current_objective):
@@ -6818,7 +7329,9 @@ def _moments_vector(
 ) -> np.ndarray:
     values: list[float] = []
     for obs in observations:
-        values.extend(_principal_moments_from_masses(coords, _mass_vector_for_observation(atoms, obs)))
+        values.extend(
+            _principal_moments_from_masses(coords, _mass_vector_for_observation(atoms, obs))
+        )
     return np.array(values, dtype=float)
 
 
@@ -6839,7 +7352,9 @@ def _build_measurement_model(
     row_labels: list[tuple[str, str]] = []
     for obs in request.observations:
         row_labels.extend((obs.label, comp) for comp in components)
-    predicate_values, predicate_weights, predicate_labels = _predicate_observations(request.qm_predicates, labels)
+    predicate_values, predicate_weights, predicate_labels = _predicate_observations(
+        request.qm_predicates, labels
+    )
     if predicate_values.size:
         observed = np.concatenate([observed, predicate_values])
         weights = np.concatenate([weights, predicate_weights])
@@ -6864,14 +7379,18 @@ def _build_measurement_model_cartesian_basis(
 ) -> MeasurementModel:
     observable = "moments" if request.observable == "auto" else request.observable
     planar = _is_planar(coords)
-    components = _select_components_from_cartesian_basis(request, observable, atoms, coords, cartesian_from_q, planar)
+    components = _select_components_from_cartesian_basis(
+        request, observable, atoms, coords, cartesian_from_q, planar
+    )
     observed = _experimental_observed_vector(request, observable, components)
     weights = _experimental_weights_vector(request, observable, components)
     n_experimental_rows = int(observed.size)
     row_labels: list[tuple[str, str]] = []
     for obs in request.observations:
         row_labels.extend((obs.label, comp) for comp in components)
-    predicate_values, predicate_weights, predicate_labels = _predicate_observations(request.qm_predicates, labels)
+    predicate_values, predicate_weights, predicate_labels = _predicate_observations(
+        request.qm_predicates, labels
+    )
     if predicate_values.size:
         observed = np.concatenate([observed, predicate_values])
         weights = np.concatenate([weights, predicate_weights])
@@ -6997,7 +7516,9 @@ def _select_components_from_cartesian_basis(
 
 def _explicit_component_selection(selection: str, observable: str, planar: bool) -> tuple[str, ...]:
     if planar and selection == "ABC":
-        raise ScientificValidationError("Planar semiexperimental fits can use only AB, AC or BC; ABC is redundant")
+        raise ScientificValidationError(
+            "Planar semiexperimental fits can use only AB, AC or BC; ABC is redundant"
+        )
     rot_components = tuple(selection)
     if observable == "moments":
         return tuple(ROTATIONAL_TO_MOMENT_COMPONENT[item] for item in rot_components)
@@ -7019,9 +7540,20 @@ def _best_planar_rotational_pair(
     for pair in candidates:
         subset = _select_raw_components(full, ROTATIONAL_COMPONENTS, pair)
         singular = np.linalg.svd(subset, compute_uv=False)
-        rank = int(np.sum(singular > max(subset.shape) * np.finfo(float).eps * (singular[0] if singular.size else 0.0)))
-        cond = float(singular[0] / singular[-1]) if singular.size and singular[-1] > 0.0 else float("inf")
-        stability = _planar_moment_pair_stability(observations, _rotational_pair_to_moment_pair(pair))
+        rank = int(
+            np.sum(
+                singular
+                > max(subset.shape) * np.finfo(float).eps * (singular[0] if singular.size else 0.0)
+            )
+        )
+        cond = (
+            float(singular[0] / singular[-1])
+            if singular.size and singular[-1] > 0.0
+            else float("inf")
+        )
+        stability = _planar_moment_pair_stability(
+            observations, _rotational_pair_to_moment_pair(pair)
+        )
         score = (rank, stability, cond)
         if _planar_pair_score_is_better(score, best_score):
             best = pair
@@ -7037,7 +7569,9 @@ def _best_planar_moment_pair(
     u_matrix: np.ndarray,
 ) -> tuple[str, ...]:
     cartesian_from_q = _gic_cartesian_projector(prims, u_matrix, coords)
-    return _best_planar_moment_pair_from_cartesian_basis(atoms, coords, observations, cartesian_from_q)
+    return _best_planar_moment_pair_from_cartesian_basis(
+        atoms, coords, observations, cartesian_from_q
+    )
 
 
 def _best_planar_moment_pair_from_cartesian_basis(
@@ -7053,8 +7587,17 @@ def _best_planar_moment_pair_from_cartesian_basis(
     for pair in candidates:
         subset = _select_raw_components(full, MOMENT_COMPONENTS, pair)
         singular = np.linalg.svd(subset, compute_uv=False)
-        rank = int(np.sum(singular > max(subset.shape) * np.finfo(float).eps * (singular[0] if singular.size else 0.0)))
-        cond = float(singular[0] / singular[-1]) if singular.size and singular[-1] > 0.0 else float("inf")
+        rank = int(
+            np.sum(
+                singular
+                > max(subset.shape) * np.finfo(float).eps * (singular[0] if singular.size else 0.0)
+            )
+        )
+        cond = (
+            float(singular[0] / singular[-1])
+            if singular.size and singular[-1] > 0.0
+            else float("inf")
+        )
         stability = _planar_moment_pair_stability(observations, pair)
         score = (rank, stability, cond)
         if _planar_pair_score_is_better(score, best_score):
@@ -7076,9 +7619,20 @@ def _best_planar_rotational_pair_from_cartesian_basis(
     for pair in candidates:
         subset = _select_raw_components(full, ROTATIONAL_COMPONENTS, pair)
         singular = np.linalg.svd(subset, compute_uv=False)
-        rank = int(np.sum(singular > max(subset.shape) * np.finfo(float).eps * (singular[0] if singular.size else 0.0)))
-        cond = float(singular[0] / singular[-1]) if singular.size and singular[-1] > 0.0 else float("inf")
-        stability = _planar_moment_pair_stability(observations, _rotational_pair_to_moment_pair(pair))
+        rank = int(
+            np.sum(
+                singular
+                > max(subset.shape) * np.finfo(float).eps * (singular[0] if singular.size else 0.0)
+            )
+        )
+        cond = (
+            float(singular[0] / singular[-1])
+            if singular.size and singular[-1] > 0.0
+            else float("inf")
+        )
+        stability = _planar_moment_pair_stability(
+            observations, _rotational_pair_to_moment_pair(pair)
+        )
         score = (rank, stability, cond)
         if _planar_pair_score_is_better(score, best_score):
             best = pair
@@ -7109,7 +7663,10 @@ def _planar_moment_pair_stability(
     values = []
     for obs in observations:
         moments = _constants_to_moments(obs.corrected.as_tuple())
-        sigmas = tuple((1.0 / weight) ** 0.5 if weight > 0.0 else float("inf") for weight in _moment_weights(obs))
+        sigmas = tuple(
+            (1.0 / weight) ** 0.5 if weight > 0.0 else float("inf")
+            for weight in _moment_weights(obs)
+        )
         ia, ib, ic = moments
         sia, sib, sic = sigmas
         if pair_set == {"Ia", "Ib"}:
@@ -7135,7 +7692,9 @@ def _planar_moment_pair_stability(
     return float(np.sqrt(np.mean(np.square(values))))
 
 
-def _select_raw_components(raw: np.ndarray, component_names: tuple[str, ...], selected: tuple[str, ...]) -> np.ndarray:
+def _select_raw_components(
+    raw: np.ndarray, component_names: tuple[str, ...], selected: tuple[str, ...]
+) -> np.ndarray:
     arr = np.asarray(raw, dtype=float)
     if arr.ndim == 1:
         arr = arr.reshape((-1, len(component_names)))
@@ -7179,7 +7738,9 @@ def _predicate_observations(
         else:
             matches = _predicate_indices(predicate, labels)
             if not matches:
-                raise ScientificValidationError(f"QM predicate did not match any GIC: {predicate.label_pattern}")
+                raise ScientificValidationError(
+                    f"QM predicate did not match any GIC: {predicate.label_pattern}"
+                )
             for idx in matches:
                 values.append(predicate.value)
                 weights.append(predicate.weight)
@@ -7270,7 +7831,15 @@ def _residual_rows(
 ) -> tuple[SemiexperimentalResidual, ...]:
     rows = []
     for idx, (isotopologue, label) in enumerate(model.labels):
-        rows.append(SemiexperimentalResidual(isotopologue, label, float(observed[idx]), float(calculated[idx]), float(observed[idx] - calculated[idx])))
+        rows.append(
+            SemiexperimentalResidual(
+                isotopologue,
+                label,
+                float(observed[idx]),
+                float(calculated[idx]),
+                float(observed[idx] - calculated[idx]),
+            )
+        )
     return tuple(rows)
 
 
@@ -7279,7 +7848,9 @@ def _rotational_constant_rows(
     coords: np.ndarray,
     observations: tuple[IsotopologueObservation, ...],
 ) -> tuple[SemiexperimentalRotationalConstantComparison, ...]:
-    calculated = _constants_vector(atoms, coords, observations).reshape((-1, len(ROTATIONAL_COMPONENTS)))
+    calculated = _constants_vector(atoms, coords, observations).reshape(
+        (-1, len(ROTATIONAL_COMPONENTS))
+    )
     rows: list[SemiexperimentalRotationalConstantComparison] = []
     for obs, calc_triplet in zip(observations, calculated):
         for component, observed_value, calculated_value in zip(
@@ -7315,14 +7886,21 @@ def _parameters(
         sigma = 0.0
         if active:
             pos = active_positions[idx]
-            if transform is not None and covariance is not None and transform.size and covariance.size:
+            if (
+                transform is not None
+                and covariance is not None
+                and transform.size
+                and covariance.size
+            ):
                 row = np.asarray(transform[pos, :], dtype=float)
                 if covariance.shape == (row.size, row.size):
                     variance = float(row @ covariance @ row)
                     sigma = float(np.sqrt(max(variance, 0.0)))
             elif covariance is not None and covariance.size and pos < covariance.shape[0]:
                 sigma = float(np.sqrt(max(float(covariance[pos, pos]), 0.0)))
-        params.append(SemiexperimentalParameter(label, float(values[idx]), sigma, active, parameter_class))
+        params.append(
+            SemiexperimentalParameter(label, float(values[idx]), sigma, active, parameter_class)
+        )
     return tuple(params)
 
 
@@ -7342,6 +7920,7 @@ def _covariance(jac: np.ndarray, residual: np.ndarray) -> np.ndarray:
     keep = singular > tol
     inv_s2[keep] = 1.0 / (singular[keep] * singular[keep])
     return sigma2 * ((vh.T * inv_s2) @ vh)
+
 
 def _diagnostics(
     weighted_jac: np.ndarray,
@@ -7383,8 +7962,12 @@ def _diagnostics(
     return SemiexperimentalFitDiagnostics(
         convergence_reason=convergence_reason,
         objective=obj,
-        weighted_rms=float(np.sqrt(np.mean(weighted_residual * weighted_residual))) if weighted_residual.size else 0.0,
-        reduced_chi_square=float((weighted_residual @ weighted_residual) / dof) if weighted_residual.size else 0.0,
+        weighted_rms=float(np.sqrt(np.mean(weighted_residual * weighted_residual)))
+        if weighted_residual.size
+        else 0.0,
+        reduced_chi_square=float((weighted_residual @ weighted_residual) / dof)
+        if weighted_residual.size
+        else 0.0,
         rank=conditioning.rank,
         incremental_rank=incremental_rank,
         condition_number=conditioning.condition_number,
@@ -7446,11 +8029,15 @@ def _stationary_point_type(eigenvalues: np.ndarray) -> str:
     return "flat_or_rank_deficient"
 
 
-def _isotopes_for_observation(atoms: list[str] | tuple[str, ...], obs: IsotopologueObservation) -> list[int | None]:
+def _isotopes_for_observation(
+    atoms: list[str] | tuple[str, ...], obs: IsotopologueObservation
+) -> list[int | None]:
     isotopes: list[int | None] = [None] * len(atoms)
     for atom_index, isotope_a in obs.substitutions.items():
         if atom_index < 1 or atom_index > len(atoms):
-            raise ScientificValidationError(f"Isotopologue {obs.label} substitution atom {atom_index} is out of range")
+            raise ScientificValidationError(
+                f"Isotopologue {obs.label} substitution atom {atom_index} is out of range"
+            )
         isotopes[atom_index - 1] = int(isotope_a)
     return isotopes
 
@@ -7467,7 +8054,9 @@ def _mass_vector_for_isotopes(
     isotopes: list[int | None] | tuple[int | None, ...],
 ) -> np.ndarray:
     isotope_key = tuple(0 if item is None else int(item) for item in isotopes)
-    return np.asarray(_cached_mass_tuple(tuple(str(atom) for atom in atoms), isotope_key), dtype=float)
+    return np.asarray(
+        _cached_mass_tuple(tuple(str(atom) for atom in atoms), isotope_key), dtype=float
+    )
 
 
 @lru_cache(maxsize=4096)
@@ -7499,11 +8088,17 @@ def _validate_observations(observations: tuple[IsotopologueObservation, ...], na
     for obs in observations:
         for atom_index in obs.substitutions:
             if atom_index < 1 or atom_index > natoms:
-                raise ScientificValidationError(f"Isotopologue {obs.label} substitution atom {atom_index} is out of range")
+                raise ScientificValidationError(
+                    f"Isotopologue {obs.label} substitution atom {atom_index} is out of range"
+                )
         if any(value <= 0.0 for value in obs.corrected.as_tuple()):
-            raise ScientificValidationError(f"Isotopologue {obs.label} has non-positive equilibrium rotational constants")
+            raise ScientificValidationError(
+                f"Isotopologue {obs.label} has non-positive equilibrium rotational constants"
+            )
         if obs.weights is not None and any(value <= 0.0 for value in obs.weights.as_tuple()):
-            raise ScientificValidationError(f"Isotopologue {obs.label} has non-positive least-squares weights")
+            raise ScientificValidationError(
+                f"Isotopologue {obs.label} has non-positive least-squares weights"
+            )
 
 
 def _topology_lock(
@@ -7523,7 +8118,10 @@ def _topology_lock(
     except Exception as exc:
         raise ScientificValidationError(f"Initial topology validation failed: {exc}") from exc
     bonds = tuple(sorted(tuple(sorted((int(i), int(j)))) for i, j in graph.bonds))
-    adjacency = tuple(tuple(sorted(int(item) for item in graph.adjacency[index])) for index in range(len(atomic_numbers)))
+    adjacency = tuple(
+        tuple(sorted(int(item) for item in graph.adjacency[index]))
+        for index in range(len(atomic_numbers))
+    )
     lock = TopologyLock(atomic_numbers=atomic_numbers, bonds=bonds, adjacency=adjacency)
     if validate_contacts:
         _validate_spurious_contacts(coords, lock, context=context)
@@ -7557,10 +8155,14 @@ def _validate_locked_topology(
     if len(removed) > 8:
         details.append(f"{len(removed) - 8} additional removed bonds")
     suffix = "; " + "; ".join(details) if details else ""
-    raise ScientificValidationError(f"Topology changed during {context}; rejecting geometry{suffix}")
+    raise ScientificValidationError(
+        f"Topology changed during {context}; rejecting geometry{suffix}"
+    )
 
 
-def _validate_spurious_contacts(coords: np.ndarray, reference: TopologyLock, *, context: str) -> None:
+def _validate_spurious_contacts(
+    coords: np.ndarray, reference: TopologyLock, *, context: str
+) -> None:
     coords = np.asarray(coords, dtype=float)
     bonded = set(reference.bonds)
     contacts: list[tuple[int, int, float]] = []
@@ -7584,7 +8186,9 @@ def _validate_spurious_contacts(coords: np.ndarray, reference: TopologyLock, *, 
         return
     preview = ", ".join(f"{i + 1}-{j + 1} ({distance:.3f} A)" for i, j, distance in contacts[:8])
     extra = f"; {len(contacts) - 8} additional H-H contacts" if len(contacts) > 8 else ""
-    raise ScientificValidationError(f"Spurious nonbonded H-H contact during {context}: {preview}{extra}")
+    raise ScientificValidationError(
+        f"Spurious nonbonded H-H contact during {context}: {preview}{extra}"
+    )
 
 
 def _bond_label(pair: tuple[int, int]) -> str:

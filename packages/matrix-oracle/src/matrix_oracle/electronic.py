@@ -117,7 +117,9 @@ def load_electronic_gui_state(path: Path | str) -> ElectronicGuiState:
         )
     section_rows = []
     for name in ELECTRONIC_SECTION_NAMES:
-        content = section_content(read_sectioned_lines(target), name) if has_section(target, name) else []
+        content = (
+            section_content(read_sectioned_lines(target), name) if has_section(target, name) else []
+        )
         section_rows.append((name, "yes" if content else "no", str(len(content))))
     ready = any(row[1] == "yes" for row in section_rows)
     messages = () if ready else ("missing #ELECTRONIC/#TRANSITIONS/#ORBITALS sections",)
@@ -191,7 +193,9 @@ def _transitions_table(target: Path) -> ElectronicTable:
                 record.to_state,
                 _format_float(record.energy_ev),
                 "" if record.wavelength_nm is None else _format_float(record.wavelength_nm),
-                "" if record.oscillator_strength is None else _format_float(record.oscillator_strength),
+                ""
+                if record.oscillator_strength is None
+                else _format_float(record.oscillator_strength),
                 record.source,
             )
             for record in records
@@ -237,7 +241,9 @@ def viewer_command_for_orbital_record(
     if role == "geometry" or fmt in {"XYZ", "XYZIN"}:
         if not _executable_available(avogadro_executable):
             raise ValueError(f"Avogadro executable not found: {avogadro_executable}")
-        return external_viewer_command(target, executable=avogadro_executable, label="Open in Avogadro")
+        return external_viewer_command(
+            target, executable=avogadro_executable, label="Open in Avogadro"
+        )
     if fmt in {"MOLDEN", "CUBE"}:
         if _molden_ready(molden_executable):
             return molden_command(target, executable=molden_executable)
@@ -245,7 +251,9 @@ def viewer_command_for_orbital_record(
     if fmt in {"FCHK", "FCH"}:
         if _molden_ready(molden_executable):
             return molden_command(target, executable=molden_executable)
-        raise ValueError("FCHK viewing requires Molden with XQuartz; MOrbVis accepts Molden/Cube files")
+        raise ValueError(
+            "FCHK viewing requires Molden with XQuartz; MOrbVis accepts Molden/Cube files"
+        )
     raise ValueError(f"no configured viewer for #ORBITALS format {fmt}")
 
 

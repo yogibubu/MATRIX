@@ -49,12 +49,15 @@ class SemiexperimentalGICPreview:
             "Suggested parameter classes:",
         ]
         lines.extend(
-            f"  {item.name}:{item.mode}:{'|'.join(item.patterns)}" for item in self.suggested_classes
+            f"  {item.name}:{item.mode}:{'|'.join(item.patterns)}"
+            for item in self.suggested_classes
         )
         if not self.suggested_classes:
             lines.append("  none")
         lines.extend(["", "GIC labels:"])
-        lines.extend(f"  {row.label} [{row.kind}] class={row.suggested_class or '-'}" for row in self.rows)
+        lines.extend(
+            f"  {row.label} [{row.kind}] class={row.suggested_class or '-'}" for row in self.rows
+        )
         if self.warnings:
             lines.extend(["", "Warnings:", *[f"  {item}" for item in self.warnings]])
         return "\n".join(lines)
@@ -142,7 +145,9 @@ def preview_semiexperimental_gics(
     return SemiexperimentalGICPreview(tuple(atoms), labels, rows, suggestions, warnings)
 
 
-def validate_semiexperimental_request(request: SemiexperimentalFitRequest) -> tuple[SemiexperimentalValidationIssue, ...]:
+def validate_semiexperimental_request(
+    request: SemiexperimentalFitRequest,
+) -> tuple[SemiexperimentalValidationIssue, ...]:
     issues: list[SemiexperimentalValidationIssue] = []
     try:
         geometry_input = read_geometry_input(Path(request.initial_geometry))
@@ -154,32 +159,74 @@ def validate_semiexperimental_request(request: SemiexperimentalFitRequest) -> tu
         issues.append(SemiexperimentalValidationIssue("error", "Duplicate isotopologue labels"))
     for obs in request.observations:
         if any(value <= 0.0 for value in obs.constants.as_tuple()):
-            issues.append(SemiexperimentalValidationIssue("error", f"{obs.label}: rotational constants must be positive"))
+            issues.append(
+                SemiexperimentalValidationIssue(
+                    "error", f"{obs.label}: rotational constants must be positive"
+                )
+            )
         if obs.weights is not None and any(value <= 0.0 for value in obs.weights.as_tuple()):
-            issues.append(SemiexperimentalValidationIssue("error", f"{obs.label}: sigma-derived weights must be positive"))
+            issues.append(
+                SemiexperimentalValidationIssue(
+                    "error", f"{obs.label}: sigma-derived weights must be positive"
+                )
+            )
         seen_atoms = set()
         for atom_index, mass in obs.substitutions.items():
             if atom_index in seen_atoms:
-                issues.append(SemiexperimentalValidationIssue("error", f"{obs.label}: duplicate substitution at atom {atom_index}"))
+                issues.append(
+                    SemiexperimentalValidationIssue(
+                        "error", f"{obs.label}: duplicate substitution at atom {atom_index}"
+                    )
+                )
             seen_atoms.add(atom_index)
             if atom_index < 1 or atom_index > len(atoms):
-                issues.append(SemiexperimentalValidationIssue("error", f"{obs.label}: substitution atom {atom_index} is out of range"))
+                issues.append(
+                    SemiexperimentalValidationIssue(
+                        "error", f"{obs.label}: substitution atom {atom_index} is out of range"
+                    )
+                )
             elif mass == 2 and atoms[atom_index - 1].upper() != "H":
-                issues.append(SemiexperimentalValidationIssue("warning", f"{obs.label}: deuterium substitution on non-H atom {atom_index}"))
-        if any(abs(value) > 0.25 * max(abs(base), 1.0) for value, base in zip(obs.correction.as_tuple(), obs.constants.as_tuple())):
-            issues.append(SemiexperimentalValidationIssue("warning", f"{obs.label}: unusually large vibrational correction"))
+                issues.append(
+                    SemiexperimentalValidationIssue(
+                        "warning", f"{obs.label}: deuterium substitution on non-H atom {atom_index}"
+                    )
+                )
+        if any(
+            abs(value) > 0.25 * max(abs(base), 1.0)
+            for value, base in zip(obs.correction.as_tuple(), obs.constants.as_tuple())
+        ):
+            issues.append(
+                SemiexperimentalValidationIssue(
+                    "warning", f"{obs.label}: unusually large vibrational correction"
+                )
+            )
     try:
         preview = preview_semiexperimental_gics(request.initial_geometry, request.observations)
     except Exception as exc:
-        issues.append(SemiexperimentalValidationIssue("error", f"Cannot generate GIC preview: {exc}"))
+        issues.append(
+            SemiexperimentalValidationIssue("error", f"Cannot generate GIC preview: {exc}")
+        )
         return tuple(issues)
     for parameter_class in request.parameter_classes:
-        matches = [label for label in preview.gic_labels if any(pattern.lower() in label.lower() for pattern in parameter_class.patterns)]
+        matches = [
+            label
+            for label in preview.gic_labels
+            if any(pattern.lower() in label.lower() for pattern in parameter_class.patterns)
+        ]
         if not matches:
-            issues.append(SemiexperimentalValidationIssue("error", f"Parameter class {parameter_class.name} matches no GIC"))
+            issues.append(
+                SemiexperimentalValidationIssue(
+                    "error", f"Parameter class {parameter_class.name} matches no GIC"
+                )
+            )
         kinds = {_gic_kind(label) for label in matches}
         if len(kinds) > 1:
-            issues.append(SemiexperimentalValidationIssue("error", f"Parameter class {parameter_class.name} mixes coordinate types: {', '.join(sorted(kinds))}"))
+            issues.append(
+                SemiexperimentalValidationIssue(
+                    "error",
+                    f"Parameter class {parameter_class.name} mixes coordinate types: {', '.join(sorted(kinds))}",
+                )
+            )
     return tuple(issues)
 
 
@@ -194,16 +241,26 @@ def preview_semiexperimental_conditioning(
     z_numbers = np.array([_atomic_number(symbol) for symbol in atoms], dtype=int)
     prims, u_matrix, labels = _gic_model(coords_arr, z_numbers)
     measurement = _build_measurement_model(request, atoms, coords_arr, prims, u_matrix, labels)
-    fixed_parameters = _combined_fixed_parameters(request.fixed_parameters, geometry_input.fixed_parameters)
+    fixed_parameters = _combined_fixed_parameters(
+        request.fixed_parameters, geometry_input.fixed_parameters
+    )
     fixed_gic_patterns = _gic_fixed_patterns(fixed_parameters)
     fixed_primitives = _merge_primitives(
         _fixed_primitives_from_patterns(fixed_parameters),
         _hydrogen_fixed_primitives(atoms, prims, fixed_parameters, coords=coords_arr),
     )
-    fixed_primitives = _symmetry_expanded_fixed_primitives(atoms, coords_arr, prims, fixed_primitives)
-    active = _active_mask(labels, fixed_gic_patterns, request.parameter_classes) & _gicforge_a1_mask(labels)
-    jac_gic = _jacobian_constants_wrt_gics(atoms, coords_arr, request, prims, u_matrix, active, labels, measurement, step=step)
-    transform, _names, _class_by_gic = _parameter_class_transform(labels, active, request.parameter_classes)
+    fixed_primitives = _symmetry_expanded_fixed_primitives(
+        atoms, coords_arr, prims, fixed_primitives
+    )
+    active = _active_mask(
+        labels, fixed_gic_patterns, request.parameter_classes
+    ) & _gicforge_a1_mask(labels)
+    jac_gic = _jacobian_constants_wrt_gics(
+        atoms, coords_arr, request, prims, u_matrix, active, labels, measurement, step=step
+    )
+    transform, _names, _class_by_gic = _parameter_class_transform(
+        labels, active, request.parameter_classes
+    )
     transform, _names = _primitive_constrained_transform(
         coords_arr,
         prims,
@@ -244,12 +301,17 @@ def suggest_parameter_classes(
             patterns = tuple(
                 f"R({heavy},{h})"
                 for h in h_atoms
-                if _matches_any(gic_labels, f"R({heavy},{h})") or _matches_any(gic_labels, f"R({h},{heavy})")
+                if _matches_any(gic_labels, f"R({heavy},{h})")
+                or _matches_any(gic_labels, f"R({h},{heavy})")
             )
             if len(patterns) >= 2:
                 name = f"{atoms[heavy - 1].upper()}H_stretches"
                 suggestions.append(ParameterClassConstraint(name, patterns, "shared"))
-        angle_patterns = tuple(_first_gic_expression(label, "angle") for label in gic_labels if _gic_kind(label) == "angle" and _angle_has_h(label, atoms))
+        angle_patterns = tuple(
+            _first_gic_expression(label, "angle")
+            for label in gic_labels
+            if _gic_kind(label) == "angle" and _angle_has_h(label, atoms)
+        )
         angle_patterns = tuple(pattern for pattern in angle_patterns if pattern)
         if angle_patterns and not h_substituted:
             suggestions.append(ParameterClassConstraint("XH_angles", angle_patterns, "fixed"))
@@ -282,7 +344,9 @@ def write_semiexperimental_html_report(
         _row("Robust loss", result.diagnostics.robust_loss),
         _row("Robust scale", f"{result.diagnostics.robust_scale:.8g}"),
         _row("Downweighted rows", str(result.diagnostics.robust_downweighted_observations)),
-        _row("Downweighted isotopologues", str(result.diagnostics.robust_downweighted_isotopologues)),
+        _row(
+            "Downweighted isotopologues", str(result.diagnostics.robust_downweighted_isotopologues)
+        ),
         _row("Rank", str(result.diagnostics.rank)),
         _row("Condition number", f"{result.diagnostics.condition_number:.8g}"),
         _row("Observable", result.diagnostics.observable),
@@ -327,7 +391,9 @@ def run_semiexperimental_benchmark(
             outdir=case_out,
         )
         rot_diffs = [item.difference_MHz for item in result.rotational_constants]
-        rotational_rms = float(np.sqrt(np.mean(np.asarray(rot_diffs, dtype=float) ** 2))) if rot_diffs else 0.0
+        rotational_rms = (
+            float(np.sqrt(np.mean(np.asarray(rot_diffs, dtype=float) ** 2))) if rot_diffs else 0.0
+        )
         rows.append(
             SemiexperimentalBenchmarkRow(
                 case.label,
@@ -392,9 +458,24 @@ def _preview_rows(
 ) -> tuple[SemiexperimentalGICPreviewRow, ...]:
     rows = []
     for label in labels:
-        assigned = next((item.name for item in suggestions if any(pattern.lower() in label.lower() for pattern in item.patterns)), "")
-        state = "fixed_by_input" if any(pattern.lower() in label.lower() for pattern in fixed_parameters) else "active"
-        rows.append(SemiexperimentalGICPreviewRow(label, _gic_kind(label), _gic_atoms(label), assigned, state))
+        assigned = next(
+            (
+                item.name
+                for item in suggestions
+                if any(pattern.lower() in label.lower() for pattern in item.patterns)
+            ),
+            "",
+        )
+        state = (
+            "fixed_by_input"
+            if any(pattern.lower() in label.lower() for pattern in fixed_parameters)
+            else "active"
+        )
+        rows.append(
+            SemiexperimentalGICPreviewRow(
+                label, _gic_kind(label), _gic_atoms(label), assigned, state
+            )
+        )
     return tuple(rows)
 
 
@@ -419,7 +500,11 @@ def _gic_atoms(label: str) -> tuple[int, ...]:
                 end = label.find(")", pos)
                 if end < 0:
                     break
-                atoms.extend(int(part.strip()) for part in label[pos + len(marker):end].split(",") if part.strip().lstrip("-").isdigit() and int(part.strip()) > 0)
+                atoms.extend(
+                    int(part.strip())
+                    for part in label[pos + len(marker) : end].split(",")
+                    if part.strip().lstrip("-").isdigit() and int(part.strip()) > 0
+                )
                 start = end + 1
     return tuple(sorted(set(atoms)))
 
@@ -443,11 +528,13 @@ def _first_gic_expression(label: str, kind: str) -> str:
             end = label.find(")", pos)
             if end < 0:
                 break
-            return label[pos:end + 1]
+            return label[pos : end + 1]
     return ""
 
 
-def _substituted_hydrogens(atoms: tuple[str, ...], observations: tuple[IsotopologueObservation, ...]) -> set[int]:
+def _substituted_hydrogens(
+    atoms: tuple[str, ...], observations: tuple[IsotopologueObservation, ...]
+) -> set[int]:
     result = set()
     for obs in observations:
         for atom_index in obs.substitutions:
@@ -478,7 +565,11 @@ def _label_atom_pairs(label: str, kind: str) -> tuple[tuple[int, int], ...]:
             end = label.find(")", pos)
             if end < 0:
                 break
-            parts = [int(part.strip()) for part in label[pos + len(marker):end].split(",") if part.strip().lstrip("-").isdigit()]
+            parts = [
+                int(part.strip())
+                for part in label[pos + len(marker) : end].split(",")
+                if part.strip().lstrip("-").isdigit()
+            ]
             parts = [part for part in parts if part > 0]
             if len(parts) >= 2:
                 pairs.append((parts[0], parts[-1]))
@@ -496,7 +587,9 @@ def _angle_has_h(label: str, atoms: tuple[str, ...]) -> bool:
     if not expr:
         return False
     atom_text = expr[expr.find("(") + 1 : -1]
-    atom_ids = [int(part.strip()) for part in atom_text.split(",") if part.strip().lstrip("-").isdigit()]
+    atom_ids = [
+        int(part.strip()) for part in atom_text.split(",") if part.strip().lstrip("-").isdigit()
+    ]
     return any(1 <= idx <= len(atoms) and atoms[idx - 1].upper() == "H" for idx in atom_ids)
 
 
@@ -540,7 +633,9 @@ def _diagnostic_warnings_table(result: SemiexperimentalFitResult) -> str:
 
 
 def _parameters_table(result: SemiexperimentalFitResult) -> str:
-    rows = ["<table><tr><th>Name</th><th>Value</th><th>Sigma</th><th>Active</th><th>Class</th></tr>"]
+    rows = [
+        "<table><tr><th>Name</th><th>Value</th><th>Sigma</th><th>Active</th><th>Class</th></tr>"
+    ]
     for item in result.parameters:
         rows.append(
             f"<tr><td>{escape(item.name)}</td><td>{item.value:.10g}</td><td>{item.sigma:.10g}</td>"
@@ -573,7 +668,9 @@ def _geometry_parameters_table(result: SemiexperimentalFitResult) -> str:
 
 
 def _residuals_table(result: SemiexperimentalFitResult) -> str:
-    rows = ["<table><tr><th>Isotopologue</th><th>Observable</th><th>Observed</th><th>Calculated</th><th>Residual</th></tr>"]
+    rows = [
+        "<table><tr><th>Isotopologue</th><th>Observable</th><th>Observed</th><th>Calculated</th><th>Residual</th></tr>"
+    ]
     for item in result.residuals:
         rows.append(
             f"<tr><td>{escape(item.isotopologue)}</td><td>{escape(item.constant)}</td>"
@@ -604,7 +701,9 @@ def _rotational_constants_table(result: SemiexperimentalFitResult) -> str:
 def _kraitchman_table(result: SemiexperimentalFitResult) -> str:
     if not result.kraitchman:
         return "<p>No single-substitution Kraitchman comparison available.</p>"
-    rows = ["<table><tr><th>Isotopologue</th><th>Atom</th><th>Axis</th><th>Kraitchman abs A</th><th>Fit abs A</th><th>Difference A</th></tr>"]
+    rows = [
+        "<table><tr><th>Isotopologue</th><th>Atom</th><th>Axis</th><th>Kraitchman abs A</th><th>Fit abs A</th><th>Difference A</th></tr>"
+    ]
     for item in result.kraitchman:
         rows.append(
             f"<tr><td>{escape(item.isotopologue)}</td><td>{item.atom_index} {escape(item.atom)}</td>"
@@ -623,7 +722,9 @@ def _latex_parameter_table(result: SemiexperimentalFitResult) -> str:
         "\\midrule",
     ]
     for item in result.parameters:
-        lines.append(f"{_tex(item.name)} & {item.value:.8g} & {item.sigma:.3g} & {int(item.active)} & {_tex(item.parameter_class)} \\\\")
+        lines.append(
+            f"{_tex(item.name)} & {item.value:.8g} & {item.sigma:.3g} & {int(item.active)} & {_tex(item.parameter_class)} \\\\"
+        )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     return "\n".join(lines)
 
@@ -636,7 +737,9 @@ def _latex_residual_table(result: SemiexperimentalFitResult) -> str:
         "\\midrule",
     ]
     for item in result.residuals:
-        lines.append(f"{_tex(item.isotopologue)} & {_tex(item.constant)} & {item.observed_equilibrium_MHz:.8g} & {item.calculated_MHz:.8g} & {item.residual_MHz:.3g} \\\\")
+        lines.append(
+            f"{_tex(item.isotopologue)} & {_tex(item.constant)} & {item.observed_equilibrium_MHz:.8g} & {item.calculated_MHz:.8g} & {item.residual_MHz:.3g} \\\\"
+        )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     return "\n".join(lines)
 
@@ -666,10 +769,18 @@ def _latex_kraitchman_table(result: SemiexperimentalFitResult) -> str:
         "\\midrule",
     ]
     for item in result.kraitchman:
-        lines.append(f"{_tex(item.isotopologue)} & {item.atom_index} {_tex(item.atom)} & {_tex(item.coordinate)} & {item.kraitchman_abs_angstrom:.6g} & {item.fitted_abs_angstrom:.6g} & {item.difference_angstrom:.3g} \\\\")
+        lines.append(
+            f"{_tex(item.isotopologue)} & {item.atom_index} {_tex(item.atom)} & {_tex(item.coordinate)} & {item.kraitchman_abs_angstrom:.6g} & {item.fitted_abs_angstrom:.6g} & {item.difference_angstrom:.3g} \\\\"
+        )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     return "\n".join(lines)
 
 
 def _tex(text: str) -> str:
-    return str(text).replace("\\", "\\textbackslash{}").replace("_", "\\_").replace("&", "\\&").replace("%", "\\%")
+    return (
+        str(text)
+        .replace("\\", "\\textbackslash{}")
+        .replace("_", "\\_")
+        .replace("&", "\\&")
+        .replace("%", "\\%")
+    )

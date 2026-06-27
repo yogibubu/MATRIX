@@ -111,9 +111,7 @@ def modes_from_gaussian_log(
         raise ValueError("fchk_path is required for atomic masses")
     masses_amu = read_fchk_masses(fchk_path)
 
-    F, G, U, prims = hessian_cart_to_internal(
-        Hx, coords_ang, Z, masses_amu, scale_map=scale_map
-    )
+    F, G, U, prims = hessian_cart_to_internal(Hx, coords_ang, Z, masses_amu, scale_map=scale_map)
     freqs, modes_q = gf_frequencies(F, G)
     return freqs, modes_q, U, prims
 
@@ -126,7 +124,11 @@ def read_fchk_masses(fchk):
     i = 0
     while i < len(lines):
         l = lines[i]
-        if l.startswith("Real atomic weights") or "Atomic masses" in l or l.startswith("Vib-AtMass"):
+        if (
+            l.startswith("Real atomic weights")
+            or "Atomic masses" in l
+            or l.startswith("Vib-AtMass")
+        ):
             n = int(l.split()[-1])
             vals = []
             i += 1

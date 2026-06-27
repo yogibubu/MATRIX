@@ -277,9 +277,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 for summary in self.workbench_summaries.values():
                     summary.setPlainText("No MATRIX project loaded")
                 self.details.setPlainText(
-                    "\n".join(
-                        f"{spec.title}: {spec.description}" for spec in ORACLE_GUI_WINDOWS
-                    )
+                    "\n".join(f"{spec.title}: {spec.description}" for spec in ORACLE_GUI_WINDOWS)
                 )
                 self.log_output.setPlainText("\n".join(self.controller.log_lines))
                 self.run_button.setEnabled(False)
@@ -304,9 +302,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._set_default_trinity_outputs(state.xyzin)
             self.path_label.setText(str(state.xyzin))
             for workflow in state.workflows:
-                self.workflow_list.addItem(
-                    f"{workflow.status.value.upper():8s}  {workflow.title}"
-                )
+                self.workflow_list.addItem(f"{workflow.status.value.upper():8s}  {workflow.title}")
 
             self.section_table.setRowCount(len(state.sections))
             for row, section in enumerate(state.sections):
@@ -359,10 +355,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                         f"Status: {workflow.status.value}",
                         workflow.message,
                         "",
-                        "Required: "
-                        + (", ".join(workflow.required_sections) or "none"),
-                        "Produced: "
-                        + (", ".join(workflow.produced_sections) or "none"),
+                        "Required: " + (", ".join(workflow.required_sections) or "none"),
+                        "Produced: " + (", ".join(workflow.produced_sections) or "none"),
                         "",
                         *self._spec_extra_lines(workflow.key),
                     ]
@@ -416,9 +410,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
 
         def _populate_contracts_table(self, xyzin: Path) -> None:
             state = load_tool_contract_gui_state(xyzin)
-            self.contracts_summary.setPlainText(
-                "\n".join(tool_contract_gui_state_lines(state))
-            )
+            self.contracts_summary.setPlainText("\n".join(tool_contract_gui_state_lines(state)))
             self._fill_table(self.contracts_table, state.table)
 
         def _clear_contracts_table(self) -> None:
@@ -535,7 +527,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 return True
             state = load_oracle_project_state(self.controller.xyzin)
             present = set(state.section_names)
-            missing = tuple(section for section in command.required_sections if section not in present)
+            missing = tuple(
+                section for section in command.required_sections if section not in present
+            )
             if not missing:
                 return True
             QMessageBox.warning(self, title, missing_sections_message(missing))
@@ -601,7 +595,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
 
             controls = QHBoxLayout()
             self.structure_source_kind = QComboBox()
-            self.structure_source_kind.addItems(("auto", "xyz", "enriched_xyz", "gaussian", "molpro", "mrcc"))
+            self.structure_source_kind.addItems(
+                ("auto", "xyz", "enriched_xyz", "gaussian", "molpro", "mrcc")
+            )
             preprocess_button = QPushButton("Preprocess")
             preprocess_button.clicked.connect(self.run_structure_preprocess)
             avogadro_button = QPushButton("Avogadro")
@@ -1477,7 +1473,10 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             )
             if path:
                 self.qm_log_path.setText(path)
-                if hasattr(self, "qm_electronic_log_path") and not self.qm_electronic_log_path.text().strip():
+                if (
+                    hasattr(self, "qm_electronic_log_path")
+                    and not self.qm_electronic_log_path.text().strip()
+                ):
                     self.qm_electronic_log_path.setText(path)
 
         def browse_qm_electronic_log_path(self) -> None:
@@ -1888,7 +1887,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
         def run_electronic_avogadro(self) -> None:
             if not self._ensure_electronic_idle("Avogadro"):
                 return
-            target = self._qm_required_path(self.electronic_viewer_target, "Avogadro", "viewer file")
+            target = self._qm_required_path(
+                self.electronic_viewer_target, "Avogadro", "viewer file"
+            )
             if target is None:
                 return
             executable = self.electronic_avogadro_executable.text().strip() or "avogadro2"
@@ -1910,7 +1911,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 command = self.electronic_controller.selected_orbital_viewer_command(
                     row,
                     molden_executable=self.electronic_molden_executable.text().strip() or "molden",
-                    avogadro_executable=self.electronic_avogadro_executable.text().strip() or "avogadro2",
+                    avogadro_executable=self.electronic_avogadro_executable.text().strip()
+                    or "avogadro2",
                     morbvis_url=self.electronic_morbvis_url.text().strip() or MORBVIS_URL,
                 )
             except (FileNotFoundError, ValueError) as exc:
@@ -1929,7 +1931,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
 
         def run_electronic_publication_export(self) -> None:
             if self.controller.xyzin is None:
-                QMessageBox.warning(self, "Electronic publication export", "Open a MATRIX xyzin first.")
+                QMessageBox.warning(
+                    self, "Electronic publication export", "Open a MATRIX xyzin first."
+                )
                 return
             formats = self._electronic_export_formats()
             if not formats:
@@ -1939,16 +1943,23 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                     "Select at least one export format.",
                 )
                 return
-            outdir = Path(self.electronic_export_dir.text().strip()) if self.electronic_export_dir.text().strip() else default_electronic_export_dir(self.controller.xyzin)
+            outdir = (
+                Path(self.electronic_export_dir.text().strip())
+                if self.electronic_export_dir.text().strip()
+                else default_electronic_export_dir(self.controller.xyzin)
+            )
             try:
-                result = self.electronic_controller.export_electronic_publication(outdir, formats=formats)
+                result = self.electronic_controller.export_electronic_publication(
+                    outdir, formats=formats
+                )
             except ValueError as exc:
                 QMessageBox.warning(self, "Electronic publication export", str(exc))
                 return
             QMessageBox.information(
                 self,
                 "Electronic publication export",
-                "Wrote Electronic publication export:\n" + "\n".join(str(path) for path in result.paths),
+                "Wrote Electronic publication export:\n"
+                + "\n".join(str(path) for path in result.paths),
             )
 
         def _ensure_electronic_idle(self, title: str) -> bool:
@@ -2443,8 +2454,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 QMessageBox.warning(self, "Thermo publication export", str(exc))
                 return
             self.controller.log(
-                "Wrote Thermo publication export:\n"
-                + "\n".join(str(path) for path in result.paths)
+                "Wrote Thermo publication export:\n" + "\n".join(str(path) for path in result.paths)
             )
             self.log_output.setPlainText("\n".join(self.controller.log_lines))
             self.refresh()
@@ -2534,7 +2544,9 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             engine_row = QHBoxLayout()
             engine_row.addWidget(QLabel("Engine"))
             self.trinity_engine_command = QLineEdit()
-            self.trinity_engine_command.setPlaceholderText("external-qm --input step.xyz --gradient gradient.json")
+            self.trinity_engine_command.setPlaceholderText(
+                "external-qm --input step.xyz --gradient gradient.json"
+            )
             engine_row.addWidget(self.trinity_engine_command, stretch=1)
             layout.addLayout(engine_row)
 

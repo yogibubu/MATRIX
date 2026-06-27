@@ -21,6 +21,7 @@ from .aromaticity import Aromaticity
 # Public API
 # ============================================================
 
+
 def build_topology_objects(
     coords,
     Z,

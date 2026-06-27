@@ -60,15 +60,15 @@ def basis_value(mode, x, exp, params):
     if exp == 0:
         return 1.0
     if mode == "poly":
-        return x ** exp
+        return x**exp
     if mode == "rational":
         s = params.get("shift", 0.0)
         f = x / (x + s)
-        return f ** exp
+        return f**exp
     if mode == "rational2":
         s = params.get("shift", 0.0)
         f = x / (x + 2.0 * s)
-        return f ** exp
+        return f**exp
     if mode == "trig":
         return math.sin(exp * x)
     if mode == "trig_cos":
@@ -84,12 +84,12 @@ def basis_value(mode, x, exp, params):
         a = params.get("a", 1.0)
         x0 = params.get("x0", 0.0)
         f = math.exp(-a * (x - x0))
-        return f ** exp
+        return f**exp
     if mode == "morse":
         a = params.get("a", 1.0)
         x0 = params.get("x0", 0.0)
         f = 1.0 - math.exp(-a * (x - x0))
-        return f ** exp
+        return f**exp
     raise ValueError(f"Unknown basis mode: {mode}")
 
 
@@ -100,7 +100,7 @@ def basis_derivative(mode, x, exp, params):
         return exp * (x ** (exp - 1))
     if mode == "rational":
         s = params.get("shift", 0.0)
-        denom = (x + s)
+        denom = x + s
         if denom == 0.0:
             return 0.0
         f = x / denom
@@ -108,7 +108,7 @@ def basis_derivative(mode, x, exp, params):
         return exp * (f ** (exp - 1)) * df
     if mode == "rational2":
         s = params.get("shift", 0.0)
-        denom = (x + 2.0 * s)
+        denom = x + 2.0 * s
         if denom == 0.0:
             return 0.0
         f = x / denom

@@ -110,12 +110,16 @@ def _mass_inverse(masses_amu: np.ndarray) -> np.ndarray:
     return np.diag(weights)
 
 
-def _internal_backtransform(bq: np.ndarray, masses_amu: np.ndarray, g_matrix: np.ndarray) -> np.ndarray:
+def _internal_backtransform(
+    bq: np.ndarray, masses_amu: np.ndarray, g_matrix: np.ndarray
+) -> np.ndarray:
     minv = _mass_inverse(masses_amu)
     return minv @ bq.T @ np.linalg.pinv(g_matrix, rcond=1.0e-10)
 
 
-def _ped(force_constants: np.ndarray, modes_internal: np.ndarray, eigenvalues: np.ndarray) -> np.ndarray:
+def _ped(
+    force_constants: np.ndarray, modes_internal: np.ndarray, eigenvalues: np.ndarray
+) -> np.ndarray:
     ped = np.zeros((force_constants.shape[0], modes_internal.shape[1]), dtype=float)
     for mode in range(modes_internal.shape[1]):
         lam = eigenvalues[mode]
@@ -233,7 +237,9 @@ def gf_from_cartesian_hessian_and_gic_b_matrix(
         gic_irreps=tuple(gic_irreps),
         point_group=point_group,
         symmetrized_gics=bool(symmetrized_gics),
-        scaling_factors=None if scaling_factors is None else np.asarray(scaling_factors, dtype=float),
+        scaling_factors=None
+        if scaling_factors is None
+        else np.asarray(scaling_factors, dtype=float),
         coordinate_source=coordinate_source,
         matrix_model=matrix_model,
         block_labels=block_labels,
@@ -450,10 +456,20 @@ def _solve_internal_gf(
     block_by_irrep: bool,
 ):
     if not block_by_irrep:
-        return solve_wilson_gf(force_constants, g_matrix, scale_to_cm=True), g_matrix, force_constants, ()
+        return (
+            solve_wilson_gf(force_constants, g_matrix, scale_to_cm=True),
+            g_matrix,
+            force_constants,
+            (),
+        )
     blocks = _irrep_blocks(gic_irreps)
     if len(blocks) <= 1:
-        return solve_wilson_gf(force_constants, g_matrix, scale_to_cm=True), g_matrix, force_constants, ()
+        return (
+            solve_wilson_gf(force_constants, g_matrix, scale_to_cm=True),
+            g_matrix,
+            force_constants,
+            (),
+        )
 
     f_block = np.zeros_like(force_constants, dtype=float)
     g_block = np.zeros_like(g_matrix, dtype=float)

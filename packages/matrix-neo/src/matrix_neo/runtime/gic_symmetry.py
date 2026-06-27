@@ -14,7 +14,10 @@ from matrix_neo.survibfit.pipeline import b_matrix_analytic
 from matrix_neo.survibfit.primitives import Primitive
 from matrix_neo.survibfit.symmetry_classifier import group_label as _group_label
 from matrix_neo.survibfit.symmetry_detector import orient_coords, symmetry_elements_from_geometry
-from matrix_neo.survibfit.symmetry_global import irrep_characters_for_operations, primitive_permutation
+from matrix_neo.survibfit.symmetry_global import (
+    irrep_characters_for_operations,
+    primitive_permutation,
+)
 
 
 SYMM_TOL = 1.0e-2
@@ -60,11 +63,19 @@ def write_gic_symmetry_files(
     oriented = _oriented_coords(atoms, coords)
     op_data = _operation_data(atoms, oriented, prims, already_oriented=True)
     backend = _requested_symmetry_backend(run_dir, symmetry_backend)
-    python_point_group = _group_label([(label, rotation, 0.0) for label, rotation, _mapping, _primitive_op in op_data])
+    python_point_group = _group_label(
+        [(label, rotation, 0.0) for label, rotation, _mapping, _primitive_op in op_data]
+    )
     fortran_point_group = _fortran_point_group(run_dir / "provout")
-    point_group = fortran_point_group if backend == "fortran" and fortran_point_group != "UNKNOWN" else python_point_group
+    point_group = (
+        fortran_point_group
+        if backend == "fortran" and fortran_point_group != "UNKNOWN"
+        else python_point_group
+    )
     raw_class_targets = _class_counts(u_matrix, prims)
-    sym_gics, class_targets = _symmetry_adapted_gics(atoms, gics, prims, u_matrix, op_data, oriented, point_group=point_group)
+    sym_gics, class_targets = _symmetry_adapted_gics(
+        atoms, gics, prims, u_matrix, op_data, oriented, point_group=point_group
+    )
     _write_gicsym(run_dir / "gicsym", sym_gics)
     _write_gic_symmetry_diagnostics(
         run_dir / "gic_symmetry_diagnostics.json",
@@ -157,7 +168,9 @@ def _oriented_coords(atoms: list[str], coords: np.ndarray) -> np.ndarray:
     return orient_coords(coords, weights=z_numbers)
 
 
-def _operation_data(atoms: list[str], coords: np.ndarray, prims: list[Primitive], already_oriented: bool = False):
+def _operation_data(
+    atoms: list[str], coords: np.ndarray, prims: list[Primitive], already_oriented: bool = False
+):
     z_numbers = np.array([atomic_number(atom) for atom in atoms], dtype=int)
     symbols = [atomic_symbol(int(z)) for z in z_numbers]
     oriented = coords if already_oriented else orient_coords(coords, weights=z_numbers)
@@ -188,15 +201,22 @@ def _operation_data(atoms: list[str], coords: np.ndarray, prims: list[Primitive]
     return _canonical_operation_order(op_data)
 
 
-def _symmetry_adapted_gics(atoms, gics, prims, u_matrix, op_data, coords: np.ndarray, *, point_group: str | None = None):
+def _symmetry_adapted_gics(
+    atoms, gics, prims, u_matrix, op_data, coords: np.ndarray, *, point_group: str | None = None
+):
     irreps = _irrep_characters([item[0] for item in op_data], point_group=point_group)
     if not irreps:
-        return [(gic.name, "A", "input", u_matrix[:, idx]) for idx, gic in enumerate(gics)], _class_counts(u_matrix, prims)
+        return [
+            (gic.name, "A", "input", u_matrix[:, idx]) for idx, gic in enumerate(gics)
+        ], _class_counts(u_matrix, prims)
     targets = _vibrational_irrep_counts(op_data, irreps, len(coords))
     b_primitive = b_matrix_analytic(prims, coords)
     source_rows = u_matrix.T @ b_primitive
     vib_projector = _vibrational_projector(coords)
-    cart_ops = [_cartesian_operation(rotation, mapping, len(coords)) for _label, rotation, mapping, _prim_op in op_data]
+    cart_ops = [
+        _cartesian_operation(rotation, mapping, len(coords))
+        for _label, rotation, mapping, _prim_op in op_data
+    ]
     projection_blocks = _projection_blocks(atoms, coords, prims)
     class_targets = _class_counts(u_matrix, prims)
     irrep_order = {irrep: idx for idx, (irrep, _chars) in enumerate(irreps)}
@@ -209,10 +229,32 @@ def _symmetry_adapted_gics(atoms, gics, prims, u_matrix, op_data, coords: np.nda
             projected_row = projected_row_raw @ vib_projector
             score = float(np.linalg.norm(projected_row))
             if score > ZERO_TOL:
-                candidates.append((score, class_order.get(kind, 9), col, irrep_order[irrep], irrep, chars, kind, projected_row_raw, projected_row))
+                candidates.append(
+                    (
+                        score,
+                        class_order.get(kind, 9),
+                        col,
+                        irrep_order[irrep],
+                        irrep,
+                        chars,
+                        kind,
+                        projected_row_raw,
+                        projected_row,
+                    )
+                )
     candidates.sort(key=lambda item: (-item[0], item[1], item[2], item[3]))
     resolved_candidates = []
-    for score, class_idx, col, irrep_idx, irrep, chars, kind, projected_row_raw, projected_row in candidates:
+    for (
+        score,
+        class_idx,
+        col,
+        irrep_idx,
+        irrep,
+        chars,
+        kind,
+        projected_row_raw,
+        projected_row,
+    ) in candidates:
         coeff = _project_column_to_irrep(u_matrix[:, col], chars, op_data)
         coeff_norm = np.linalg.norm(coeff)
         source = "primitive_projection"
@@ -232,12 +274,18 @@ def _symmetry_adapted_gics(atoms, gics, prims, u_matrix, op_data, coords: np.nda
         output_row = coeff @ b_primitive @ vib_projector
         if np.linalg.norm(output_row) < RANK_TOL:
             continue
-        resolved_candidates.append((score, class_idx, col, irrep_idx, irrep, kind, source, coeff, output_row))
-    class_targets = _rank_limited_class_targets(class_targets, resolved_candidates, sum(targets.values()))
+        resolved_candidates.append(
+            (score, class_idx, col, irrep_idx, irrep, kind, source, coeff, output_row)
+        )
+    class_targets = _rank_limited_class_targets(
+        class_targets, resolved_candidates, sum(targets.values())
+    )
     capacities: dict[tuple[str, str], int] = {}
     for irrep, _chars in irreps:
         for kind in class_targets:
-            rows = [entry[8] for entry in resolved_candidates if entry[4] == irrep and entry[5] == kind]
+            rows = [
+                entry[8] for entry in resolved_candidates if entry[4] == irrep and entry[5] == kind
+            ]
             capacities[(irrep, kind)] = _rank_capacity(rows)
     block_targets = _allocate_symmetry_class_counts(
         targets,
@@ -255,7 +303,17 @@ def _symmetry_adapted_gics(atoms, gics, prims, u_matrix, op_data, coords: np.nda
     selected_global: list[np.ndarray] = []
     selected_blocks: dict[tuple[str, str], int] = {key: 0 for key in block_targets}
     fallback_used = False
-    for _score, _class_idx, col, _irrep_idx, irrep, kind, source, coeff, _output_row in resolved_candidates:
+    for (
+        _score,
+        _class_idx,
+        col,
+        _irrep_idx,
+        irrep,
+        kind,
+        source,
+        coeff,
+        _output_row,
+    ) in resolved_candidates:
         class_key = (irrep, kind)
         if selected_blocks.get(class_key, 0) >= block_targets.get(class_key, 0):
             continue
@@ -290,11 +348,21 @@ def _symmetry_adapted_gics(atoms, gics, prims, u_matrix, op_data, coords: np.nda
             all(len(selected_rows[name]) == targets.get(name, 0) for name, _chars in irreps)
             and selected_classes == class_targets
             and selected_blocks == block_targets
-            ):
+        ):
             break
     counts = {irrep: len(rows) for irrep, rows in selected_rows.items()}
     if counts != targets:
-        for _score, _class_idx, col, _irrep_idx, irrep, kind, source, coeff, _output_row in resolved_candidates:
+        for (
+            _score,
+            _class_idx,
+            col,
+            _irrep_idx,
+            irrep,
+            kind,
+            source,
+            coeff,
+            _output_row,
+        ) in resolved_candidates:
             if len(selected_rows[irrep]) >= targets.get(irrep, 0):
                 continue
             output_row = coeff @ b_primitive @ vib_projector
@@ -309,7 +377,16 @@ def _symmetry_adapted_gics(atoms, gics, prims, u_matrix, op_data, coords: np.nda
             selected_rows[irrep].append(residual / norm)
             selected_global.append(residual / norm)
             selected_classes[kind] = selected_classes.get(kind, 0) + 1
-            chosen.append((irrep_order[irrep], col, irrep, kind, f"{source}_rank_completion", coeff / row_norm))
+            chosen.append(
+                (
+                    irrep_order[irrep],
+                    col,
+                    irrep,
+                    kind,
+                    f"{source}_rank_completion",
+                    coeff / row_norm,
+                )
+            )
             fallback_used = True
             counts = {name: len(rows) for name, rows in selected_rows.items()}
             if counts == targets:
@@ -317,9 +394,13 @@ def _symmetry_adapted_gics(atoms, gics, prims, u_matrix, op_data, coords: np.nda
     if counts != targets:
         raise RuntimeError(f"GIC symmetry reduction count mismatch: {counts}; expected {targets}")
     if selected_classes != class_targets and not fallback_used:
-        raise RuntimeError(f"GIC class count mismatch: {selected_classes}; expected {class_targets}")
+        raise RuntimeError(
+            f"GIC class count mismatch: {selected_classes}; expected {class_targets}"
+        )
     adapted = []
-    for _irrep_idx, _col, irrep, kind, source, coeff in sorted(chosen, key=lambda item: (item[0], item[1])):
+    for _irrep_idx, _col, irrep, kind, source, coeff in sorted(
+        chosen, key=lambda item: (item[0], item[1])
+    ):
         adapted.append((_next_name(irrep, kind, used_names), irrep, source, coeff))
     return adapted, class_targets
 
@@ -348,10 +429,22 @@ def _rank_limited_class_targets(
     if current_total == target_total:
         return class_targets
     if current_total < target_total:
-        raise RuntimeError(f"GIC class targets below vibrational rank: {class_targets}; target={target_total}")
+        raise RuntimeError(
+            f"GIC class targets below vibrational rank: {class_targets}; target={target_total}"
+        )
     selected_rows: list[np.ndarray] = []
     counts = {kind: 0 for kind in class_targets}
-    for _score, _class_idx, _col, _irrep_idx, _irrep, kind, _source, _coeff, output_row in resolved_candidates:
+    for (
+        _score,
+        _class_idx,
+        _col,
+        _irrep_idx,
+        _irrep,
+        kind,
+        _source,
+        _coeff,
+        output_row,
+    ) in resolved_candidates:
         if counts.get(kind, 0) >= class_targets.get(kind, 0):
             continue
         residual = _orthogonal_residual(output_row, selected_rows)
@@ -362,7 +455,9 @@ def _rank_limited_class_targets(
         counts[kind] = counts.get(kind, 0) + 1
         if sum(counts.values()) == target_total:
             return {kind: count for kind, count in counts.items() if count}
-    raise RuntimeError(f"Unable to reduce GIC class targets {class_targets} to vibrational rank {target_total}")
+    raise RuntimeError(
+        f"Unable to reduce GIC class targets {class_targets} to vibrational rank {target_total}"
+    )
 
 
 def _allocate_symmetry_class_counts(
@@ -380,11 +475,15 @@ def _allocate_symmetry_class_counts(
         if row_index == len(irrep_order):
             return all(value == 0 for value in remaining_classes.values())
         irrep = irrep_order[row_index]
-        for row_assignment in _row_count_assignments(irrep, targets[irrep], remaining_classes, capacities, kind_order):
+        for row_assignment in _row_count_assignments(
+            irrep, targets[irrep], remaining_classes, capacities, kind_order
+        ):
             for kind, count in row_assignment.items():
                 remaining_classes[kind] -= count
                 assignments[(irrep, kind)] = count
-            if _remaining_capacity_sufficient(row_index + 1, irrep_order, kind_order, remaining_classes, capacities) and backtrack(row_index + 1):
+            if _remaining_capacity_sufficient(
+                row_index + 1, irrep_order, kind_order, remaining_classes, capacities
+            ) and backtrack(row_index + 1):
                 return True
             for kind, count in row_assignment.items():
                 remaining_classes[kind] += count
@@ -428,7 +527,9 @@ def _row_count_assignments(
                 current.pop(kind, None)
             rest_capacity = 0
             for next_kind in kind_order[kind_index + 1 :]:
-                rest_capacity += min(remaining_classes.get(next_kind, 0), capacities.get((irrep, next_kind), 0))
+                rest_capacity += min(
+                    remaining_classes.get(next_kind, 0), capacities.get((irrep, next_kind), 0)
+                )
             if remaining - count <= rest_capacity:
                 rec(kind_index + 1, remaining - count)
         current.pop(kind, None)
@@ -477,11 +578,15 @@ def _source_column_order(
     )
 
 
-def _projection_blocks(atoms: list[str], coords: np.ndarray, prims: list[Primitive]) -> list[tuple[str, set[int]]]:
+def _projection_blocks(
+    atoms: list[str], coords: np.ndarray, prims: list[Primitive]
+) -> list[tuple[str, set[int]]]:
     blocks: list[tuple[str, set[int]]] = []
     z_numbers = [atomic_number(atom) for atom in atoms]
     try:
-        _continuous, graph, ringset, _synthons, _aromaticity = build_topology_objects(coords, z_numbers)
+        _continuous, graph, ringset, _synthons, _aromaticity = build_topology_objects(
+            coords, z_numbers
+        )
     except Exception:
         return blocks
     adjacency = [set(neigh) for neigh in graph.adjacency]
@@ -492,7 +597,8 @@ def _projection_blocks(atoms: list[str], coords: np.ndarray, prims: list[Primiti
         idxs = {
             idx
             for idx, prim in enumerate(prims)
-            if prim.kind in {"angle", "dihedral", "out_of_plane"} and _ring_mixed_member(prim, ring_atoms, adjacency)
+            if prim.kind in {"angle", "dihedral", "out_of_plane"}
+            and _ring_mixed_member(prim, ring_atoms, adjacency)
         }
         _append_block(blocks, seen, f"ring_mixed_{ring.index + 1}", idxs)
 
@@ -502,13 +608,19 @@ def _projection_blocks(atoms: list[str], coords: np.ndarray, prims: list[Primiti
         idxs = {
             idx
             for idx, prim in enumerate(prims)
-            if prim.kind in {"dihedral", "out_of_plane"} and _oop_local_member(prim, center, local_atoms, adjacency)
+            if prim.kind in {"dihedral", "out_of_plane"}
+            and _oop_local_member(prim, center, local_atoms, adjacency)
         }
         _append_block(blocks, seen, f"oop_local_{center + 1}", idxs)
     return blocks
 
 
-def _append_block(blocks: list[tuple[str, set[int]]], seen: set[tuple[str, tuple[int, ...]]], name: str, idxs: set[int]) -> None:
+def _append_block(
+    blocks: list[tuple[str, set[int]]],
+    seen: set[tuple[str, tuple[int, ...]]],
+    name: str,
+    idxs: set[int],
+) -> None:
     if len(idxs) < 2:
         return
     key = (name.split("_", 1)[0], tuple(sorted(idxs)))
@@ -530,7 +642,9 @@ def _ring_mixed_member(prim: Primitive, ring_atoms: set[int], adjacency: list[se
     return all(any(neigh in ring_atoms for neigh in adjacency[atom]) for atom in external)
 
 
-def _oop_local_member(prim: Primitive, center: int, local_atoms: set[int], adjacency: list[set[int]]) -> bool:
+def _oop_local_member(
+    prim: Primitive, center: int, local_atoms: set[int], adjacency: list[set[int]]
+) -> bool:
     atoms = set(prim.atoms)
     if not atoms.issubset(local_atoms):
         return False
@@ -538,12 +652,19 @@ def _oop_local_member(prim: Primitive, center: int, local_atoms: set[int], adjac
         return len(prim.atoms) >= 2 and prim.atoms[1] == center
     if prim.kind != "dihedral":
         return False
-    return center in atoms and sum(1 for atom in atoms if atom != center and atom in adjacency[center]) >= 3
+    return (
+        center in atoms
+        and sum(1 for atom in atoms if atom != center and atom in adjacency[center]) >= 3
+    )
 
 
 def _canonical_operation_order(op_data):
     labels = [item[0] for item in op_data]
-    if len(op_data) == 4 and any(label.startswith("C2") for label in labels) and sum(label.startswith("sigma") for label in labels) == 2:
+    if (
+        len(op_data) == 4
+        and any(label.startswith("C2") for label in labels)
+        and sum(label.startswith("sigma") for label in labels) == 2
+    ):
         order = {"E": 0, "C2": 1, "sigma_xz": 2, "sigma_xy": 3}
 
         def key(item):
@@ -566,7 +687,9 @@ def _cartesian_operation(rotation: np.ndarray, mapping: tuple[int, ...], natoms:
     return matrix
 
 
-def _project_cartesian_row(row: np.ndarray, chars: np.ndarray, cart_ops: list[np.ndarray]) -> np.ndarray:
+def _project_cartesian_row(
+    row: np.ndarray, chars: np.ndarray, cart_ops: list[np.ndarray]
+) -> np.ndarray:
     projected = np.zeros_like(row)
     for op_index, op_matrix in enumerate(cart_ops):
         projected += chars[op_index] * (row @ op_matrix)
@@ -581,7 +704,9 @@ def _vibrational_projector(coords: np.ndarray) -> np.ndarray:
         vec[axis::3] = 1.0
         basis.append(vec)
     for axis in np.eye(3):
-        vec = np.array([component for coord in coords for component in np.cross(axis, coord)], dtype=float)
+        vec = np.array(
+            [component for coord in coords for component in np.cross(axis, coord)], dtype=float
+        )
         basis.append(vec)
     ortho: list[np.ndarray] = []
     for vec in basis:
@@ -662,11 +787,15 @@ def _orthogonal_residual(vector: np.ndarray, basis: list[np.ndarray]) -> np.ndar
     return residual
 
 
-def _irrep_characters(labels: list[str], point_group: str | None = None) -> list[tuple[str, np.ndarray]]:
+def _irrep_characters(
+    labels: list[str], point_group: str | None = None
+) -> list[tuple[str, np.ndarray]]:
     return irrep_characters_for_operations(labels, point_group=point_group)
 
 
-def _vibrational_irrep_counts(op_data, irreps: list[tuple[str, np.ndarray]], natoms: int) -> dict[str, int]:
+def _vibrational_irrep_counts(
+    op_data, irreps: list[tuple[str, np.ndarray]], natoms: int
+) -> dict[str, int]:
     gamma_3n = []
     gamma_trans = []
     gamma_rot = []
@@ -738,7 +867,11 @@ def _write_gic_symmetry_diagnostics(
         b_primitive = b_matrix_analytic(prims, coords)
         vib_projector = _vibrational_projector(coords)
         for irrep in targets:
-            rows = [column @ b_primitive @ vib_projector for _name, row_irrep, _source, column in sym_gics if row_irrep == irrep]
+            rows = [
+                column @ b_primitive @ vib_projector
+                for _name, row_irrep, _source, column in sym_gics
+                if row_irrep == irrep
+            ]
             b_ranks[irrep] = int(np.linalg.matrix_rank(np.array(rows), tol=RANK_TOL)) if rows else 0
     payload = {
         "schema": "oracle.gic_symmetry.v1",
@@ -783,7 +916,9 @@ def _class_from_name(name: str) -> str:
 
 def _write_symmetrized_gauin(source: Path, target: Path, sym_gics, prims: list[Primitive]) -> None:
     lines = source.read_text(encoding="utf-8", errors="replace").splitlines()
-    first_gic = next((i for i, line in enumerate(lines) if _parse_gic_line(line) is not None), len(lines))
+    first_gic = next(
+        (i for i, line in enumerate(lines) if _parse_gic_line(line) is not None), len(lines)
+    )
     prefix = [_explicit_gic_route(line) for line in lines[:first_gic]]
     out = list(prefix)
     a1 = [item for item in sym_gics if item[1] in {"A1", "A", "Ag", "A'"}]
@@ -828,7 +963,10 @@ def _requested_symmetry_backend(run_dir: Path, explicit: str | None = None) -> s
 def _fortran_point_group(provout: Path) -> str:
     if not provout.exists():
         return "UNKNOWN"
-    match = re.search(r"Point Group from symm\.f:\s*([A-Za-z0-9]+)", provout.read_text(encoding="utf-8", errors="replace"))
+    match = re.search(
+        r"Point Group from symm\.f:\s*([A-Za-z0-9]+)",
+        provout.read_text(encoding="utf-8", errors="replace"),
+    )
     return match.group(1) if match else "UNKNOWN"
 
 
@@ -873,7 +1011,9 @@ def _append_symmetrized_provout(path: Path, sym_gics, prims: list[Primitive]) ->
         " Name          Irrep    Source                      Coordinate",
     ]
     for name, irrep, source, column in sym_gics:
-        block.append(f" {name:<13s} {irrep:<8s} {source:<27s} {_format_gic_line(name, column, prims).strip()}")
+        block.append(
+            f" {name:<13s} {irrep:<8s} {source:<27s} {_format_gic_line(name, column, prims).strip()}"
+        )
     block.append(PROVOUT_SYMM_END)
     path.write_text("\n".join(clean + block) + "\n", encoding="utf-8")
 
@@ -899,10 +1039,17 @@ def _symmetrized_count_summary(sym_gics) -> str:
 def _explicit_gic_route(line: str) -> str:
     if not line.lstrip().startswith("#"):
         return line
-    return re.sub(r"geom=\(\s*readallgic\s*,\s*gic(?:all)?symm\s*\)", "geom=readallgic", line, flags=re.IGNORECASE)
+    return re.sub(
+        r"geom=\(\s*readallgic\s*,\s*gic(?:all)?symm\s*\)",
+        "geom=readallgic",
+        line,
+        flags=re.IGNORECASE,
+    )
 
 
-def _orient_with_frame(coords: np.ndarray, weights: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _orient_with_frame(
+    coords: np.ndarray, weights: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     coords = np.asarray(coords, dtype=float)
     weights = np.asarray(weights, dtype=float)
     total = float(np.sum(weights))
@@ -942,8 +1089,18 @@ def _write_sycart_files(run_dir: Path, atoms: list[str], coords: np.ndarray) -> 
         sym_oriented += permuted
     sym_oriented /= float(len(elements))
     sym_coords = np.round(sym_oriented @ frame.T + com[None, :], decimals=8)
-    _write_xyz(run_dir / "sycart.xyz", atoms, sym_coords, "GICForge SyCart symmetrized Cartesian coordinates")
-    _write_xyz(run_dir / "symmetrized.xyz", atoms, sym_coords, "GICForge SyCart symmetrized Cartesian coordinates")
+    _write_xyz(
+        run_dir / "sycart.xyz",
+        atoms,
+        sym_coords,
+        "GICForge SyCart symmetrized Cartesian coordinates",
+    )
+    _write_xyz(
+        run_dir / "symmetrized.xyz",
+        atoms,
+        sym_coords,
+        "GICForge SyCart symmetrized Cartesian coordinates",
+    )
 
 
 def _write_xyz(path: Path, atoms: list[str], coords: np.ndarray, comment: str) -> None:

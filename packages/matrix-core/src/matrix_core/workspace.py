@@ -59,4 +59,3 @@ class WorkspaceLayout:
 
 def ensure_workspace(root: Path) -> WorkspaceLayout:
     return WorkspaceLayout(Path(root)).ensure()
-

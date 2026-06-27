@@ -43,8 +43,8 @@ class Ring:
 
     def __init__(self, index, atoms, coords):
         self.index = index
-        self.atoms = list(atoms)            # ordered cyclic list
-        self.coords = np.asarray(coords)    # (N,3)
+        self.atoms = list(atoms)  # ordered cyclic list
+        self.coords = np.asarray(coords)  # (N,3)
 
         # Topology
         self.bonds = self._build_bonds()
@@ -60,12 +60,7 @@ class Ring:
         Triplets (i-1, i, i+1) for valence angles.
         """
         n = len(self.atoms)
-        return [
-            (self.atoms[(i - 1) % n],
-             self.atoms[i],
-             self.atoms[(i + 1) % n])
-            for i in range(n)
-        ]
+        return [(self.atoms[(i - 1) % n], self.atoms[i], self.atoms[(i + 1) % n]) for i in range(n)]
 
     def cyclic_quartets(self):
         """
@@ -73,10 +68,12 @@ class Ring:
         """
         n = len(self.atoms)
         return [
-            (self.atoms[(i - 1) % n],
-             self.atoms[i],
-             self.atoms[(i + 1) % n],
-             self.atoms[(i + 2) % n])
+            (
+                self.atoms[(i - 1) % n],
+                self.atoms[i],
+                self.atoms[(i + 1) % n],
+                self.atoms[(i + 2) % n],
+            )
             for i in range(n)
         ]
 
@@ -89,7 +86,7 @@ class Ring:
         Return list of valence angles (radians) along the ring.
         """
         angles = []
-        for (i, j, k) in self.cyclic_triplets():
+        for i, j, k in self.cyclic_triplets():
             angles.append(self._angle(i, j, k))
         return angles
 
@@ -98,7 +95,7 @@ class Ring:
         Return list of dihedral angles (radians) along the ring.
         """
         dihedrals = []
-        for (i, j, k, l) in self.cyclic_quartets():
+        for i, j, k, l in self.cyclic_quartets():
             dihedrals.append(self._dihedral(i, j, k, l))
         return dihedrals
 

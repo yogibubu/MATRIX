@@ -124,7 +124,9 @@ def _uff_vdw_hessian(
             pair_scale = _nonbonded_pair_scale(distances.get((i, j), 999999), one_four_scale)
             if pair_scale == 0.0:
                 continue
-            xij_bohr, dij_hartree = _uff_pair_parameters(int(atomic_numbers[i]), int(atomic_numbers[j]))
+            xij_bohr, dij_hartree = _uff_pair_parameters(
+                int(atomic_numbers[i]), int(atomic_numbers[j])
+            )
             rvec = coordinates_bohr[i] - coordinates_bohr[j]
             r = float(np.linalg.norm(rvec))
             if r <= 1.0e-12:

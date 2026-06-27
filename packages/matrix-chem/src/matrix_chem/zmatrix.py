@@ -83,7 +83,9 @@ def parse_zmatrix_text(
     variables = _parse_variables(variable_lines)
     atoms = tuple(_parse_zmatrix_atom(idx, line) for idx, line in enumerate(geom_lines))
     _validate_zmatrix_atoms(atoms)
-    return ZMatrix(atoms=atoms, variables=variables, title=title, charge=charge, multiplicity=multiplicity)
+    return ZMatrix(
+        atoms=atoms, variables=variables, title=title, charge=charge, multiplicity=multiplicity
+    )
 
 
 def zmatrix_to_geometry(
@@ -110,7 +112,10 @@ def zmatrix_to_geometry(
         source_path=source_path,
         charge=zmat.charge,
         multiplicity=zmat.multiplicity,
-        metadata={"zmatrix_atoms": len(zmat.atoms), "dummy_atoms": sum(a.is_dummy for a in zmat.atoms)},
+        metadata={
+            "zmatrix_atoms": len(zmat.atoms),
+            "dummy_atoms": sum(a.is_dummy for a in zmat.atoms),
+        },
     )
 
 
@@ -220,7 +225,9 @@ def _parse_zmatrix_atom(index: int, line: str) -> ZMatrixAtom:
     if index == 1:
         return ZMatrixAtom(symbol, _ref(parts[1]), _parse_value(parts[2]))
     if index == 2:
-        return ZMatrixAtom(symbol, _ref(parts[1]), _parse_value(parts[2]), _ref(parts[3]), _parse_value(parts[4]))
+        return ZMatrixAtom(
+            symbol, _ref(parts[1]), _parse_value(parts[2]), _ref(parts[3]), _parse_value(parts[4])
+        )
     return ZMatrixAtom(
         symbol,
         _ref(parts[1]),

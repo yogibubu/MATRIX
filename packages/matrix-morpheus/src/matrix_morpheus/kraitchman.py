@@ -63,7 +63,9 @@ def kraitchman_comparison(
         atom_pos = atom_index - 1
         if atom_pos < 0 or atom_pos >= len(atoms):
             continue
-        substitution_mass = kraitchman_substitution_mass(atoms[atom_pos], int(isotope_a), parent_mass)
+        substitution_mass = kraitchman_substitution_mass(
+            atoms[atom_pos], int(isotope_a), parent_mass
+        )
         if substitution_mass <= 0.0:
             continue
         moments = np.array(constants_to_moments(obs.corrected.as_tuple()), dtype=float)
@@ -101,7 +103,9 @@ def kraitchman_seed_geometry(
     observations: tuple[IsotopologueObservation, ...],
     rows: tuple[KraitchmanComparison, ...] | None = None,
 ) -> KraitchmanSeedResult | None:
-    kraitchman_rows = rows if rows is not None else kraitchman_comparison(atoms, coords, observations)
+    kraitchman_rows = (
+        rows if rows is not None else kraitchman_comparison(atoms, coords, observations)
+    )
     atom_targets = _atom_targets(kraitchman_rows)
     if not atom_targets:
         return None
@@ -119,7 +123,11 @@ def kraitchman_seed_geometry(
     for atom_index, target_coord in atom_targets.items():
         seeded[atom_index - 1] = target_coord
     displacements = seeded[[idx - 1 for idx in atom_indices]] - reference
-    rms = float(np.sqrt(np.mean(np.sum(displacements * displacements, axis=1)))) if atom_indices else 0.0
+    rms = (
+        float(np.sqrt(np.mean(np.sum(displacements * displacements, axis=1))))
+        if atom_indices
+        else 0.0
+    )
     return KraitchmanSeedResult(
         coordinates_angstrom=seeded,
         rows=kraitchman_rows,
@@ -133,8 +141,12 @@ def constants_to_moments(constants: tuple[float, float, float]) -> tuple[float, 
     return tuple(ROTCONST_TO_MOMENT / value if value > 0.0 else 0.0 for value in constants)
 
 
-def principal_axis_coordinates(atoms: list[str] | tuple[str, ...], coords: np.ndarray) -> np.ndarray:
-    structure = Structure.from_atoms_coords(list(atoms), [tuple(row) for row in np.asarray(coords, dtype=float)])
+def principal_axis_coordinates(
+    atoms: list[str] | tuple[str, ...], coords: np.ndarray
+) -> np.ndarray:
+    structure = Structure.from_atoms_coords(
+        list(atoms), [tuple(row) for row in np.asarray(coords, dtype=float)]
+    )
     inertia = inertia_tensor(structure, isotopic=True)
     eigvals, eigvecs = np.linalg.eigh(inertia)
     order = np.argsort(eigvals)
@@ -146,7 +158,9 @@ def principal_axis_coordinates(atoms: list[str] | tuple[str, ...], coords: np.nd
 
 
 def parent_total_mass(atoms: list[str] | tuple[str, ...], coords: np.ndarray) -> float:
-    structure = Structure.from_atoms_coords(list(atoms), [tuple(row) for row in np.asarray(coords, dtype=float)])
+    structure = Structure.from_atoms_coords(
+        list(atoms), [tuple(row) for row in np.asarray(coords, dtype=float)]
+    )
     return float(sum(structure.mass_isotope))
 
 
@@ -184,7 +198,9 @@ def _rank3(points: np.ndarray) -> int:
     return int(np.sum(singular > tol))
 
 
-def _rigid_kabsch_update(coords: np.ndarray, reference: np.ndarray, target: np.ndarray) -> tuple[np.ndarray, bool]:
+def _rigid_kabsch_update(
+    coords: np.ndarray, reference: np.ndarray, target: np.ndarray
+) -> tuple[np.ndarray, bool]:
     ref_center = np.mean(reference, axis=0)
     target_center = np.mean(target, axis=0)
     ref0 = reference - ref_center
