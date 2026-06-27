@@ -99,6 +99,14 @@ finished parsing:
 GF/PED can then run from `oracle gf --xyzin molecule.xyzin` without reparsing the
 FCHK. VPT2/VCI loaders can read `#QFF` directly from the same container.
 
+`oracle gf --xyzin molecule.xyzin` updates `#GF_PED` by default. The section
+uses schema `oracle.xyz.gf_ped.v1` and stores the Hessian source, coordinate
+source, point group, matrix model, nonbonded correction label, frequencies,
+GIC labels/irreps and the PED matrix. If a readable report or CSV directory is
+requested, their paths are recorded in the same section. Use
+`--no-write-section` only for standalone report/benchmark runs that should not
+modify the project container.
+
 `oracle vpt2-vci --xyzin molecule.xyzin` consumes `#QFF` as the canonical
 standalone input. `--fchk` and `--qff-file` remain adapter/compatibility entry
 points; scientific VPT2/VCI code should not reparse Gaussian output directly.

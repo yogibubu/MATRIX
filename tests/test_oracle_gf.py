@@ -9,9 +9,11 @@ from oracle_gaussian import hessian_input_from_gaussian_fchk, lower_to_symmetric
 from oracle_gf import (
     gf_from_cartesian_hessian_and_gic_b_matrix,
     nonbonded_cartesian_hessian_correction,
+    read_gf_ped_section,
     run_xyzin_gf_report_from_fchk,
     solve_wilson_gf,
     write_csv_tables,
+    write_gf_ped_section_from_report,
 )
 from oracle_gicforge import write_gicforge_build_sections
 
@@ -133,6 +135,15 @@ def test_xyzin_gf_report_runs_from_fchk_and_frozen_gics(tmp_path):
         force_threshold=1.0e-12,
     )
     written = write_csv_tables(report, tmp_path / "csv", prefix="gic_gf")
+    section = write_gf_ped_section_from_report(
+        xyzin,
+        report,
+        source_kind="fchk",
+        source_path=GF_FIXTURES / "h2o.fchk",
+        report_path=tmp_path / "gf.report",
+        csv_dir=tmp_path / "csv",
+    )
+    reread = read_gf_ped_section(xyzin)
 
     assert "GF/PED from ORACLE non-redundant GICs" in report.text
     assert "Frozen xyzin:" in report.text
@@ -144,6 +155,12 @@ def test_xyzin_gf_report_runs_from_fchk_and_frozen_gics(tmp_path):
     assert report.result.ped.values.shape == (definition.rank, definition.rank)
     assert (tmp_path / "csv" / "gic_gf_frequencies.csv").is_file()
     assert "ped.csv" in written
+    assert section.source_kind == "fchk"
+    assert reread.source_path == GF_FIXTURES / "h2o.fchk"
+    assert reread.report_path == tmp_path / "gf.report"
+    assert len(reread.modes) == definition.rank
+    assert len(reread.gics) == definition.rank
+    assert len(reread.gics[0].ped) == definition.rank
 
 
 def test_xyzin_gf_report_can_use_symmetry_blocks(tmp_path):

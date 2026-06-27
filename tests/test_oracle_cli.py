@@ -7,11 +7,37 @@ import sys
 from types import SimpleNamespace
 
 from oracle_babel import rdkit_available
+from oracle_gf import read_gf_ped_section
 from tools import oracle_run
 
 
 ROOT = Path(__file__).resolve().parents[1]
 GIC_CORPUS = ROOT / "tests" / "fixtures" / "test_molecules" / "molecules"
+
+
+def _fake_gf_report(text: str, source: Path, *, xyzin: Path | None = None) -> SimpleNamespace:
+    result = SimpleNamespace(
+        frequencies_cm=(123.4,),
+        ped=SimpleNamespace(values=((100.0,),)),
+        gic_labels=("R(1,2)",),
+        gic_names=("A1Str001",),
+        gic_irreps=("A1",),
+        block_labels=("A1",),
+        scaling_factors=None,
+        coordinate_source="xyzin-frozen-gic:C1",
+        point_group="C1",
+        symmetrized_gics=True,
+        matrix_model="FULL+IRREP_BLOCKS",
+        hessian_correction="NONE",
+        force_threshold=None,
+    )
+    return SimpleNamespace(
+        text=text,
+        result=result,
+        fchk_path=source,
+        xyzin_path=xyzin,
+        hessian_source=f"FAKE {source}",
+    )
 
 
 def test_python_module_entrypoint_prints_help():
@@ -386,6 +412,7 @@ def test_gaussian_promote_rovib_cli_calls_adapter(tmp_path, monkeypatch, capsys)
 def test_gf_cli_can_use_hessian_from_xyzin_without_fchk(tmp_path, monkeypatch, capsys):
     calls = {}
     xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
 
     def fake_report(
         xyzin_path,
@@ -402,7 +429,7 @@ def test_gf_cli_can_use_hessian_from_xyzin_without_fchk(tmp_path, monkeypatch, c
         calls["xyzin"] = xyzin_path
         calls["local"] = local
         calls["block_by_irrep"] = block_by_irrep
-        return SimpleNamespace(text="GF from xyzin", result=SimpleNamespace())
+        return _fake_gf_report("GF from xyzin", xyzin_path, xyzin=xyzin_path)
 
     monkeypatch.setattr("oracle_gf.run_xyzin_gf_report_from_xyzin", fake_report)
 
@@ -412,6 +439,11 @@ def test_gf_cli_can_use_hessian_from_xyzin_without_fchk(tmp_path, monkeypatch, c
     assert rc == 0
     assert calls == {"xyzin": xyzin, "local": True, "block_by_irrep": True}
     assert "GF from xyzin" in out
+    assert "Updated #GF_PED" in out
+    section = read_gf_ped_section(xyzin)
+    assert section.source_kind == "xyzin"
+    assert section.modes[0].frequency_cm == 123.4
+    assert section.gics[0].ped == (100.0,)
 
 
 def test_vpt2_vci_cli_uses_qff_section_from_xyzin(tmp_path, monkeypatch, capsys):
@@ -944,6 +976,7 @@ def test_gf_cli_runs_xyzin_report_and_csv_export(tmp_path, monkeypatch, capsys):
     xyzin = tmp_path / "molecule.xyzin"
     out = tmp_path / "gf.txt"
     csv_dir = tmp_path / "csv"
+    xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
 
     def fake_run(
         fchk_path,
@@ -970,7 +1003,7 @@ def test_gf_cli_runs_xyzin_report_and_csv_export(tmp_path, monkeypatch, capsys):
             subtract_uff_vdw,
             nonbonded_14_scale,
         )
-        return SimpleNamespace(text="gf report")
+        return _fake_gf_report("gf report", fchk_path, xyzin=xyzin_path)
 
     def fake_csv(report, outdir, *, prefix="gf"):
         calls["csv"] = (report.text, outdir, prefix)
@@ -1018,7 +1051,15 @@ def test_gf_cli_runs_xyzin_report_and_csv_export(tmp_path, monkeypatch, capsys):
     )
     assert calls["csv"] == ("gf report", csv_dir, "gic_gf")
     assert out.read_text(encoding="utf-8") == "gf report\n"
-    assert "Wrote GF/PED report" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "Wrote GF/PED report" in output
+    assert "Updated #GF_PED" in output
+    section = read_gf_ped_section(xyzin)
+    assert section.source_kind == "fchk"
+    assert section.source_path == fchk
+    assert section.report_path == out
+    assert section.csv_dir == csv_dir
+    assert section.matrix_model == "FULL+IRREP_BLOCKS"
 
 
 def test_gicforge_bmatrix_cli_calls_writer(tmp_path, monkeypatch, capsys):

@@ -210,6 +210,7 @@ def build_parser(*, repo_root: Path | None = None) -> argparse.ArgumentParser:
     gf.add_argument("--local", action="store_true", help="Apply local force-field filtering")
     gf.add_argument("--symmetry-blocks", action="store_true", help="Solve separated irrep blocks")
     gf.add_argument("--force-threshold", type=float, help="Zero internal force constants below threshold")
+    gf.add_argument("--no-write-section", action="store_true", help="Do not update #GF_PED")
     gf.add_argument(
         "--subtract-electrostatic",
         action="store_true",
@@ -864,6 +865,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
             run_xyzin_gf_report_from_fchk,
             run_xyzin_gf_report_from_xyzin,
             write_csv_tables,
+            write_gf_ped_section_from_report,
         )
 
         if args.xyzin is None:
@@ -871,6 +873,8 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
                 raise ValueError("gf needs --fchk, or --xyzin containing #CARTESIAN_HESSIAN")
             report = run_gf_report_from_fchk(args.fchk)
             prefix = "gf"
+            source_kind = "fchk"
+            source_path = args.fchk
         elif args.fchk is None:
             report = run_xyzin_gf_report_from_xyzin(
                 args.xyzin,
@@ -884,6 +888,8 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
                 nonbonded_14_scale=args.nonbonded_14_scale,
             )
             prefix = "gic_gf"
+            source_kind = "xyzin"
+            source_path = args.xyzin
         else:
             report = run_xyzin_gf_report_from_fchk(
                 args.fchk,
@@ -898,6 +904,8 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
                 nonbonded_14_scale=args.nonbonded_14_scale,
             )
             prefix = "gic_gf"
+            source_kind = "fchk"
+            source_path = args.fchk
         if args.out is not None:
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(report.text + "\n", encoding="utf-8")
@@ -907,6 +915,16 @@ def main(argv: list[str] | None = None, *, repo_root: Path | None = None) -> int
         if args.csv_dir is not None:
             written = write_csv_tables(report, args.csv_dir, prefix=prefix)
             print(f"Wrote GF/PED CSV tables: {len(written)} files in {args.csv_dir}")
+        if args.xyzin is not None and not args.no_write_section:
+            write_gf_ped_section_from_report(
+                args.xyzin,
+                report,
+                source_kind=source_kind,
+                source_path=source_path,
+                report_path=args.out,
+                csv_dir=args.csv_dir,
+            )
+            print(f"Updated #GF_PED: {args.xyzin}")
         return 0
     if args.command == "vpt2-vci":
         from oracle_vpt2_vci import (

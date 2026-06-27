@@ -25,6 +25,18 @@ from .nonbonded import (
     nonbonded_cartesian_hessian_correction,
     synthon_charges_from_xyzin,
 )
+from .sections import (
+    GFGICRow,
+    GFModeRow,
+    GFPEDSection,
+    ORACLE_XYZ_GF_PED_SCHEMA,
+    gf_ped_section_from_report,
+    gf_ped_section_lines,
+    parse_gf_ped_section,
+    read_gf_ped_section,
+    write_gf_ped_section,
+    write_gf_ped_section_from_report,
+)
 
 _SERVICE_EXPORTS = {
     "GFReport",
@@ -47,13 +59,19 @@ def __getattr__(name: str):
 
 __all__ = [
     "BOHR_TO_ANGSTROM",
+    "GFGICRow",
+    "GFModeRow",
+    "GFPEDSection",
     "GFReport",
     "GFResult",
     "HessianInput",
     "InternalGFResult",
+    "ORACLE_XYZ_GF_PED_SCHEMA",
     "PEDTable",
     "format_gf_report",
     "gf_csv_tables",
+    "gf_ped_section_from_report",
+    "gf_ped_section_lines",
     "gf_from_cartesian_hessian_and_gic_b_matrix",
     "gf_from_cartesian_hessian_and_oracle_gics",
     "gf_from_gaussian_fchk_with_oracle_gics",
@@ -64,9 +82,11 @@ __all__ = [
     "local_force_constant_mask",
     "mass_weighted_cartesian_hessian",
     "nonbonded_cartesian_hessian_correction",
+    "parse_gf_ped_section",
     "primitive_label",
     "pulay_scale_internal_hessian",
     "pulay_scaling_factors",
+    "read_gf_ped_section",
     "run_gf_report_from_fchk",
     "run_xyzin_gf_report_from_fchk",
     "run_xyzin_gf_report_from_xyzin",
@@ -74,4 +94,6 @@ __all__ = [
     "synthon_charges_from_xyzin",
     "topology_bonds_from_xyzin",
     "write_csv_tables",
+    "write_gf_ped_section",
+    "write_gf_ped_section_from_report",
 ]
