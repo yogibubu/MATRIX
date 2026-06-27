@@ -376,10 +376,19 @@ B rows describe ring-puckering motion.
 
 \section{Coordinate Families}
 
-\program{} builds primitive coordinates from the covalent graph.  Hydrogen bonds
-may be detected and reported by higher-level topology utilities, but the
-standard GIC graph remains covalent: hydrogen bonds are correction targets, not
-ring-closing covalent edges.
+\program{} builds primitive coordinates from the saved covalent graph unless a
+fragment mode requests otherwise.  Weak complexes have two supported models.
+In \texttt{SPECIAL\_COORDINATES} mode, fragments remain separate bodies and
+their relative motion is described by protected fragment-center,
+fragment-translation and fragment-orientation coordinates.  In
+\texttt{PSEUDO\_BONDS} mode, \program{} first tries the Merlino/BDPCS3
+X--H\(\cdots\)Y hydrogen-bond detector; if no chemically valid hydrogen bond
+connects the relevant fragments, it falls back to the closest inter-fragment
+atom pair.  The selected H\(\cdots\)Y or closest contact is added only to the
+GIC construction graph.  It is serialized in \xyzin{} under
+\texttt{[PSEUDO\_BONDS]} and does not alter the saved covalent topology.
+Pseudo-bonds do not generate artificial rings: ring coordinates are built only
+from the original covalent ring section.
 
 \begin{longtable}{@{}p{0.23\linewidth}p{0.67\linewidth}@{}}
 \toprule
@@ -466,6 +475,15 @@ dependent on previously accepted special rows.  If the independent protected
 set alone is larger than the vibrational rank, \program{} stops with a contract
 error instead of silently deleting a protected coordinate.
 
+For a non-covalent complex this policy gives two deliberately different
+coordinate bases for the same geometry.  The fragment model keeps
+inter-fragment rigid-body coordinates protected.  The pseudo-bond model removes
+fragment coordinates from the selected basis and lets the standard
+stretch/bend/torsion/OOP generator operate on the graph augmented by the
+selected weak contact.  Primitive candidates are still reduced by analytic
+B-matrix rank; the pseudo-bond is an internal-coordinate edge, not a request to
+keep every primitive generated around it.
+
 The frozen \xyzin{} schema records this distinction explicitly.  Ordinary
 coordinates are written with \texttt{CLASS=ORDINARY}.  Fragment and
 virtual-center coordinates are written with the protected class token
@@ -548,6 +566,12 @@ distances, fragment translations, fragment orientations and atom to
 virtual-center distances.  There is no global fallback that mixes every
 primitive in the molecule.  This preserves the meaning of the final coordinates
 and makes the result comparable between Fortran and Python.
+
+Pseudo-bond H-bond coordinates are not placed in protected special blocks.  Once
+the pseudo-bond is selected, the resulting stretches, bends and torsions belong
+to the ordinary homogeneous valence blocks.  This mirrors the Fortran
+\texttt{HBOND}/\texttt{MkHBnd} idea: connect the graph through a weak
+H\(\cdots\)Y contact, then use ordinary internal coordinates.
 
 Within a homogeneous block, equivalent primitives are collected by the symmetry
 operations.  The totally symmetric combination is the normalized sum over the
@@ -661,8 +685,33 @@ of out-of-plane coordinates. \\
 \texttt{SYMMALL} & Apply the limited type-local Fortran SALC generator before
 final pruning.  Production symmetry adaptation is still owned by
 \texttt{GICSYM}. \\
+\texttt{HBOND} & Legacy Merlino keyword for detecting X--H\(\cdots\)Y contacts.
+In MATRIX/NEO the corresponding mode is
+\texttt{--fragment-mode pseudo-bonds}; detected H-bonds are preferred over the
+closest-pair fallback and are written as \texttt{KIND=HBOND}. \\
+\texttt{JOINFR} & Legacy Merlino fragment-joining concept.  MATRIX keeps the
+saved covalent topology unchanged and records any weak graph-joining contact in
+\texttt{\#GIC/[PSEUDO\_BONDS]}. \\
 \bottomrule
 \end{longtable}
+
+\noindent
+The Python CLI exposes the fragment choice explicitly:
+
+\begin{lstlisting}[style=oracle]
+matrix neo plan molecule.xyzin --fragment-mode special-coordinates
+matrix neo build molecule.xyzin --fragment-mode special-coordinates
+
+matrix neo plan molecule.xyzin --fragment-mode pseudo-bonds
+matrix neo build molecule.xyzin --fragment-mode pseudo-bonds
+\end{lstlisting}
+
+\noindent
+For the formic-acid--water probe used in the regression suite, the first mode
+produces protected fragment distance/translation/orientation coordinates with
+full B rank, while the second mode detects the O--H\(\cdots\)O contact, writes
+\texttt{1 5 6 KIND=HBOND}, and produces only ordinary stretch, bend and torsion
+coordinates.
 
 \section{Python/Fortran Identity Contract}
 

@@ -6,7 +6,9 @@ from pathlib import Path
 
 import numpy as np
 
+from matrix_chem.topology.elements import atomic_number
 from matrix_chem import read_enriched_xyz
+from matrix_core.parameters.bdpcs3 import load_bdpcs3_parameters
 from matrix_core import read_sectioned_lines, replace_section, section_content
 
 from .contracts import (
@@ -143,6 +145,7 @@ class GICDefinition:
     symmetry_diagnostics: GICSymmetrizationDiagnostics | None = None
     fragment_mode: str = FRAGMENT_MODE_NONE
     pseudo_bonds: tuple[tuple[int, int], ...] = ()
+    pseudo_bond_kinds: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -222,14 +225,18 @@ def construct_gic_definition_from_xyzin(
     bonds = _topology_bonds(lines, natoms=geometry.natoms)
     rings = _topology_rings(lines, natoms=geometry.natoms)
     pseudo_bonds: tuple[tuple[int, int], ...] = ()
+    pseudo_bond_kinds: tuple[str, ...] = ()
     candidate_fragment_records = fragment_records
     candidate_interaction_centers = interaction_centers
     if fragment_records and mode == FRAGMENT_MODE_PSEUDO_BONDS:
-        pseudo_bonds = _pseudo_bonds_for_fragments(
+        pseudo_contacts = _pseudo_bonds_for_fragments(
             fragment_records,
             bonds=bonds,
             coords=coords,
+            atom_symbols=tuple(geometry.atoms),
         )
+        pseudo_bonds = tuple((left, right) for left, right, _kind in pseudo_contacts)
+        pseudo_bond_kinds = tuple(kind for _left, _right, kind in pseudo_contacts)
         bonds = tuple(sorted(set(bonds + pseudo_bonds)))
         candidate_fragment_records = ()
         candidate_interaction_centers = None
@@ -284,6 +291,7 @@ def construct_gic_definition_from_xyzin(
         symmetry_diagnostics=_empty_symmetry_diagnostics(point_group, requested=False),
         fragment_mode=mode if fragment_records else FRAGMENT_MODE_NONE,
         pseudo_bonds=pseudo_bonds,
+        pseudo_bond_kinds=pseudo_bond_kinds,
     )
     return definition, tuple(geometry.atoms), symmetry_operations
 
@@ -563,6 +571,7 @@ def symmetrize_gic_definition(
         symmetry_diagnostics=symmetry_diagnostics,
         fragment_mode=definition.fragment_mode,
         pseudo_bonds=definition.pseudo_bonds,
+        pseudo_bond_kinds=definition.pseudo_bond_kinds,
     )
 
 
@@ -631,8 +640,16 @@ def gic_definition_section_lines(definition: GICDefinition) -> list[str]:
     lines.extend(_symmetry_diagnostics_lines(definition))
     lines.append("[PSEUDO_BONDS]")
     if definition.pseudo_bonds:
-        for index, (left, right) in enumerate(definition.pseudo_bonds, start=1):
-            lines.append(f"{index} {left} {right} KIND=INTERFRAGMENT_CLOSEST")
+        kinds = definition.pseudo_bond_kinds or (
+            ("INTERFRAGMENT_CLOSEST",) * len(definition.pseudo_bonds)
+        )
+        if len(kinds) != len(definition.pseudo_bonds):
+            kinds = ("INTERFRAGMENT_CLOSEST",) * len(definition.pseudo_bonds)
+        for index, ((left, right), kind) in enumerate(
+            zip(definition.pseudo_bonds, kinds),
+            start=1,
+        ):
+            lines.append(f"{index} {left} {right} KIND={kind}")
     else:
         lines.append("NONE")
     lines.append("[GAUSSIAN_GIC]")
@@ -867,6 +884,7 @@ def read_gic_definition_from_xyzin(path: Path) -> GICDefinition:
         symmetry_diagnostics=symmetry_diagnostics,
         fragment_mode=_fragment_mode(_section_value(section, "FRAGMENT_MODE")),
         pseudo_bonds=_parse_pseudo_bonds(section),
+        pseudo_bond_kinds=_parse_pseudo_bond_kinds(section),
     )
 
 
@@ -3961,7 +3979,8 @@ def _pseudo_bonds_for_fragments(
     *,
     bonds: tuple[tuple[int, int], ...],
     coords: np.ndarray,
-) -> tuple[tuple[int, int], ...]:
+    atom_symbols: tuple[str, ...],
+) -> tuple[tuple[int, int, str], ...]:
     records = tuple(
         record
         for record in sorted(fragment_records, key=lambda item: getattr(item, "identifier"))
@@ -3970,21 +3989,51 @@ def _pseudo_bonds_for_fragments(
     if len(records) <= 1:
         return ()
     covalent = {tuple(sorted(bond)) for bond in bonds}
-    fragment_edges: list[tuple[float, int, int, tuple[int, int]]] = []
+    fragment_index_by_atom = _fragment_index_by_atom(records)
+    hbond_contacts = _interfragment_hbond_contacts(
+        records,
+        atom_symbols=atom_symbols,
+        coords=coords,
+        covalent=covalent,
+        fragment_index_by_atom=fragment_index_by_atom,
+    )
+    hbond_by_fragment_pair: dict[tuple[int, int], tuple[float, tuple[int, int], str]] = {}
+    for distance, pair, kind in hbond_contacts:
+        key = tuple(
+            sorted(
+                (
+                    fragment_index_by_atom[pair[0]],
+                    fragment_index_by_atom[pair[1]],
+                )
+            )
+        )
+        if key[0] == key[1]:
+            continue
+        current = hbond_by_fragment_pair.get(key)
+        if current is None or (distance, pair) < (current[0], current[1]):
+            hbond_by_fragment_pair[key] = (distance, pair, kind)
+    fragment_edges: list[tuple[int, float, int, int, tuple[int, int], str]] = []
     for left_index, left in enumerate(records):
         left_atoms = tuple(int(atom) for atom in getattr(left, "atoms"))
         for right_index, right in enumerate(records[left_index + 1 :], start=left_index + 1):
             right_atoms = tuple(int(atom) for atom in getattr(right, "atoms"))
-            contact = _closest_interfragment_atom_pair(
-                left_atoms,
-                right_atoms,
-                covalent=covalent,
-                coords=coords,
-            )
+            contact = hbond_by_fragment_pair.get((left_index, right_index))
             if contact is None:
-                continue
-            distance, pair = contact
-            fragment_edges.append((distance, left_index, right_index, pair))
+                closest = _closest_interfragment_atom_pair(
+                    left_atoms,
+                    right_atoms,
+                    covalent=covalent,
+                    coords=coords,
+                )
+                if closest is None:
+                    continue
+                distance, pair = closest
+                fragment_edges.append(
+                    (1, distance, left_index, right_index, pair, "INTERFRAGMENT_CLOSEST")
+                )
+            else:
+                distance, pair, kind = contact
+                fragment_edges.append((0, distance, left_index, right_index, pair, kind))
     parent = list(range(len(records)))
 
     def find(index: int) -> int:
@@ -3993,19 +4042,19 @@ def _pseudo_bonds_for_fragments(
             index = parent[index]
         return index
 
-    selected: list[tuple[int, int]] = []
-    for _distance, left_index, right_index, pair in sorted(fragment_edges):
+    selected: list[tuple[int, int, str]] = []
+    for _priority, _distance, left_index, right_index, pair, kind in sorted(fragment_edges):
         left_root = find(left_index)
         right_root = find(right_index)
         if left_root == right_root:
             continue
         parent[right_root] = left_root
-        selected.append(pair)
+        selected.append((pair[0], pair[1], kind))
         if len(selected) == len(records) - 1:
             break
     if len(selected) != len(records) - 1:
         raise GICForgeContractError(
-            "cannot connect all fragments with pseudo-bonds from closest atom pairs"
+            "cannot connect all fragments with pseudo-bonds from H-bonds/closest atom pairs"
         )
     return tuple(sorted(set(selected)))
 
@@ -4027,6 +4076,81 @@ def _closest_interfragment_atom_pair(
             if best is None or (distance, pair) < best:
                 best = (distance, pair)
     return best
+
+
+def _fragment_index_by_atom(records: tuple[object, ...]) -> dict[int, int]:
+    mapping: dict[int, int] = {}
+    for index, record in enumerate(records):
+        for atom in getattr(record, "atoms", ()):
+            mapping[int(atom)] = index
+    return mapping
+
+
+def _interfragment_hbond_contacts(
+    records: tuple[object, ...],
+    *,
+    atom_symbols: tuple[str, ...],
+    coords: np.ndarray,
+    covalent: set[tuple[int, int]],
+    fragment_index_by_atom: dict[int, int],
+) -> tuple[tuple[float, tuple[int, int], str], ...]:
+    if len(records) <= 1:
+        return ()
+    parameters = load_bdpcs3_parameters().hbond
+    atomic_numbers = tuple(int(atomic_number(symbol) or 0) for symbol in atom_symbols)
+    adjacency = _adjacency(tuple(covalent), natoms=len(atom_symbols))
+    selected: list[tuple[int, int, int, float, float]] = []
+    for hydrogen, z_hydrogen in enumerate(atomic_numbers, start=1):
+        if z_hydrogen != 1:
+            continue
+        donors = tuple(
+            atom
+            for atom in adjacency[hydrogen]
+            if atomic_numbers[atom - 1] in parameters.donor_atomic_numbers
+        )
+        if len(donors) != 1:
+            continue
+        donor = donors[0]
+        donor_fragment = fragment_index_by_atom.get(donor)
+        if donor_fragment is None:
+            continue
+        best: tuple[int, int, int, float, float] | None = None
+        for acceptor, z_acceptor in enumerate(atomic_numbers, start=1):
+            if acceptor in {hydrogen, donor}:
+                continue
+            if z_acceptor not in parameters.acceptor_atomic_numbers:
+                continue
+            acceptor_fragment = fragment_index_by_atom.get(acceptor)
+            if acceptor_fragment is None or acceptor_fragment == donor_fragment:
+                continue
+            if tuple(sorted((hydrogen, acceptor))) in covalent:
+                continue
+            if tuple(sorted((donor, acceptor))) in covalent:
+                continue
+            distance = float(np.linalg.norm(coords[hydrogen - 1] - coords[acceptor - 1]))
+            if distance >= parameters.search_cutoff_ang:
+                continue
+            angle = float(np.degrees(_angle_value(coords, (donor, hydrogen, acceptor))))
+            if angle < parameters.angle_threshold_deg:
+                continue
+            candidate = (donor, hydrogen, acceptor, distance, angle)
+            if best is None or (distance, acceptor) < (best[3], best[2]):
+                best = candidate
+        if best is not None:
+            selected.append(best)
+
+    unique: list[tuple[float, tuple[int, int], str]] = []
+    seen_donor_acceptor: set[tuple[int, int]] = set()
+    for donor, hydrogen, acceptor, distance, _angle in sorted(
+        selected,
+        key=lambda item: (item[3], item[0], item[1], item[2]),
+    ):
+        donor_acceptor = (donor, acceptor)
+        if donor_acceptor in seen_donor_acceptor:
+            continue
+        seen_donor_acceptor.add(donor_acceptor)
+        unique.append((distance, tuple(sorted((hydrogen, acceptor))), "HBOND"))
+    return tuple(unique)
 
 
 def _interaction_center_definition(path: Path) -> object | None:
@@ -4561,6 +4685,24 @@ def _parse_pseudo_bonds(section: list[str]) -> tuple[tuple[int, int], ...]:
             raise GICForgeContractError(f"invalid pseudo-bond indexes: {line}")
         bonds.append(tuple(sorted((left, right))))
     return tuple(sorted(set(bonds)))
+
+
+def _parse_pseudo_bond_kinds(section: list[str]) -> tuple[str, ...]:
+    kinds: list[tuple[tuple[int, int], str]] = []
+    for line in _subsection(section, "PSEUDO_BONDS"):
+        text = line.strip()
+        if not text or text.upper() == "NONE":
+            continue
+        parts = text.split()
+        if len(parts) < 3:
+            raise GICForgeContractError(f"invalid pseudo-bond line: {line}")
+        fields = _key_values(parts[3:])
+        try:
+            pair = tuple(sorted((int(parts[1]), int(parts[2]))))
+        except ValueError as exc:
+            raise GICForgeContractError(f"invalid pseudo-bond line: {line}") from exc
+        kinds.append((pair, fields.get("KIND", "INTERFRAGMENT_CLOSEST").upper()))
+    return tuple(kind for _pair, kind in sorted(kinds))
 
 
 def _cartesian_column_labels(natoms: int) -> tuple[str, ...]:

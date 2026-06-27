@@ -18,6 +18,7 @@ from matrix_engines import (
     run_legacy_gicforge,
     validate_legacy_gicforge_sources,
 )
+from matrix_fragments import write_fragment_build_section
 from matrix_neo import (
     GICForgeFortranAudit,
     GICForgeFortranAuditResult,
@@ -136,6 +137,48 @@ def test_legacy_merlino_ring_and_butterfly_blocks_remain_reference():
     assert "Subroutine CycAng" in mkcyc
     assert "Subroutine CyGNSVD" in mkcyc
     assert "Subroutine PruneGICBlocks" in gicprune
+
+
+def test_python_pseudo_bond_hbond_mode_tracks_legacy_fortran_hbond_contract(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    legacy = root / "engines" / "fortran" / "gicforge" / "legacy_merlino"
+    mkprim = (legacy / "mkprim.f").read_text(encoding="utf-8")
+    coord = (legacy / "coord.f").read_text(encoding="utf-8")
+    source = tmp_path / "formic_acid_water.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "8",
+                "formic acid-water non-covalent probe",
+                "6    -1.171727   -0.018999   -0.001370",
+                "1    -2.256869    0.130369   -0.015107",
+                "8    -0.651376   -1.113045    0.004964",
+                "8    -0.533544    1.143228    0.007603",
+                "1     0.435203    0.960633    0.019343",
+                "8     1.930145   -0.025976   -0.052269",
+                "1     2.594643   -0.128917    0.633345",
+                "1     1.351317   -0.802634    0.008831",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "formic_acid_water.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    write_fragment_build_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, fragment_mode="h-bonds")
+
+    assert definition.pseudo_bonds == ((5, 6),)
+    assert definition.pseudo_bond_kinds == ("HBOND",)
+    assert "Subroutine FindHBnd" in mkprim
+    assert "Subroutine MkHBnd" in mkprim
+    assert "BDPCS3_HB_ANGLE_MIN" in mkprim
+    assert "NBond(JAt)=NBond(JAt)+1" in mkprim
+    assert "IBond(NBond(JAt),JAt)=KAt" in mkprim
+    assert "IBond(NBond(KAt),KAt)=JAt" in mkprim
+    assert "DoHBnd = KWd(17)" in coord
 
 
 def test_legacy_merlino_gicforge_backend_compiles():

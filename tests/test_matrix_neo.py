@@ -995,6 +995,7 @@ def test_gicforge_pseudo_bond_fragment_mode_uses_standard_internal_coordinates(t
 
     assert definition.fragment_mode == "PSEUDO_BONDS"
     assert definition.pseudo_bonds == ((5, 6),)
+    assert definition.pseudo_bond_kinds == ("HBOND",)
     assert definition.target_rank == 18
     assert definition.rank == 18
     assert np.linalg.matrix_rank(rows, tol=1.0e-8) == 18
@@ -1007,7 +1008,7 @@ def test_gicforge_pseudo_bond_fragment_mode_uses_standard_internal_coordinates(t
     assert "FRAGMENT_MODE PSEUDO_BONDS" in gic
     assert "PSEUDO_BOND_COUNT 1" in gic
     assert "[PSEUDO_BONDS]" in gic
-    assert "1 5 6 KIND=INTERFRAGMENT_CLOSEST" in gic
+    assert "1 5 6 KIND=HBOND" in gic
 
 
 def test_gicforge_non_covalent_probe_runs_fragment_and_hbond_coordinate_models(tmp_path):
@@ -1057,6 +1058,7 @@ def test_gicforge_non_covalent_probe_runs_fragment_and_hbond_coordinate_models(t
     hbond_families = {gic.family for gic in hbond_definition.gics}
     assert hbond_definition.fragment_mode == "PSEUDO_BONDS"
     assert hbond_definition.pseudo_bonds == ((5, 6),)
+    assert hbond_definition.pseudo_bond_kinds == ("HBOND",)
     assert hbond_families == {"STRETCH", "BEND", "TORSION"}
     assert not any(
         primitive.family.startswith(("FRAG_", "RING_", "CYCLIC_"))
