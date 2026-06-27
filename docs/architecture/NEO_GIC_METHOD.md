@@ -77,6 +77,18 @@ The point-group projector treats `RPck` as a homogeneous ring-puckering source
 block: operations map the underlying dihedral-term vector, so equivalent
 selected `RPck` components can form symmetry-adapted SALCs without mixing with
 ordinary torsions, bends or special fragment coordinates.
+For `RPck` source spaces of any dimension, NEO can also verify the operation
+representation in the physical B-row subspace. This is a general consistency
+rule for ring-puckering coordinates, not a molecule-specific correction:
+`RPck` is already a linear combination of redundant endocyclic dihedrals, so a
+symmetry operation must map the selected puckering source rows in the same
+space used to evaluate the analytic B matrix. When the Merlino-compatible
+primitive-space projector already closes the block, the B-row projector is used
+only if it preserves the same irrep sequence. If the primitive projector does
+not close but the finite independent B-row source representation does, the
+B-row representation can be used to avoid an artificial local-SALC fallback.
+If neither representation closes, NEO stops or records the explicit fallback
+rather than inventing a new coordinate family.
 
 This makes the B matrix a shared service. Python and Fortran backends must use
 the same mathematical definitions, and downstream programs must call the
@@ -203,6 +215,15 @@ The symmetrized block must preserve the family counts and the protected
 semantic role. If symmetry projection would destroy these counts or produce
 ambiguous labels, the correct behavior is a clean stop.
 
+There is also a downstream physical invariant. After a Cartesian Hessian is
+transformed to a symmetrized frozen GIC basis, the internal force-constant
+matrix \(F\) and Wilson kinetic matrix \(G\) must be block diagonal in the
+stored irreducible representations, up to numerical roundoff. GF/PED therefore
+refuses a requested symmetry-block solve when off-block couplings are detected.
+This is intentionally a hard error: cross-irrep couplings indicate a faulty
+coordinate projector, wrong symmetry labels, inconsistent geometry/frame data
+or an invalid Hessian/coordinate pairing, not a GF option to bypass.
+
 The frozen `#GIC` section records `[SYMMETRY_DIAGNOSTICS]` with the method,
 policy, status, transformed source groups and output labels. Human reports read
 this stored diagnostic state; they do not recompute symmetry.
@@ -254,6 +275,32 @@ frequencies:
 
 Optimizers and least-squares solvers call the first two stages once at setup
 time, then call the B-matrix evaluator at every geometry iteration.
+
+## Gaussian ReadAllGIC And GF Cross-Checks
+
+For Gaussian workflows generated from MATRIX symmetrized GICs, MATRIX keeps
+three roles separate:
+
+- the Gaussian input block is an external representation of frozen MATRIX GICs;
+- the optimized Gaussian log supplies the final geometry, Cartesian Hessian and
+  optional normal-mode table;
+- NEO rebuilds or reloads the frozen GIC schema from the final molecular state,
+  not from the Gaussian input text.
+
+The regression workflow therefore starts the post-run analysis from the
+Gaussian log, not from the original `.gjf`, then promotes the log Hessian into
+the same `xyzin` container. The checks are deliberately independent:
+
+- the geometry read from the log archive/original frame must match the Hessian
+  geometry;
+- rebuilt NEO GICs must keep the stored point group, irreps and protected ring
+  coordinates;
+- GF/PED with symmetry blocks must reproduce the Gaussian harmonic frequencies
+  within printed-log precision;
+- PED columns must be non-negative, normalized to 100%, and confined to the
+  mode irrep;
+- any non-negligible \(F\) or \(G\) coupling between different irreps is a
+  regression in the coordinate/symmetry contract.
 
 ## Reports
 

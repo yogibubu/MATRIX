@@ -91,6 +91,14 @@ Current required gate:
 - Pyrrole is an explicit regression: point group `C2v`, rank 24, retained ring
   coordinates, and symmetrized `A2RPck001`/`B1RPck001`; ring puckering and
   out-of-plane coordinates must not appear in the totally symmetric block.
+  The Gaussian ReadAllGIC fixture is also an integration regression: post-run
+  analysis starts from the optimized Gaussian log geometry, NEO rebuilds the
+  frozen symmetrized GIC schema, the log Hessian is promoted to `xyzin`, GF/PED
+  runs with strict symmetry blocks, the sorted MATRIX frequencies reproduce the
+  Gaussian log frequencies within printed-log precision, and each PED column is
+  confined to the mode irrep. Any measurable \(F/G\) coupling between different
+  irreps is a failure of the coordinate/symmetry contract, not an allowed
+  fallback.
 - Fused PAHs are explicit regressions: naphthalene, phenanthrene, anthracene,
   pyrene and fluorene must retain protected ring `RDef`/`RPck` sources, keep
   `BtFl` bridge coordinates when present, and export fused ring puckerings as

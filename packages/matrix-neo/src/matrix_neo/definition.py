@@ -1855,14 +1855,11 @@ def _apply_point_group_projector(
             protect_special=use_global_b_selection,
         ),
     ):
-        block_coords = coords
-        if (
-            block_coords is None
-            and key[1] == "RING_PUCKER_COMPONENT"
-            and len(block_gics) == 2
-            and reference_coordinates_angstrom is not None
-        ):
-            block_coords = np.asarray(reference_coordinates_angstrom, dtype=float)
+        ring_pucker_coords = (
+            np.asarray(reference_coordinates_angstrom, dtype=float)
+            if key[1] == "RING_PUCKER_COMPONENT" and reference_coordinates_angstrom is not None
+            else None
+        )
         projected = _project_gic_block(
             key,
             tuple(block_gics),
@@ -1871,7 +1868,8 @@ def _apply_point_group_projector(
             point_group=point_group,
             first_index=len(output) + 1,
             name_counters=name_counters,
-            reference_coordinates_angstrom=block_coords,
+            reference_coordinates_angstrom=coords,
+            ring_pucker_coordinates_angstrom=ring_pucker_coords,
             global_b_basis=global_b_basis,
         )
         if projected is None:
@@ -2243,6 +2241,7 @@ def _project_gic_block(
     first_index: int,
     name_counters: dict[tuple[str, str], int],
     reference_coordinates_angstrom: np.ndarray | None = None,
+    ring_pucker_coordinates_angstrom: np.ndarray | None = None,
     global_b_basis: tuple[np.ndarray, ...] = (),
 ) -> tuple[tuple[FrozenGIC, ...], GICSymmetrizedGroup, tuple[np.ndarray, ...]] | None:
     block, family = key
@@ -2270,13 +2269,28 @@ def _project_gic_block(
     )
     if any(vector is None for vector in source_vectors):
         return None
-    if (
-        family == "RING_PUCKER_COMPONENT"
-        and reference_coordinates_angstrom is not None
-        and len(gics) == 2
-        and len(source_vectors) == len(gics)
+
+    ring_brow_projected: (
+        tuple[tuple[FrozenGIC, ...], GICSymmetrizedGroup, tuple[np.ndarray, ...]] | None
+    ) = None
+    ring_brow_counters: dict[tuple[str, str], int] | None = None
+    ring_brow_attempted = False
+
+    def ring_brow_result() -> (
+        tuple[tuple[FrozenGIC, ...], GICSymmetrizedGroup, tuple[np.ndarray, ...]] | None
     ):
-        projected_ring = _project_ring_pucker_source_block(
+        nonlocal ring_brow_attempted, ring_brow_projected, ring_brow_counters
+        if ring_brow_attempted:
+            return ring_brow_projected
+        ring_brow_attempted = True
+        if (
+            family != "RING_PUCKER_COMPONENT"
+            or ring_pucker_coordinates_angstrom is None
+            or len(source_vectors) != len(gics)
+        ):
+            return None
+        candidate_counters = dict(name_counters)
+        ring_brow_projected = _project_ring_pucker_source_block(
             key,
             gics,
             block_primitives,
@@ -2286,16 +2300,27 @@ def _project_gic_block(
             operations=operations,
             point_group=point_group,
             first_index=first_index,
-            name_counters=name_counters,
-            reference_coordinates_angstrom=reference_coordinates_angstrom,
+            name_counters=candidate_counters,
+            reference_coordinates_angstrom=ring_pucker_coordinates_angstrom,
             global_b_basis=global_b_basis,
         )
-        if projected_ring is not None:
-            return projected_ring
+        if ring_brow_projected is not None:
+            ring_brow_counters = candidate_counters
+        return ring_brow_projected
+
+    def use_result(
+        result: tuple[tuple[FrozenGIC, ...], GICSymmetrizedGroup, tuple[np.ndarray, ...]],
+        counters: dict[tuple[str, str], int] | None,
+    ) -> tuple[tuple[FrozenGIC, ...], GICSymmetrizedGroup, tuple[np.ndarray, ...]]:
+        if counters is not None:
+            name_counters.clear()
+            name_counters.update(counters)
+        return result
 
     primitive_key_index = _primitive_projector_key_index(block_primitives)
     if primitive_key_index is None:
-        return None
+        projected_ring = ring_brow_result()
+        return use_result(projected_ring, ring_brow_counters) if projected_ring else None
     transforms = tuple(
         _operation_primitive_transform(
             block_primitives,
@@ -2305,7 +2330,8 @@ def _project_gic_block(
         for operation in operations
     )
     if any(transform is None for transform in transforms):
-        return None
+        projected_ring = ring_brow_result()
+        return use_result(projected_ring, ring_brow_counters) if projected_ring else None
 
     projected_vectors: list[tuple[str, np.ndarray]] = []
     basis: list[np.ndarray] = []
@@ -2359,8 +2385,10 @@ def _project_gic_block(
         if len(projected_vectors) == len(gics):
             break
     if len(projected_vectors) != len(gics):
-        return None
+        projected_ring = ring_brow_result()
+        return use_result(projected_ring, ring_brow_counters) if projected_ring else None
 
+    primitive_counters = dict(name_counters)
     output: list[FrozenGIC] = []
     for offset, (irrep, vector) in enumerate(projected_vectors):
         coefficients = _coefficients_from_vector(block_primitives, vector)
@@ -2369,7 +2397,7 @@ def _project_gic_block(
         output.append(
             FrozenGIC(
                 identifier=f"GIC{first_index + offset:03d}",
-                name=_next_projected_name(family, irrep, name_counters),
+                name=_next_projected_name(family, irrep, primitive_counters),
                 family=family,
                 irrep=irrep,
                 primitive_id=coefficients[0][0],
@@ -2378,7 +2406,7 @@ def _project_gic_block(
             )
         )
 
-    return (
+    primitive_result = (
         tuple(output),
         GICSymmetrizedGroup(
             block=block,
@@ -2389,6 +2417,20 @@ def _project_gic_block(
         ),
         tuple(b_basis),
     )
+    projected_ring = ring_brow_result()
+    if projected_ring is not None and _same_projected_irrep_sequence(
+        projected_ring,
+        primitive_result,
+    ):
+        return use_result(projected_ring, ring_brow_counters)
+    return use_result(primitive_result, primitive_counters)
+
+
+def _same_projected_irrep_sequence(
+    left: tuple[tuple[FrozenGIC, ...], GICSymmetrizedGroup, tuple[np.ndarray, ...]],
+    right: tuple[tuple[FrozenGIC, ...], GICSymmetrizedGroup, tuple[np.ndarray, ...]],
+) -> bool:
+    return tuple(gic.irrep for gic in left[0]) == tuple(gic.irrep for gic in right[0])
 
 
 def _project_ring_pucker_source_block(

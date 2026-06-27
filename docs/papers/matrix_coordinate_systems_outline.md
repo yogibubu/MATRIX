@@ -20,6 +20,10 @@ Point-group symmetry adaptation is carried out by projector operations without
 mixing different coordinate types.  Weak complexes can be described either by
 protected fragment-center translation/rotation coordinates or by hydrogen-bond
 pseudo-bonds that connect fragments and then use ordinary internal coordinates.
+The validity of the symmetry assignment is tested downstream: in a
+symmetry-adapted GIC basis, Wilson \(G\) and transformed force-constant \(F\)
+matrices must be block diagonal by irreducible representation, and potential
+energy distributions must remain within the same symmetry block.
 The resulting framework unifies coordinate construction, symmetry adaptation
 and reusable B-matrix evaluation for geometry optimization, least-squares
 structural refinement, GF analysis and force-field development.
@@ -51,6 +55,13 @@ optimization, least-squares fitting, GF analysis and force-field development.
   pseudo-bond/H-bond coordinates added to the internal-coordinate graph.
 - Special coordinates remain compatible with analytic Wilson B-matrix
   construction.
+- Ring-puckering coordinates are validated in the physical B-row source space
+  when the selected `RPck` source subspace is lower-dimensional than the
+  redundant endocyclic torsion set. This keeps the symmetry projector tied to
+  the same derivatives used by GF, fitting and optimization.
+- Symmetry labels are checked by an independent GF invariant: cross-irrep
+  couplings in \(F\) or \(G\) are contract failures, not a downstream
+  diagonalization choice.
 - Weak non-covalent contacts are handled without contaminating the covalent
   topology: pseudo-bonds are local graph edges for coordinate generation, not
   new covalent bonds.
@@ -70,6 +81,8 @@ optimization, least-squares fitting, GF analysis and force-field development.
 7. Apply point-group projector symmetrization without mixing coordinate types.
 8. Save frozen GICs, primitive coefficients, symmetry labels, total-symmetric
    subsets and B-matrix metadata.
+9. Validate the frozen coordinate model by rank, family-count, symmetry-label,
+   B-row and downstream GF/PED invariants.
 
 This contract is intended to make downstream tools deterministic: GF, SEFit,
 anharmonic modules and GUI workflows consume the frozen coordinate schema
@@ -121,6 +134,9 @@ vibrational space.
   Python/Fortran status.
 - Symmetry projector validation: group, operation count, closed permutations,
   total-symmetric coordinates.
+- Cross-module invariant checks: final log geometry, Hessian source, GF
+  symmetry blocks, off-block \(F/G\) maximum, PED normalization and irrep
+  purity.
 
 ## Required Numerical Demonstrations
 
@@ -132,6 +148,9 @@ vibrational space.
 - Metal/center cases: ferrocene eclipsed and staggered, including D5h/D5d
   symmetry closure.
 - Python/Fortran consistency checks on primitive sets, GICs and B rows.
+- Gaussian ReadAllGIC closed-loop checks: MATRIX-generated symmetrized GICs,
+  Gaussian optimization/frequency output, final log geometry recovery,
+  Hessian promotion, strict symmetry-block GF/PED and symmetry-pure PED.
 
 ## Key Comparisons
 
@@ -149,6 +168,9 @@ vibrational space.
 - Total-symmetric coordinate subsets for optimization and least-squares fitting.
 - Reproducible xyzin sections documenting topology, symmetry, fragment mode,
   pseudo-bonds and frozen GICs.
+- Failure diagnostics that identify the violated invariant: rank, family count,
+  operation closure, B-row independence, cross-irrep \(F/G\) coupling or PED
+  symmetry leakage.
 
 ## Open Technical Points
 
@@ -163,7 +185,10 @@ vibrational space.
 ## Current MATRIX Regression Anchors
 
 - Benzene: D6h symmetry, ring-puckering projector behavior.
-- Pyrrole and azulene: ring coordinates and nonbenzenoid/fused-ring behavior.
+- Pyrrole: C2v ring coordinates, non-total-symmetric RPck/out-of-plane labels,
+  Gaussian ReadAllGIC closed-loop GF/PED with final log geometry and strict
+  cross-irrep \(F/G\) rejection.
+- Azulene: nonbenzenoid/fused-ring behavior.
 - Norbornane/norbornene/norbornadiene/norcamphor/thujone/ribose/cubane:
   bridged, cyclic and high-connectivity cases.
 - Ferrocene eclipsed and staggered: D5h/D5d closure and metal-to-ring-center

@@ -601,6 +601,22 @@ out-of-plane or puckering coordinates from being labelled as totally symmetric
 under a molecular-plane reflection.  Stretches, valence angles and ring bends
 remain scalar coordinates and do not receive this determinant factor.
 
+\noindent
+Ring-puckering components require one additional invariant because
+\texttt{RPck} coordinates are already linear combinations of redundant
+endocyclic dihedrals.  For \texttt{RPck} source spaces of any dimension,
+MATRIX can verify the projector in the physical B-row source space used by the
+analytic Wilson B matrix.  This is a coordinate-family rule, not a
+molecule-specific patch: the symmetry operation must map the selected
+puckering-source rows into the same row space that downstream GF, fitting and
+optimization modules will differentiate.  When the Merlino-compatible
+primitive-space projector already closes the block, the B-row projector is
+accepted only if it preserves the same irrep sequence.  If the primitive
+projector does not close but a finite independent B-row source representation
+does, the B-row representation can be used to avoid an artificial local-SALC
+fallback.  If neither representation closes, MATRIX stops or records the
+explicit fallback instead of inventing a new coordinate family.
+
 \subsection{Fortran local SALCs versus production symmetry}
 
 The keyword \texttt{SYMMALL} activates a limited Fortran-side local SALC pass
@@ -628,6 +644,15 @@ permutations are inconsistent, or if two equivalent source blocks would produce
 ambiguous labels.  These failures are intentional.  A wrong or ambiguous
 symmetry label would contaminate downstream refinement, Gaussian optimization
 or force-field projection more seriously than a clean stop.
+
+\noindent
+A second, independent validation is performed by GF/PED when
+\texttt{--symmetry-blocks} is requested.  In a correctly symmetrized GIC basis,
+the internal \(F\) and \(G\) matrices cannot contain couplings between
+different irreducible representations, except for numerical roundoff.  MATRIX
+therefore treats such off-block couplings as a contract error to be fixed in
+the coordinate/symmetry layer; it does not silently solve the full problem and
+label the result as symmetry-blocked.
 
 \section{Frozen Schema and Public API}
 
@@ -743,6 +768,8 @@ basis silently.  The contract checks:
   \item ordered primitive signatures;
   \item point group and irreducible-representation labels;
   \item number of totally symmetric coordinates;
+  \item absence of cross-irrep \(F/G\) couplings in symmetry-block GF/PED
+  diagnostics;
   \item Python analytic B matrix against Fortran \texttt{bmat.out};
   \item byte-stable symmetry diagnostics for repeated runs.
 \end{itemize}

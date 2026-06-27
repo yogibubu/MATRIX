@@ -192,7 +192,12 @@ NEO consumes \sectionname{VALIDATION}, \sectionname{SYMMETRY},
 \sectionname{FRAGMENTS}.  It produces \sectionname{GIC} and
 \sectionname{SYCART}.  Symmetry-adapted GIC labels begin with the irrep label;
 totally symmetric blocks can therefore be selected directly in optimization or
-least-squares workflows.
+least-squares workflows.  Symmetrization is a typed projector: stretches,
+bends, torsions, out-of-plane coordinates, ring-puckering blocks and protected
+special coordinates are never mixed just because they share an irrep.  For
+ring-puckering source spaces, the projector is also checked against the
+analytic B-row space used downstream, so the frozen labels, Gaussian export and
+Wilson B matrix remain the same mathematical object.
 
 \section{GF/PED}
 
@@ -210,7 +215,11 @@ The module writes \sectionname{GF\_PED}.  It can subtract electrostatic and van
 der Waals non-bonded terms before a local force-field model is built.  Frequency
 scaling is not a MATRIX vibrational-spectrum operation; scaling belongs here,
 at the force-constant level, where diagonal class scaling and geometric-mean
-off-diagonal scaling are chemically meaningful.
+off-diagonal scaling are chemically meaningful.  When symmetry-block solution is
+requested, GF/PED first verifies that the internal \(F\) and \(G\) matrices are
+block diagonal in the stored GIC irreps.  Couplings between different irreps are
+treated as a contract error in the coordinate/symmetry layer, not as a
+recoverable GF fallback.
 
 \section{MORPHEUS / SEFit}
 
@@ -392,6 +401,9 @@ Important cross-module checks include:
 
 \begin{itemize}
   \item Python/Fortran NEO/GICForge primitive, GIC and B-row agreement;
+  \item Gaussian ReadAllGIC closed-loop checks using final log geometry,
+        promoted Cartesian Hessian, strict GF symmetry blocks and PED irrep
+        purity;
   \item GF/PED writing and reading \sectionname{GF\_PED};
   \item MORPHEUS standalone and multi-structure runs;
   \item WMS-Rot local line-list generation;
