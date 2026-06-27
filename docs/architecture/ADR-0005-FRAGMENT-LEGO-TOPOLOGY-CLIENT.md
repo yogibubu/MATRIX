@@ -14,17 +14,17 @@ ORACLE needs a Nano-LEGO-like utility that can:
 - search a fragment library such as LCB25-derived fragments;
 - assemble candidate structures from compatible fragments.
 
-This tool is scientifically useful only if all ORACLE modules agree on the same
+This tool is scientifically useful only if all MATRIX modules agree on the same
 connectivity, rings, aromaticity, synthons and atom identifiers. Recomputing
 topology inside the fragment utility would recreate the duplication that ORACLE
 is meant to remove.
 
 ## Decision
 
-Create `oracle-fragments` as the package boundary for future fragmentation,
+Create `matrix-fragments` as the package boundary for future fragmentation,
 fragment search and fragment assembly. It is not a topology engine.
 
-`oracle-fragments` must consume enriched XYZ files that already contain:
+`matrix-fragments` must consume enriched XYZ files that already contain:
 
 - `#TOPOLOGY` with schema `oracle.xyz.topology.v1`;
 - `#SYNTHONS` with schema `oracle.xyz.synthons.v1`.
@@ -43,7 +43,7 @@ is robust across ORACLE cases and LCB25.
 The initial command is:
 
 ```bash
-python -m oracle fragments plan molecule.xyzin
+python -m matrix fragments plan molecule.xyzin
 ```
 
 ## Consequences

@@ -1,6 +1,6 @@
 # Repository Layout
 
-This file is the operational map for the ORACLE repository.
+This file is the operational map for the MATRIX repository.
 
 ## Root Policy
 
@@ -9,20 +9,20 @@ the top-level README. New implementation files should not be added at root.
 
 ## Runtime Code
 
-- `packages/oracle-core/src/oracle_core/`: CLI, manifests, workspace handling,
+- `packages/matrix-core/src/matrix_core/`: CLI, manifests, workspace handling,
   common errors and shared sectioned-xyz helpers.
-- `packages/oracle-chem/src/oracle_chem/`: chemistry primitives, topology and
+- `packages/matrix-chem/src/matrix_chem/`: chemistry primitives, topology and
   preprocessing services used by all tools.
-- `packages/oracle-gicforge/src/oracle_gicforge/`: frozen GIC definition,
+- `packages/matrix-neo/src/matrix_neo/`: frozen GIC definition,
   symmetry adaptation and reusable B-matrix evaluation.
-- `packages/oracle-gf/src/oracle_gf/`: harmonic Cartesian-Hessian/GIC-B/GF/PED
+- `packages/matrix-gf/src/matrix_gf/`: harmonic Cartesian-Hessian/GIC-B/GF/PED
   package, physically separated from VPT2/VCI.
-- `packages/oracle-vpt2-vci/src/oracle_vpt2_vci/`: normal-mode anharmonic QFF,
+- `packages/matrix-vpt2-vci/src/matrix_vpt2_vci/`: normal-mode anharmonic QFF,
   VPT2, VCI and Davidson services.
-- `packages/oracle-dvr/src/oracle_dvr/`: scan/grid to DVR workflow services.
-- `packages/oracle-morpheus/src/oracle_morpheus/`: semiexperimental refinement
+- `packages/matrix-dvr/src/matrix_dvr/`: scan/grid to DVR workflow services.
+- `packages/matrix-morpheus/src/matrix_morpheus/`: semiexperimental refinement
   and SEfit workflows.
-- `packages/oracle-gui/src/oracle_gui/`: GUI controllers and views.
+- `packages/matrix-oracle/src/matrix_oracle/`: GUI controllers and views.
 - `engines/fortran/`: active Fortran backends. GICForge lives in
   `engines/fortran/gicforge`; DVR lives in `engines/fortran/dvr`; independent
   source kernels for harmonic GF, normal-mode VPT2/VCI and Davidson live in
@@ -39,11 +39,11 @@ the top-level README. New implementation files should not be added at root.
 
 ## Documentation
 
-- `docs/architecture/ORACLE_LEGACY_GAP_REVIEW_2026-06-26.md`: current
+- `docs/architecture/MATRIX_LEGACY_GAP_REVIEW_2026-06-26.md`: current
   migration/gap status snapshot.
 - `docs/architecture/PACKAGE_ARCHITECTURE.md`: package boundaries and workflow
   data flow.
-- `docs/architecture/ORACLE_GIC_METHOD.md`: GIC construction, reduction,
+- `docs/architecture/NEO_GIC_METHOD.md`: GIC construction, reduction,
   symmetrization and Python/Fortran parity notes.
 - `docs/archive/`: cleanup, freeze and triage history.
 - `docs/reports/`: larger reports and TeX artifacts.

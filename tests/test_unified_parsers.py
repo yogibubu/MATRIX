@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from oracle_chem import MolecularGeometry, read_enriched_xyz, read_geometry, read_xyz, read_zmatrix
-from oracle_gaussian import (
+from matrix_chem import MolecularGeometry, read_enriched_xyz, read_geometry, read_xyz, read_zmatrix
+from matrix_gaussian import (
     parse_gaussian_topology,
     read_gaussian_cartesian_input,
     read_gaussian_input,

@@ -158,8 +158,8 @@ than allowing the model itself to change during refinement.
 The standard project setup is:
 
 \begin{lstlisting}[style=oracle]
-oracle-set
-oracle-run
+matrix-set
+matrix-run
 \end{lstlisting}
 
 \noindent
@@ -169,13 +169,13 @@ kept as independent executables and are selected explicitly from the GUI or
 with the \texttt{--backend} option.  Check the resolved configuration with:
 
 \begin{lstlisting}[style=oracle]
-python -m oracle config
-python -m oracle backends
+python -m matrix config
+python -m matrix backends
 \end{lstlisting}
 
 \noindent
 The current production backend for MORPHEUS/SEfit is Python.  The Fortran77 backend
-is maintained where required for common ORACLE services, especially
+is maintained where required for common MATRIX services, especially
 \gicforge{} consistency, but the Python MORPHEUS implementation is the
 reference path for the full adaptive least-squares solver and reports.
 
@@ -280,8 +280,8 @@ one positive finite component weight.
 Validate a container with:
 
 \begin{lstlisting}[style=oracle]
-python -m oracle xyzin-validate --xyzin working/xyzin
-python -m oracle xyzin-validate --xyzin working/xyzin --require-semiexp-observations
+python -m matrix xyzin-validate --xyzin working/xyzin
+python -m matrix xyzin-validate --xyzin working/xyzin --require-semiexp-observations
 \end{lstlisting}
 
 \subsection{Standalone job file}
@@ -367,7 +367,7 @@ They are useful when accurate electronic-structure or library information
 should stabilize an underdetermined refinement without being treated as exact.
 
 \begin{lstlisting}[style=oracle]
-python -m oracle semiexp --job input.mse.toml --outdir run \
+python -m matrix semiexp --job input.mse.toml --outdir run \
   --qm-predicate "R(2,3):0.9683:0.002:reference"
 \end{lstlisting}
 
@@ -384,7 +384,7 @@ related parameters are not independently determined by the available
 isotopologues.
 
 \begin{lstlisting}[style=oracle]
-python -m oracle semiexp --job input.mse.toml --outdir run \
+python -m matrix semiexp --job input.mse.toml --outdir run \
   --parameter-class "CH_stretches:shared:R(1,6)|R(2,7)|R(3,8)"
 \end{lstlisting}
 
@@ -412,7 +412,7 @@ information.  Typical actions are:
 \end{itemize}
 
 \begin{lstlisting}[style=oracle]
-python -m oracle semiexp --job input.mse.toml --outdir run \
+python -m matrix semiexp --job input.mse.toml --outdir run \
   --fix-hydrogens \
   --qm-predicate "R(2,3):0.9683:0.002:reference" \
   --parameter-class "CH_stretches:shared:R(1,6)|R(2,7)|R(3,8)"
@@ -473,13 +473,13 @@ rotational component is still calculated and reported as a diagnostic.
 \subsection{Input validation}
 
 \begin{lstlisting}[style=oracle]
-python -m oracle xyzin-validate --xyzin working/xyzin
-python -m oracle xyzin-validate --xyzin working/xyzin \
+python -m matrix xyzin-validate --xyzin working/xyzin
+python -m matrix xyzin-validate --xyzin working/xyzin \
   --require-semiexp-observations
 \end{lstlisting}
 
 \noindent
-The validation commands check the canonical ORACLE container before a
+The validation commands check the canonical MATRIX container before a
 production fit.  A full MORPHEUS run then materializes or updates \xyzin{},
 constructs the coordinate model, applies requested constraints/classes and
 writes rank, conditioning, planar-component choice and warning diagnostics to
@@ -488,7 +488,7 @@ the output manifest.
 \subsection{Production fit}
 
 \begin{lstlisting}[style=oracle]
-python -m oracle semiexp \
+python -m matrix semiexp \
   --job input.mse.toml \
   --xyzin working/xyzin \
   --outdir working/morpheus/run01 \
@@ -504,8 +504,8 @@ To test whether shared classes are justified, run the same input twice: once
 without the class and once with the proposed shared or fixed class.
 
 \begin{lstlisting}[style=oracle]
-python -m oracle semiexp --job p-EBN.msr.inp --outdir run_no_class
-python -m oracle semiexp --job p-EBN.msr.inp --outdir run_classed \
+python -m matrix semiexp --job p-EBN.msr.inp --outdir run_no_class
+python -m matrix semiexp --job p-EBN.msr.inp --outdir run_classed \
   --parameter-class "example:shared:R(1,2)|R(3,4)"
 \end{lstlisting}
 
@@ -521,7 +521,7 @@ For debugging or method reporting, \gicforge{} definitions can be exported with
 dominant primitive contributions:
 
 \begin{lstlisting}[style=oracle]
-python -m oracle gic-define --geometry parent.xyz \
+python -m matrix gic-define --geometry parent.xyz \
   --out gic_definition.json \
   --explain-out gic_explain.json \
   --explain-csv gic_explain.csv
@@ -537,7 +537,7 @@ weight fractions.
 The GUI uses the same services as the command line.  A typical GUI run is:
 
 \begin{enumerate}
-  \item create or load a ORACLE project;
+  \item create or load a MATRIX project;
   \item import Cartesian geometry or a legacy/job input;
   \item inspect or edit isotopologue definitions, rotational constants,
         vibrational corrections, electronic corrections and standard

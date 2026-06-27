@@ -26,7 +26,7 @@ MATRIX will copy the first-party WMS-Rot code locally and reuse its Python
 Hamiltonian engine as the initial native rotational spectroscopy backend.
 WMS-Rot is therefore kept in two forms:
 
-- a vendored Python engine used by `oracle-rovib`;
+- a vendored Python engine used by `matrix-rovib`;
 - a first-party browser-suite snapshot for WMS-Rot/WMS-Prep/WMS-FitRot/
   WMS-Wavefunctions reference;
 - an external browser reference;
@@ -34,12 +34,12 @@ WMS-Rot is therefore kept in two forms:
 - a numerical comparison source when future extensions are added.
 
 MATRIX will not depend on the public WMS-Rot URL for production calculations.
-The GUI may still open the WMS-Rot page, and `oracle rovib wmsrot-input`
+The GUI may still open the WMS-Rot page, and `matrix rovib wmsrot-input`
 exports a WMS-Rot input file from normalized `xyzin` sections.
 
 The browser snapshot lives under `external/wmsrot-site/`. The callable Python
-engine is copied to `oracle_rovib.vendor.wmsrot_engine` and is invoked through
-`oracle_rovib.wmsrot`. Vendored browser JavaScript must not become a private
+engine is copied to `matrix_rovib.vendor.wmsrot_engine` and is invoked through
+`matrix_rovib.wmsrot`. Vendored browser JavaScript must not become a private
 parser or data model for MATRIX; shared adapters still own Gaussian/QM parsing.
 
 ## Contract
@@ -55,13 +55,13 @@ The internal source of truth remains:
 The WMS-Rot bridge is an export adapter:
 
 ```bash
-oracle rovib wmsrot-input molecule.xyzin --out molecule.wmsrot.txt
+matrix rovib wmsrot-input molecule.xyzin --out molecule.wmsrot.txt
 ```
 
 The local WMS-Rot engine is a run backend:
 
 ```bash
-oracle rovib wmsrot-run molecule.xyzin --out molecule.rotational.csv
+matrix rovib wmsrot-run molecule.xyzin --out molecule.rotational.csv
 ```
 
 The adapter/backend must not parse Gaussian logs, infer topology, or duplicate
@@ -74,7 +74,7 @@ MATRIX sections.
 - The Rotational Spectroscopy window can immediately open WMS-Rot, export a
   compatible input file and run the local WMS-Rot Hamiltonian.
 - Reproducible MATRIX calculations use copied first-party code inside
-  `oracle-rovib`, not an external website call.
+  `matrix-rovib`, not an external website call.
 - Future extensions, including internal hindered rotors, should extend this
   local backend rather than starting a second rotational Hamiltonian stack.
 

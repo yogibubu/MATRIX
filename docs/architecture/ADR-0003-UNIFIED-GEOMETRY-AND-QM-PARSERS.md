@@ -8,8 +8,8 @@ ORACLE must have one parser stack for geometries and QM-program files. There
 must not be parallel XYZ readers, Gaussian readers, Z-matrix readers, GUI-only
 readers or workflow-specific geometry parsers.
 
-Every parser must return shared ORACLE data models, starting with
-`oracle_chem.MolecularGeometry`. Workflow packages may enrich that model, but
+Every parser must return shared MATRIX data models, starting with
+`matrix_chem.MolecularGeometry`. Workflow packages may enrich that model, but
 they must not define their own incompatible geometry containers.
 
 ## Rules
@@ -17,7 +17,7 @@ they must not define their own incompatible geometry containers.
 - Geometry parsers live in shared libraries, not GUI classes or workflow
   scripts.
 - QM-program adapters live in program-specific packages such as
-  `oracle-gaussian`, `oracle-molpro` or `oracle-mrcc`, but return shared ORACLE
+  `matrix-gaussian`, `matrix-molpro` or `matrix-mrcc`, but return shared MATRIX
   models.
 - The enriched XYZ container remains the canonical handoff file.
 - Parser diagnostics should be explicit and user-facing.
@@ -29,14 +29,14 @@ they must not define their own incompatible geometry containers.
 
 ## Initial Parser Ownership
 
-- `oracle-chem`: plain XYZ, enriched XYZ first block, canonical
+- `matrix-chem`: plain XYZ, enriched XYZ first block, canonical
   `MolecularGeometry`, element normalization, Z-matrix parsing and geometry
   serialization.
-- `oracle-gaussian`: Gaussian `.com`/`.gjf` Cartesian input, Gaussian log/out
+- `matrix-gaussian`: Gaussian `.com`/`.gjf` Cartesian input, Gaussian log/out
   summaries, Gaussian Z-matrix input through the shared Z-matrix parser and
   FCHK/QFF adapters.
-- `oracle-molpro`: Molpro output geometry, charge and multiplicity adapters.
-- `oracle-mrcc`: MRCC output geometry, charge and multiplicity adapters.
+- `matrix-molpro`: Molpro output geometry, charge and multiplicity adapters.
+- `matrix-mrcc`: MRCC output geometry, charge and multiplicity adapters.
 - Future program packages must consume the same shared data model and must not
   add workflow-local parsers.
 
@@ -60,11 +60,11 @@ Known ORACLE parser locations to replace or wrap:
 - `gui/gaussian.py`
 - `gui/molpro.py`
 - `gui/mrcc.py`
-- `oracle_core/xyzin_geometry.py`
-- `oracle_gaussian/parsers.py`
-- `oracle_morpheus/geometry_input.py`
-- `oracle_morpheus/survibfit/gaussian_log.py`
-- `oracle_vpt2_vci/gaussian_qff.py`
+- `matrix_core/xyzin_geometry.py`
+- `matrix_gaussian/parsers.py`
+- `matrix_morpheus/geometry_input.py`
+- `matrix_morpheus/survibfit/gaussian_log.py`
+- `matrix_vpt2_vci/gaussian_qff.py`
 
 The first ORACLE migration step is not to delete these files in ORACLE, but to
 make the ORACLE parser stack the only new implementation path.

@@ -20,7 +20,7 @@ or adapter baseline.
 
 Use this corpus as an input library, not as a second implementation:
 
-1. ORACLE-Babel parses each legacy input into the canonical enriched XYZ.
+1. LINK parses each legacy input into the canonical enriched XYZ.
 2. Topology and symmetry are computed once and saved as sections.
 3. GICForge generates and freezes the GIC definition.
 4. Python and Fortran77 backends are compared against the same frozen contract.
@@ -30,19 +30,19 @@ Use this corpus as an input library, not as a second implementation:
 Quick inventory:
 
 ```bash
-source /Users/vincenzobarone/ORACLE/scripts/oracle_env.sh
-oracle-gic-corpus-list
+source /Users/vincenzobarone/MATRIX/scripts/matrix_env.sh
+matrix-gic-corpus-list
 ```
 
 Numerical Python/Fortran77 parity audit:
 
 ```bash
-python -m oracle gicforge fortran-audit \
+python -m matrix gicforge fortran-audit \
   --root tests/fixtures/test_molecules/molecules \
   --workdir runs/gicforge_fortran_audit
 ```
 
-The audit preprocesses each selected corpus molecule through ORACLE-Babel,
+The audit preprocesses each selected corpus molecule through LINK,
 builds the frozen ORACLE GIC/B matrix, runs the vendored Merlino Fortran77
 GICForge harness, and compares final rank, row-space rank and Wilson-B row
 span. Add `--molecule name.inp` repeatedly to pin a smaller periodic audit set.

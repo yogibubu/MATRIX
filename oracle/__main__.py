@@ -11,8 +11,8 @@ for src in sorted((ROOT / "packages").glob("*/src")):
     if text not in sys.path:
         sys.path.insert(0, text)
 
-from oracle_core.cli import main
+from matrix_core.cli import main
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(repo_root=ROOT))
+    raise SystemExit(main(repo_root=ROOT, prog="oracle"))

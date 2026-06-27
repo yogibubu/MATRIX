@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "oracle-suite"
+name = "matrix-framework"
 version = "0.1.0"
-description = "ORACLE computational chemistry suite monorepo"
+description = "MATRIX computational chemistry framework monorepo"
 readme = "README.md"
 requires-python = ">=3.11"
 
@@ -16,4 +16,3 @@ testpaths = ["tests", "packages"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-

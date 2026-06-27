@@ -12,7 +12,7 @@ ORACLE treats LCB25 as a remote geometry library source. The import flow is:
 ```text
 LCB25 ZIP
   -> local library cache
-  -> ORACLE-Babel import for each XYZ
+  -> LINK import for each XYZ
   -> enriched XYZ with #SOURCE/#TOPOLOGY/#SYNTHONS
   -> fragment extraction or full-molecule reference search
 ```
@@ -20,7 +20,7 @@ LCB25 ZIP
 The managed local cache is created with:
 
 ```bash
-python -m oracle lcb25 fetch
+python -m matrix lcb25 fetch
 ```
 
 By default it writes `data/lcb25/manifest.json`, `data/lcb25/archives/*.zip`
@@ -31,7 +31,7 @@ downloaded database remains an explicit project decision.
 LCB25 molecules can be used in two directions:
 
 - as whole-molecule references for MORPHEUS/reference-assisted workflows;
-- as fragment libraries through `oracle-fragments` after ORACLE
+- as fragment libraries through `matrix-fragments` after ORACLE
   topology/synthon preprocessing.
 
 Conversely, an arbitrary query molecule can be fragmented by the same

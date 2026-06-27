@@ -35,7 +35,7 @@ block this release.
 
 | Manual | Status | Scope |
 | --- | --- | --- |
-| ORACLE-Babel / Preprocessing | Covered in release manual | Geometry/QM/SMILES import, RDKit use, symmetry/topology execution, Avogadro handoff and generated xyzin sections. |
+| LINK / Preprocessing | Covered in release manual | Geometry/QM/SMILES import, RDKit use, symmetry/topology execution, Avogadro handoff and generated xyzin sections. |
 | NEO / GICForge | Specialist manual plus release manual | Rename transition from GICForge to NEO, fragment-aware GICs already implemented, symmetry projector, B matrix, Python/Fortran parity and golden tests. |
 | GF/PED | Specialist manual plus release manual | Standalone xyzin mode, `#GF_PED`, local force-field model, electrostatic/vdW subtraction, GIC force-constant scaling and publication tables. |
 | MORPHEUS / SEFit | Specialist manual plus release manual | Standalone and GUI workflows, local `se_geometries`, multi-structure refinements and exported diagnostics. |

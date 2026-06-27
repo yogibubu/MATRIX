@@ -4,7 +4,7 @@ Date: 2026-06-26
 
 ## Decision
 
-All ORACLE tools must use shared libraries for shared tasks. A module must not
+All MATRIX tools must use shared libraries for shared tasks. A module must not
 reimplement parsing, topology perception, isotope handling, Gaussian parsing,
 manifest writing, section management or backend execution when an ORACLE
 library already owns that function.
@@ -23,7 +23,7 @@ The main communication object between tools is an enriched XYZ container:
 4. A tool that updates one section must preserve all unrelated sections exactly.
 5. External formats such as Gaussian logs, TOML jobs, CSV tables and MSR inputs
    are adapters or import sources. They must be materialized into the enriched
-   XYZ container before downstream ORACLE tools consume them.
+   XYZ container before downstream MATRIX tools consume them.
 
 This keeps tools independently developable while sharing the same molecule,
 metadata and workflow state.
@@ -43,7 +43,7 @@ operations must have one implementation:
 - backend discovery and execution;
 - run manifests and checksums.
 
-For numerical kernels, "one implementation" means one public ORACLE service and
+For numerical kernels, "one implementation" means one public MATRIX service and
 one data contract, not necessarily one programming language. Python and Fortran77
 implementations may coexist when this is useful for performance, validation,
 legacy compatibility or independent scientific cross-checking.
@@ -56,7 +56,7 @@ can be developed independently without duplicating data models.
 
 Python and Fortran77 backends are allowed and sometimes required. The rules are:
 
-- The user-facing service API is defined once in an ORACLE package.
+- The user-facing service API is defined once in a MATRIX package.
 - The enriched XYZ sections and auxiliary files consumed or produced by the
   service are schema-controlled.
 - Backend selection is explicit in parameters and recorded in the manifest.
@@ -111,33 +111,33 @@ SCHEMA oracle.xyz.isotopologues.v1
 
 Initial section ownership:
 
-- `#BASIC`: `oracle-core` and GUI/project importers.
+- `#BASIC`: `matrix-core` and GUI/project importers.
 - `#SMILES`: SMILES/import adapters.
-- `#GAUSSIAN`: `oracle-gaussian`.
-- Gaussian input files: `oracle-gaussian`, even when requested by GICForge.
-- `#GAUSSIAN_TOPOLOGY`: `oracle-gaussian` as adapter data, consumed by
-  `oracle-chem`.
-- `#TOPOLOGY`: `oracle-chem`.
-- `#SYMMETRY`: `oracle-chem`.
-- `#VALIDATION`: `oracle-chem`.
-- `#GIC`: `oracle-gicforge`.
-- `#SYCART`: `oracle-gicforge`.
-- `#FRAGMENTS`: `oracle-fragments`.
-- `#FRAGMENT_LIBRARY`: `oracle-fragments`.
-- `#ASSEMBLY`: `oracle-fragments`.
-- `#ROTATIONAL`: `oracle-rovib` for derived constants and DeltaVib bridge
-  metadata, `oracle-morpheus` for fitted/equilibrium records.
-- `#VIBRATIONAL`: `oracle-gaussian`, `oracle-gf` or `oracle-vpt2-vci` depending
+- `#GAUSSIAN`: `matrix-gaussian`.
+- Gaussian input files: `matrix-gaussian`, even when requested by GICForge.
+- `#GAUSSIAN_TOPOLOGY`: `matrix-gaussian` as adapter data, consumed by
+  `matrix-chem`.
+- `#TOPOLOGY`: `matrix-chem`.
+- `#SYMMETRY`: `matrix-chem`.
+- `#VALIDATION`: `matrix-chem`.
+- `#GIC`: `matrix-neo`.
+- `#SYCART`: `matrix-neo`.
+- `#FRAGMENTS`: `matrix-fragments`.
+- `#FRAGMENT_LIBRARY`: `matrix-fragments`.
+- `#ASSEMBLY`: `matrix-fragments`.
+- `#ROTATIONAL`: `matrix-rovib` for derived constants and DeltaVib bridge
+  metadata, `matrix-morpheus` for fitted/equilibrium records.
+- `#VIBRATIONAL`: `matrix-gaussian`, `matrix-gf` or `matrix-vpt2-vci` depending
   on source, with schema-specific ownership.
-- `#DELTABVIB`: `oracle-rovib`.
-- `#CORIOLIS`: `oracle-rovib`.
-- `#QCENT`: `oracle-rovib`.
-- `#THERMO`: `oracle-thermo`.
-- `#ISOTOPOLOGUES`: shared schema owned by `oracle-core`/`oracle-morpheus`.
-- `#MORPHEUS`: `oracle-morpheus`.
-- `#GF_PED`: `oracle-gf`.
-- `#DVR`: `oracle-dvr`.
-- `#VPT2_VCI`: `oracle-vpt2-vci`.
+- `#DELTABVIB`: `matrix-rovib`.
+- `#CORIOLIS`: `matrix-rovib`.
+- `#QCENT`: `matrix-rovib`.
+- `#THERMO`: `matrix-thermo`.
+- `#ISOTOPOLOGUES`: shared schema owned by `matrix-core`/`matrix-morpheus`.
+- `#MORPHEUS`: `matrix-morpheus`.
+- `#GF_PED`: `matrix-gf`.
+- `#DVR`: `matrix-dvr`.
+- `#VPT2_VCI`: `matrix-vpt2-vci`.
 
 When a new section is needed, its schema and owner must be documented before
 implementation.
@@ -148,28 +148,28 @@ Each package can expose domain services, but shared primitives live in lower
 packages:
 
 ```text
-oracle-core
+matrix-core
   sectioned XYZ file utilities, manifests, workspace, config, errors
-oracle-chem
+matrix-chem
   atom/mass/geometry/topology/ring/symmetry model
-oracle-gaussian
+matrix-gaussian
   Gaussian adapters only
-oracle-gicforge
+matrix-neo
   GIC/SYCART schemas, B matrices and Python/Fortran77 backend adapters
-oracle-fragments
+matrix-fragments
   topology/synthon-backed fragmentation, fragment search and assembly contracts
-oracle-rovib
+matrix-rovib
   rotational, vibrational, DeltaVib, Coriolis and Q-cent compatibility sections
-oracle-thermo
+matrix-thermo
   thermochemistry from BASIC/ROTATIONAL/VIBRATIONAL state
-oracle-morpheus, oracle-gf, oracle-dvr, oracle-vpt2-vci
+matrix-morpheus, matrix-gf, matrix-dvr, matrix-vpt2-vci
   consume shared models, select backends and append their own sections
-oracle-gui
+matrix-oracle
   calls services; does not own scientific logic
 ```
 
-No package may reach upward for shared logic. For example, `oracle-gicforge`
-may use `oracle-chem`, but `oracle-chem` must not import `oracle-gicforge`.
+No package may reach upward for shared logic. For example, `matrix-neo`
+may use `matrix-chem`, but `matrix-chem` must not import `matrix-neo`.
 
 ## Consequences
 

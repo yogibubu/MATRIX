@@ -5,7 +5,7 @@ import zipfile
 
 import pytest
 
-from oracle_babel import (
+from matrix_link import (
     LCB25_DATASETS,
     extract_lcb25_archive,
     lcb25_dataset_url,
@@ -51,7 +51,7 @@ def test_lcb25_sync_writes_manifest_without_network(tmp_path, monkeypatch):
             zf.writestr(f"{label.lower()}/water.xyz", "3\nwater\nO 0 0 0\nH 0 0 1\nH 0 1 0\n")
         return archive
 
-    monkeypatch.setattr("oracle_babel.lcb25.download_lcb25_dataset", fake_download)
+    monkeypatch.setattr("matrix_link.lcb25.download_lcb25_dataset", fake_download)
 
     manifest_path = sync_lcb25_library(tmp_path / "lcb25", datasets=("se",))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

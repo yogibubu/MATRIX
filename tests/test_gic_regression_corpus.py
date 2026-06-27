@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from oracle_babel import rdkit_available
-from oracle_gicforge import (
+from matrix_link import rdkit_available
+from matrix_neo import (
     audit_gic_corpus_geometry,
     discover_gic_corpus,
     summarize_gic_corpus,
@@ -11,7 +11,7 @@ from oracle_gicforge import (
 
 
 CORPUS = Path(__file__).resolve().parent / "fixtures" / "test_molecules" / "molecules"
-ENV_HELPERS = Path(__file__).resolve().parents[1] / "scripts" / "oracle_env.sh"
+ENV_HELPERS = Path(__file__).resolve().parents[1] / "scripts" / "matrix_env.sh"
 
 
 def test_gic_regression_corpus_is_available():
@@ -67,10 +67,23 @@ def test_gic_regression_corpus_geometry_audit_tracks_parser_budget():
         assert {"azulene.inp", "pyrrole_smile1.inp", "testvib.inp"} <= failures
 
 
-def test_oracle_environment_helpers_define_oracle_style_commands():
+def test_matrix_environment_helpers_define_primary_and_legacy_commands():
     text = ENV_HELPERS.read_text(encoding="utf-8")
 
     for name in (
+        "matrix-set()",
+        "matrix-unset()",
+        "matrix-run()",
+        "matrix-run-bg()",
+        "matrix-run-check()",
+        "matrix-test-all()",
+        "matrix-clean()",
+        "matrix-create-venv()",
+        "matrix-save-shell-state()",
+        "matrix-install-runtime-deps()",
+        "matrix-gic-corpus-list()",
+        "matrix-gic-corpus-summary()",
+        "matrix-gic-corpus-audit()",
         "oracle-set()",
         "oracle-unset()",
         "oracle-run()",
@@ -86,7 +99,7 @@ def test_oracle_environment_helpers_define_oracle_style_commands():
         "oracle-gic-corpus-audit()",
     ):
         assert name in text
-    assert "ORACLE_AUTO_CREATE_VENV" in text
-    assert "ORACLE_AUTO_INSTALL_RUNTIME_DEPS" in text
-    assert "ORACLE_ENV_ACTIVE" in text
+    assert "MATRIX_AUTO_CREATE_VENV" in text
+    assert "MATRIX_AUTO_INSTALL_RUNTIME_DEPS" in text
+    assert "MATRIX_ENV_ACTIVE" in text
     assert "rdkit" in text

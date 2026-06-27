@@ -3,8 +3,13 @@
 ## Current Release Maintenance
 
 - The first release is documented in `docs/architecture/MATRIX_FIRST_RELEASE_CLOSURE.md`.
+- Naming cleanup is the first maintenance task before new scientific features:
+  public documentation, manuals and user-facing commands must consistently use
+  MATRIX for the framework/container, ORACLE for the GUI/orchestrator and NEO
+  for the GICForge coordinate engine. Runtime compatibility aliases stay active
+  until package renames are planned and tested.
 - Keep the user-facing manuals aligned with implemented command-line and GUI
-  workflows: ORACLE-Babel/preprocessing, NEO/GICForge, GF/PED, MORPHEUS/SEFit,
+  workflows: LINK/preprocessing, NEO/GICForge, GF/PED, MORPHEUS/SEFit,
   rotational spectroscopy/WMS-Rot, vibrational spectroscopy, thermo tables,
   VPT2/VCI, DVR, QM adapters and the ORACLE GUI.
 - When code changes, update the relevant manual in the same commit as tests.
@@ -55,6 +60,14 @@
 - Add packaging/versioning policy for the MATRIX transition, including final
   command aliases, deprecation messages for ORACLE/Merlino names and a
   reproducible environment lock for optional heavy dependencies.
+- Execute the MATRIX naming transition in stages:
+  1. freeze the canonical naming table in `ADR-0009`;
+  2. update top-level docs, manuals and GUI labels;
+  3. make public commands prefer `matrix ...`, `link ...`, `neo ...` and
+     `matrix-oracle` style entry points while keeping old aliases;
+  4. rename distributions/packages only after tests and downstream scripts are
+     covered by compatibility shims;
+  5. remove legacy ORACLE/Merlino wording only after one deprecation cycle.
 - Make the repository-wide `ruff check packages tests` clean and turn it into a
   CI/release gate. Current full-repo lint debt is legacy cleanup work and should
   be separated from scientific feature changes.
@@ -75,7 +88,7 @@
 ## DVR Diagonalization
 
 - Keep large DVR Hamiltonian diagonalizations behind
-  `oracle_core.diagonalizer`.
+  `matrix_core.diagonalizer`.
 - Do not add private DVR diagonalizer wrappers in new Python DVR workflows.
 - Add GPU/performance regression cases when realistic large DVR fixtures are
   available.

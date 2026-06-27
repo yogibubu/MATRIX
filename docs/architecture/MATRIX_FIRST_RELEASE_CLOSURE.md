@@ -3,13 +3,13 @@
 Status: closed for the first release baseline.
 
 This release establishes MATRIX as the framework layer around the implemented
-ORACLE tools. The release is closed on the condition that the repository stays
+MATRIX tools. The release is closed on the condition that the repository stays
 green under the standard test suite and the manuals in `docs/manuals` remain
 generated from their LaTeX sources.
 
 ## Included Scope
 
-- ORACLE-Babel preprocessing from XYZ, QM adapters and SMILES/RDKit.
+- LINK preprocessing from XYZ, QM adapters and SMILES/RDKit.
 - Shared enriched `xyzin` section contracts.
 - NEO/GICForge GIC construction, symmetrization, special coordinates and B
   matrices.

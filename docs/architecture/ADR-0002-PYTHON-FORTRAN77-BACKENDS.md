@@ -4,7 +4,7 @@ Date: 2026-06-26
 
 ## Decision
 
-Some ORACLE modules may intentionally provide both Python and strict Fortran77
+Some MATRIX modules may intentionally provide both Python and strict Fortran77
 implementations of the same scientific kernel.
 
 This is allowed when the implementations are exposed as backends of one public
@@ -44,7 +44,7 @@ duplicate GUI logic and incompatible workflow contracts.
 Allowed:
 
 ```text
-oracle-gicforge service
+matrix-neo service
   -> Python backend
   -> Fortran77 backend
   -> same #GIC / #SYCART sections
@@ -68,4 +68,3 @@ tests cover only one backend
 - DVR path/grid solver kernels.
 - GF/VPT2/VCI numerical kernels.
 - Semiexperimental fitting kernels when legacy compatibility is required.
-

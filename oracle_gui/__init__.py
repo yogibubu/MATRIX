@@ -1,4 +1,4 @@
-"""Source-tree launcher shim for :mod:`oracle_gui`."""
+"""Compatibility source-tree shim for :mod:`matrix_oracle`."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = ROOT / "packages" / "oracle-gui" / "src"
-PKG_ROOT = SRC_ROOT / "oracle_gui"
+SRC_ROOT = ROOT / "packages" / "matrix-oracle" / "src"
+PKG_ROOT = SRC_ROOT / "matrix_oracle"
 
 for src in sorted((ROOT / "packages").glob("*/src")):
     text = str(src)

@@ -1,8 +1,8 @@
 # MATRIX Installation Notes
 
-MATRIX is the framework name for the refactored ORACLE repository. During the
-transition the repository and Python packages still use `oracle-*` names, while
-the installation contract already covers the whole MATRIX/ORACLE workflow.
+MATRIX is the framework name for the refactored repository. During the
+transition the checkout path and Python packages still use `oracle-*` names,
+while the installation contract already covers the whole MATRIX workflow and ORACLE GUI.
 
 These notes describe a macOS-first scientific workstation setup. Linux systems
 use the same Python environment and package layout, but install external
@@ -25,13 +25,13 @@ for building Molden from source when no binary package is available.
 From a fresh checkout:
 
 ```bash
-cd /Users/vincenzobarone/ORACLE
-source scripts/oracle_env.sh
-oracle-set
-oracle-run-check
+cd /Users/vincenzobarone/MATRIX
+source scripts/matrix_env.sh
+matrix-set
+matrix-run-check
 ```
 
-`oracle-set` creates or activates the ORACLE virtual environment, adds package
+`matrix-set` creates or activates the MATRIX virtual environment, adds package
 `src` directories to `PYTHONPATH`, and installs the core runtime dependencies
 when missing:
 
@@ -43,13 +43,13 @@ when missing:
 - `pytest`
 - `rdkit`
 
-RDKit is part of the runtime stack because ORACLE-Babel uses it for SMILES
+RDKit is part of the runtime stack because LINK uses it for SMILES
 imports. Pandas and SymPy are part of the runtime stack because the vendored
 WMS-Rot Hamiltonian engine uses them for line-list tables and Wigner algebra.
 GUI dependencies are optional and can be installed explicitly:
 
 ```bash
-oracle-install-gui-deps
+matrix-install-gui-deps
 ```
 
 This installs the declared GUI stack, including `PySide6`.
@@ -60,9 +60,9 @@ This installs the declared GUI stack, including `PySide6`.
 inside the active ORACLE environment:
 
 ```bash
-cd /Users/vincenzobarone/ORACLE
-source scripts/oracle_env.sh
-oracle-set
+cd /Users/vincenzobarone/MATRIX
+source scripts/matrix_env.sh
+matrix-set
 python -m pip install ruff
 ```
 
@@ -76,20 +76,20 @@ python -m ruff format --check .
 ## Shared Diagonalizer And GPU Acceleration
 
 GF, DVR, VCI/Davidson, vibro-rotational normal-mode extraction and the local
-WMS-Rot rotational engine use the shared ORACLE diagonalizer in
-`oracle_core.diagonalizer`. By default it chooses GPU acceleration only when a
+WMS-Rot rotational engine use the shared MATRIX diagonalizer in
+`matrix_core.diagonalizer`. By default it chooses GPU acceleration only when a
 supported GPU backend is already available and the matrix is large enough to
 justify transfer overhead. Otherwise it uses SciPy/NumPy LAPACK on CPU.
 
 The main controls are:
 
 ```bash
-export ORACLE_DIAGONALIZER_BACKEND=auto
-export ORACLE_DIAGONALIZER_GPU_MIN_SIZE=128
-export ORACLE_DIAGONALIZER_STRICT_GPU=0
+export MATRIX_DIAGONALIZER_BACKEND=auto
+export MATRIX_DIAGONALIZER_GPU_MIN_SIZE=128
+export MATRIX_DIAGONALIZER_STRICT_GPU=0
 ```
 
-Use `ORACLE_DIAGONALIZER_BACKEND=gpu` only when a GPU package is installed.
+Use `MATRIX_DIAGONALIZER_BACKEND=gpu` only when a GPU package is installed.
 Install CuPy or PyTorch manually in the active ORACLE environment because the
 right package depends on the workstation:
 
@@ -99,7 +99,7 @@ right package depends on the workstation:
 
 ## Visualization Programs
 
-MATRIX/ORACLE delegates visualization to external programs. The GUI must not
+MATRIX delegates visualization to external programs. The GUI must not
 parse or render private chemistry data when a shared section or external viewer
 already owns that task.
 
@@ -170,7 +170,7 @@ external/wmsrot-site/
 The callable Python Hamiltonian engine is vendored as:
 
 ```text
-packages/oracle-rovib/src/oracle_rovib/vendor/wmsrot_engine.py
+packages/matrix-rovib/src/matrix_rovib/vendor/wmsrot_engine.py
 ```
 
 It requires the same scientific Python stack as the browser Pyodide engine:
@@ -182,7 +182,7 @@ python -m pip install numpy pandas sympy matplotlib
 Run the local engine from normalized `xyzin` data with:
 
 ```bash
-oracle rovib wmsrot-run molecule.xyzin --out molecule.rotational.csv
+matrix rovib wmsrot-run molecule.xyzin --out molecule.rotational.csv
 ```
 
 The Rotational Spectroscopy workbench can also open the WMS-Rot browser
@@ -195,12 +195,12 @@ https://www.skies-village.it/webtools/wmsrot/
 Generate a compatible input file from the MATRIX container with:
 
 ```bash
-oracle rovib wmsrot-input molecule.xyzin --out molecule.wmsrot.txt
+matrix rovib wmsrot-input molecule.xyzin --out molecule.wmsrot.txt
 ```
 
 WMS-Rot browser code is treated as a reference and compatibility target.
 Production MATRIX rotational spectroscopy calls the vendored WMS-Rot Python
-engine through `oracle-rovib` over shared `xyzin` sections.
+engine through `matrix-rovib` over shared `xyzin` sections.
 
 ### Molden On macOS
 
@@ -209,8 +209,8 @@ on this Apple Silicon workstation. Build it from the official source tarball:
 
 ```bash
 brew install gcc libx11 libxmu
-mkdir -p /Users/vincenzobarone/ORACLE/.external/molden-build
-cd /Users/vincenzobarone/ORACLE/.external/molden-build
+mkdir -p /Users/vincenzobarone/MATRIX/.external/molden-build
+cd /Users/vincenzobarone/MATRIX/.external/molden-build
 curl -L -o molden7.3.tar.gz https://ftp.science.ru.nl/Molden/molden7.3.tar.gz
 tar -xzf molden7.3.tar.gz
 cd molden7.3
@@ -268,14 +268,14 @@ and back in again so XQuartz startup files and `DISPLAY` handling are loaded.
 
 ## QM And External Calculation Utilities
 
-These tools are optional but used by specific MATRIX/ORACLE workflows:
+These tools are optional but used by specific MATRIX workflow and ORACLE GUIs:
 
 | Utility | Role | Notes |
 | --- | --- | --- |
 | Gaussian executable (`g16`, `gdv`, or site wrapper) | QM jobs, Hessians, FCHK, rovibrational logs | Configure in the QM Jobs GUI or CLI `--executable` |
-| `formchk` | Convert Gaussian checkpoint files to FCHK | Used by `oracle gaussian formchk` |
-| Molpro | External QM output source | Parsed only by `oracle-molpro` adapters |
-| MRCC | External QM output source | Parsed only by `oracle-mrcc` adapters |
+| `formchk` | Convert Gaussian checkpoint files to FCHK | Used by `matrix gaussian formchk` |
+| Molpro | External QM output source | Parsed only by `matrix-molpro` adapters |
+| MRCC | External QM output source | Parsed only by `matrix-mrcc` adapters |
 | Browser | Opens MOrbVis and future HTML reports | Prefer Chrome/Edge/Safari versions with WebGPU support |
 
 All QM output parsing must go through the single adapter for that external
@@ -287,9 +287,9 @@ Gaussian, Molpro or MRCC output privately.
 Run:
 
 ```bash
-source /Users/vincenzobarone/ORACLE/scripts/oracle_env.sh
-oracle-set
-oracle-run-check
+source /Users/vincenzobarone/MATRIX/scripts/matrix_env.sh
+matrix-set
+matrix-run-check
 PYTHONPATH=. pytest -q
 ```
 

@@ -42,7 +42,7 @@
 \newcommand{\sectionname}[1]{\texttt{\##1}}
 
 \title{\textbf{MATRIX First Release Manual}\\
-\large Operational guide for the implemented ORACLE/MATRIX tools}
+\large Operational guide for the implemented MATRIX tools}
 \author{MATRIX Development Notes}
 \date{\today}
 
@@ -103,10 +103,10 @@ corresponding shared section is already present.
 \toprule
 Section & Owner & Main consumers \\
 \midrule
-\sectionname{BASIC} & ORACLE-Babel / chemistry layer & all molecular tools \\
-\sectionname{SYMMETRY} & ORACLE-Babel & NEO/GICForge, GUI \\
-\sectionname{TOPOLOGY} & ORACLE-Babel & synthons, fragments, GICs \\
-\sectionname{SYNTHONS} & ORACLE-Babel & GF/PED, MORPHEUS, future fragments \\
+\sectionname{BASIC} & LINK / chemistry layer & all molecular tools \\
+\sectionname{SYMMETRY} & LINK & NEO/GICForge, GUI \\
+\sectionname{TOPOLOGY} & LINK & synthons, fragments, GICs \\
+\sectionname{SYNTHONS} & LINK & GF/PED, MORPHEUS, future fragments \\
 \sectionname{GIC}, \sectionname{SYCART} & NEO/GICForge & GF/PED, MORPHEUS, TRINITY \\
 \sectionname{CARTESIAN\_HESSIAN} & QM adapters & GF/PED, diagnostics \\
 \sectionname{NORMAL\_MODES} & QM adapters & vibrational comparison, hybrid spectra \\
@@ -125,17 +125,17 @@ The practical rule is simple: if two tools need the same information, that
 information belongs in a shared section and in a shared library, not in two
 tool-local parsers.
 
-\section{ORACLE-Babel and Preprocessing}
+\section{LINK and Preprocessing}
 
-ORACLE-Babel is the preprocessing gate.  It obtains an initial Cartesian
+LINK, formerly ORACLE-Babel, is the preprocessing gate.  It obtains an initial Cartesian
 geometry by reading an XYZ file directly, importing from a supported QM format,
 or building from SMILES through RDKit.  It then performs symmetry detection,
 topology analysis, synthon typing and validation once, and writes the results
 back to the same \xyzin{} container.
 
 \begin{lstlisting}[style=matrix]
-oracle babel preprocess input.xyz molecule.xyzin
-oracle babel preprocess smiles.txt molecule.xyzin --source-format smiles
+matrix link preprocess input.xyz molecule.xyzin
+matrix link preprocess smiles.txt molecule.xyzin --source-kind auto
 oracle validate molecule.xyzin
 \end{lstlisting}
 
@@ -155,11 +155,11 @@ Gaussian, Molpro and MRCC data are promoted into shared sections.  Scientific
 tools consume these sections and never scan log files privately.
 
 \begin{lstlisting}[style=matrix]
-oracle gaussian promote-fchk calc.fchk molecule.xyzin
-oracle gaussian promote-rovib calc.log molecule.xyzin
-oracle gaussian promote-electronic calc.log molecule.xyzin
-oracle molpro promote-output molpro.out molecule.xyzin
-oracle mrcc promote-output mrcc.out molecule.xyzin
+matrix gaussian promote-fchk calc.fchk molecule.xyzin
+matrix gaussian promote-rovib calc.log molecule.xyzin
+matrix gaussian promote-electronic calc.log molecule.xyzin
+matrix molpro promote-output molpro.out molecule.xyzin
+matrix mrcc promote-output mrcc.out molecule.xyzin
 \end{lstlisting}
 
 The main promoted sections are \sectionname{CARTESIAN\_HESSIAN},
@@ -179,8 +179,8 @@ construction, ring puckering, symmetry projectors, special fragment-aware
 coordinates, B-matrix construction and Python/Fortran parity.
 
 \begin{lstlisting}[style=matrix]
-oracle gicforge molecule.xyzin
-oracle neo molecule.xyzin
+matrix gicforge molecule.xyzin
+matrix neo molecule.xyzin
 oracle gic-bmatrix oracle.gic.definition.json geometry.xyz
 \end{lstlisting}
 
@@ -199,8 +199,8 @@ internal force constants, PEDs, local force-field approximations and
 Pulay-style scaling of force constants in GIC space.
 
 \begin{lstlisting}[style=matrix]
-oracle gf --xyzin molecule.xyzin --out gf.report
-oracle gf --xyzin molecule.xyzin --csv-dir gf_tables
+matrix gf --xyzin molecule.xyzin --out gf.report
+matrix gf --xyzin molecule.xyzin --csv-dir gf_tables
 \end{lstlisting}
 
 The module writes \sectionname{GF\_PED}.  It can subtract electrostatic and van
@@ -217,9 +217,9 @@ The detailed manuals are \texttt{morpheus\_manual.pdf} and
 \texttt{multistructure\_manual.pdf}.
 
 \begin{lstlisting}[style=matrix]
-oracle semiexp --xyzin molecule.xyzin --job job.toml --outdir run
-oracle semiexp-ensemble ensemble.toml --outdir ensemble_run
-oracle semiexp-benchmark snapshot.json --outdir benchmark
+matrix semiexp --xyzin molecule.xyzin --job job.toml --outdir run
+matrix semiexp-ensemble ensemble.toml --outdir ensemble_run
+matrix semiexp-benchmark snapshot.json --outdir benchmark
 \end{lstlisting}
 
 MORPHEUS consumes isotopologue data and optional \sectionname{GIC},
@@ -237,9 +237,9 @@ normalizes constants, dipoles and vibration-rotation corrections through
 \sectionname{DELTABVIB}, then calls the local engine.
 
 \begin{lstlisting}[style=matrix]
-oracle rovib summarize molecule.xyzin
-oracle rovib wmsrot-input molecule.xyzin --out wmsrot.in
-oracle rovib wmsrot-run molecule.xyzin --out rotational_lines.csv
+matrix rovib summarize molecule.xyzin
+matrix rovib wmsrot-input molecule.xyzin --out wmsrot.in
+matrix rovib wmsrot-run molecule.xyzin --out rotational_lines.csv
 \end{lstlisting}
 
 The run writes line lists suitable for plotting and publication export.  Future
@@ -258,10 +258,10 @@ negative intensity.  VCD and ROA are signed observables and are therefore not
 mirrored.
 
 \begin{lstlisting}[style=matrix]
-oracle rovib vib-spectrum molecule.xyzin --observable IR \
+matrix rovib vib-spectrum molecule.xyzin --observable IR \
   --source harmonic --csv ir.csv --plot ir.svg
 
-oracle rovib vib-compare level1.xyzin level2.xyzin \
+matrix rovib vib-compare level1.xyzin level2.xyzin \
   --observable IR --first-source harmonic --second-source anharmonic \
   --csv compare.csv --plot compare.svg
 \end{lstlisting}
@@ -284,7 +284,7 @@ normal-mode overlap.  If any assigned overlap is below the threshold, the
 hybrid spectrum is rejected.
 
 \begin{lstlisting}[style=matrix]
-oracle rovib vib-spectrum level1.xyzin --source hybrid \
+matrix rovib vib-spectrum level1.xyzin --source hybrid \
   --level2-xyzin level2.xyzin --observable IR \
   --csv hybrid.csv --plot hybrid.svg \
   --mode-match-csv mode_matches.csv --min-mode-overlap 0.70
@@ -296,7 +296,7 @@ records and unparseable records are returned to the GUI as states requiring
 user instructions.
 
 \begin{lstlisting}[style=matrix]
-oracle rovib nist-ir 74-82-8 --out methane_nist_ir.csv
+matrix rovib nist-ir 74-82-8 --out methane_nist_ir.csv
 \end{lstlisting}
 
 \section{Thermochemistry and Kinetics}
@@ -309,9 +309,9 @@ rovibrational density-of-states outputs.  Production kinetics models and
 release.
 
 \begin{lstlisting}[style=matrix]
-oracle thermo molecule.xyzin --out thermo.report
-oracle rovib dos molecule.xyzin --out dos_vib.dat
-oracle rovib dos-rovib molecule.xyzin --out dos_rovib.dat --q-out rovib_qt.dat
+matrix thermo molecule.xyzin --out thermo.report
+matrix rovib dos molecule.xyzin --out dos_vib.dat
+matrix rovib dos-rovib molecule.xyzin --out dos_rovib.dat --q-out rovib_qt.dat
 \end{lstlisting}
 
 Publication exports should keep temperature, pressure, symmetry number,
@@ -324,8 +324,8 @@ only an adapter input; standalone operation reads the normalized \xyzin{}
 section.  Reports and CSV tables are attached to the vibrational workbench.
 
 \begin{lstlisting}[style=matrix]
-oracle vpt2-vci --xyzin molecule.xyzin --run-dir vpt2_run
-oracle vpt2-vci --xyzin molecule.xyzin --run-dir vci_run --model vci
+matrix vpt2-vci --xyzin molecule.xyzin --run-dir vpt2_run
+matrix vpt2-vci --xyzin molecule.xyzin --run-dir vci_run --model vci
 \end{lstlisting}
 
 VPT2/VCI uses the shared diagonalization policy where matrix diagonalization is
@@ -339,9 +339,9 @@ post-run outputs into the GUI state.  Large Hamiltonian diagonalizations are
 routed through the same shared diagonalizer used by other MATRIX modules.
 
 \begin{lstlisting}[style=matrix]
-oracle dvr prepare molecule.xyzin --scan-log scan.log --run-dir dvr_run
-oracle dvr run --xyzin molecule.xyzin --run-dir dvr_run
-oracle dvr status molecule.xyzin
+matrix dvr prepare molecule.xyzin --scan-log scan.log --run-dir dvr_run
+matrix dvr run --xyzin molecule.xyzin --run-dir dvr_run
+matrix dvr status molecule.xyzin
 \end{lstlisting}
 
 The implemented GUI state is \sectionname{DVR}.  New DVR engines must not add
@@ -357,8 +357,8 @@ selection, external viewer launches and publication export orchestration.  It
 does not own scientific parsers or algorithms.
 
 \begin{lstlisting}[style=matrix]
-python -m oracle_gui molecule.xyzin
-oracle-gui molecule.xyzin
+python -m matrix_oracle molecule.xyzin
+matrix-oracle molecule.xyzin
 \end{lstlisting}
 
 The first-release GUI exposes:
@@ -379,8 +379,8 @@ The release gate is the full test suite plus focused smoke tests for workflows
 that cross tool boundaries.  The minimum command is:
 
 \begin{lstlisting}[style=matrix]
-source scripts/oracle_env.sh
-oracle-set
+source scripts/matrix_env.sh
+matrix-set
 python -m ruff check packages tests
 python -m pytest -q
 \end{lstlisting}

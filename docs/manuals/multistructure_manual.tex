@@ -269,7 +269,7 @@ conformers and homologous molecules.
 \subsection{Production ensemble fit}
 
 \begin{lstlisting}[style=oracle]
-python -m oracle semiexp-ensemble \
+python -m matrix semiexp-ensemble \
   --job examples/semiexp/anhydrides_ensemble/anhydrides_ensemble.mse-ensemble.toml \
   --outdir working/semiexp/anhydrides_ensemble
 \end{lstlisting}
@@ -277,7 +277,7 @@ python -m oracle semiexp-ensemble \
 \subsection{Prior comparison}
 
 \begin{lstlisting}[style=oracle]
-python -m oracle semiexp-ensemble-compare \
+python -m matrix semiexp-ensemble-compare \
   --job examples/semiexp/anhydrides_ensemble/anhydrides_ensemble.mse-ensemble.toml \
   --outdir working/semiexp/anhydrides_prior_comparison \
   --soft-prior-sigma 1.0e-3
@@ -291,7 +291,7 @@ is chemically informative or merely numerically regularized.
 \subsection{Synthon threshold scan}
 
 \begin{lstlisting}[style=oracle]
-python -m oracle semiexp-ensemble-synthon-scan \
+python -m matrix semiexp-ensemble-synthon-scan \
   --job examples/semiexp/glycine_ensemble/glycine_conformers_synthon.mse-ensemble.toml \
   --outdir working/semiexp/glycine_synthon_scan \
   --thresholds 0.015,0.025,0.035,0.050
@@ -300,7 +300,7 @@ python -m oracle semiexp-ensemble-synthon-scan \
 \subsection{Paper artifact regeneration}
 
 \begin{lstlisting}[style=oracle]
-python -m oracle semiexp-ensemble-paper \
+python -m matrix semiexp-ensemble-paper \
   --job examples/semiexp/anhydrides_ensemble/anhydrides_ensemble.mse-ensemble.toml \
   --paper-dir doc/papers/ensemble_jpcl \
   --outdir working/semiexp/anhydrides_full_analysis
@@ -375,7 +375,7 @@ Current scientific regression targets are:
 \end{itemize}
 
 \begin{lstlisting}[style=oracle]
-pytest oracle_morpheus/tests/test_ensemble.py \
+pytest matrix_morpheus/tests/test_ensemble.py \
   gui/tests/test_ensemble_window_helpers.py
 \end{lstlisting}
 

@@ -185,7 +185,7 @@ angstrom and are converted internally to bohr before B-matrix evaluation.
 The quick workflow builds a ORACLE GIC basis directly from the FCHK geometry:
 
 \begin{lstlisting}[style=oracle]
-python -m oracle gf \
+python -m matrix gf \
   --fchk working/gauin.fchk \
   --out working/gf_ped_report.txt \
   --csv-dir working/gf_csv
@@ -201,12 +201,12 @@ previous Gaussian input, SEfit/MORPHEUS refinement or GICForge manifest.
 The production workflow first freezes the coordinate model and then runs GF/PED:
 
 \begin{lstlisting}[style=oracle]
-python -m oracle gic-define \
+python -m matrix gic-define \
   --geometry parent.xyz \
   --out working/gic_definition.json \
   --gaussian-out working/gauin
 
-python -m oracle gic-gf \
+python -m matrix gic-gf \
   --schema working/gic_definition.json \
   --fchk working/gauin.fchk \
   --out working/gic_gf_ped_report.txt \
@@ -218,7 +218,7 @@ If the B matrix must be evaluated on a geometry different from the FCHK
 geometry, pass:
 
 \begin{lstlisting}[style=oracle]
-python -m oracle gic-gf \
+python -m matrix gic-gf \
   --schema working/gic_definition.json \
   --fchk working/gauin.fchk \
   --geometry working/current.xyz \
@@ -261,7 +261,7 @@ Selectors may be:
 Inline records are supplied with repeated \texttt{--scale} options:
 
 \begin{lstlisting}[style=oracle]
-python -m oracle gic-gf \
+python -m matrix gic-gf \
   --schema working/gic_definition.json \
   --fchk working/gauin.fchk \
   --scale-file working/pulay_scale.txt \
@@ -280,7 +280,7 @@ Before the Cartesian Hessian is transformed to the GIC basis, GF/PED may
 subtract model electrostatic and van der Waals contributions:
 
 \begin{lstlisting}[style=oracle]
-python -m oracle gf \
+python -m matrix gf \
   --fchk working/gauin.fchk \
   --xyzin working/xyzin \
   --subtract-electrostatic \
@@ -291,7 +291,7 @@ python -m oracle gf \
 
 \noindent
 The charge vector is read from the canonical \texttt{\#SYNTHONS} section.  If
-Gaussian CM5 charges were imported during ORACLE-Babel preprocessing, those are
+Gaussian CM5 charges were imported during LINK preprocessing, those are
 used.  Otherwise the same synthon charge column is present and comes from the
 ORACLE electronegativity model.  GF/PED therefore never reparses Gaussian text
 for charges.
