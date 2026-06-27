@@ -1975,6 +1975,7 @@ def test_gicforge_benzene_d6h_projector_symmetrizes_ring_puckering(tmp_path):
 def test_gicforge_pyrrole_c2v_projector_keeps_ring_coordinates(tmp_path):
     source = _test_molecule_path("pyrrole.inp")
     xyzin = tmp_path / "pyrrole.xyzin"
+    gjf = tmp_path / "pyrrole.gjf"
 
     preprocess_to_enriched_xyz(source, xyzin)
     write_validation_section(xyzin)
@@ -2005,10 +2006,28 @@ def test_gicforge_pyrrole_c2v_projector_keeps_ring_coordinates(tmp_path):
     )
     assert any(line.startswith("A2RPck001 =") for line in gaussian_lines)
     assert any(line.startswith("B1RPck001 =") for line in gaussian_lines)
+    assert any(
+        line.startswith("A2RPck001(Frozen) =")
+        for line in gaussian_gic_lines_from_xyzin(
+            xyzin,
+            freeze_non_total=True,
+        )
+    )
     assert not any("RPck" in line and "(Inactive)" in line for line in gaussian_lines)
     assert not any(line.startswith("QPck") for line in gaussian_lines)
     assert not any(line.startswith("PhiP") for line in gaussian_lines)
     assert not any("RPck" in line or "OuPl" in line for line in total_gaussian_lines)
+
+    write_gicforge_gaussian_input(xyzin, gjf, route="#p hf/sto-3g opt=readallgic")
+    text = gjf.read_text(encoding="utf-8")
+    assert "A1Str001 = R(1,2)" in text
+    assert "A1CyBe001 = " in text
+    assert "A2RPck001(Frozen) = " in text
+    assert "B1RPck001(Frozen) = " in text
+    assert "A2OuPl001(Frozen) = " in text
+    assert "B1OuPl003(Frozen) = " in text
+    assert "A1Str001(Frozen)" not in text
+    assert "A1CyBe001(Frozen)" not in text
 
 
 def test_gicforge_projector_handles_large_noncondensed_ring_puckering(tmp_path):

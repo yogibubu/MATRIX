@@ -86,7 +86,7 @@ def _gaussian_gic_lines(path: Path) -> list[str]:
         from matrix_neo import gaussian_gic_lines_from_xyzin
     except ImportError:
         return []
-    return gaussian_gic_lines_from_xyzin(Path(path))
+    return gaussian_gic_lines_from_xyzin(Path(path), freeze_non_total=True)
 
 
 def _normalize_route(route: str) -> str:

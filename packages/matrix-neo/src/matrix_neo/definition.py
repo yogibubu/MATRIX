@@ -920,16 +920,62 @@ def gaussian_gic_lines_from_xyzin(
     path: Path,
     *,
     total_symmetric_only: bool = False,
+    freeze_non_total: bool = False,
 ) -> list[str]:
     gic = section_content(read_sectioned_lines(Path(path)), "GIC")
     block = _subsection(gic, "GAUSSIAN_GIC")
     lines = [line for line in block if line.strip() and line.strip().upper() != "NONE"]
+    total_names = set(_parse_text_list(_section_value(gic, "TOTAL_SYMMETRIC_GICS")))
+    if freeze_non_total:
+        lines = _freeze_non_total_gaussian_lines(
+            lines,
+            final_names=_frozen_gic_names(gic),
+            total_names=total_names,
+        )
     if not total_symmetric_only:
         return lines
-    total_names = set(_parse_text_list(_section_value(gic, "TOTAL_SYMMETRIC_GICS")))
     if not total_names:
         return lines
     return _gaussian_dependency_closed_lines(lines, total_names)
+
+
+def _freeze_non_total_gaussian_lines(
+    lines: list[str],
+    *,
+    final_names: set[str],
+    total_names: set[str],
+) -> list[str]:
+    if not final_names or not total_names:
+        return lines
+    return [
+        _gaussian_line_with_frozen_label(line)
+        if (label := _gaussian_definition_label(line)) in final_names and label not in total_names
+        else line
+        for line in lines
+    ]
+
+
+def _gaussian_line_with_frozen_label(line: str) -> str:
+    if "=" not in line:
+        return line
+    label, expression = line.split("=", 1)
+    base = label.strip()
+    if "(" in base:
+        return line
+    return f"{base}(Frozen) = {expression.strip()}"
+
+
+def _frozen_gic_names(gic_section: list[str]) -> set[str]:
+    names: set[str] = set()
+    for line in _subsection(gic_section, "FROZEN_GICS"):
+        text = line.strip()
+        if not text or text.upper() == "NONE":
+            continue
+        fields = _key_values(text.split()[1:])
+        name = fields.get("NAME")
+        if name:
+            names.add(name)
+    return names
 
 
 def _gaussian_dependency_closed_lines(lines: list[str], wanted_names: set[str]) -> list[str]:

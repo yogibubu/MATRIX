@@ -377,9 +377,12 @@ For direct Gaussian \texttt{ReadAllGIC} optimizations, the exported block must
 remain a complete non-redundant internal-coordinate basis.  Although
 \program{} records the total-symmetric irrep and the list of total-symmetric
 GICs in the frozen \xyzin{} contract, Gaussian's Berny optimizer still requires
-the full active internal basis to build its metric.  MATRIX-controlled
+the full internal basis to build its metric.  The Gaussian input writer
+therefore exports all final GICs, but marks every non-totally-symmetric final
+coordinate as \texttt{Frozen}.  Only the totally symmetric block remains
+variable in a symmetry-preserving Gaussian optimization.  MATRIX-controlled
 optimizers and least-squares workflows use the saved total-symmetric list to
-select symmetry blocks internally.
+select symmetry blocks internally without relying on Gaussian syntax.
 
 \section{Coordinate Families}
 

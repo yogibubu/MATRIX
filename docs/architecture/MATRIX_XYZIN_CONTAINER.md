@@ -221,10 +221,13 @@ lines. In built files it includes:
 - Gaussian ReadGIC text generated from the frozen state.
 
 Downstream modules should consume the frozen GICs and diagnostics directly and
-use `[GAUSSIAN_GIC]` only when writing Gaussian inputs. Optimizers and
+use `[GAUSSIAN_GIC]` only when writing Gaussian inputs. The shared `xyzin`
+stores reusable Gaussian expressions without workflow-specific freeze flags;
+the Gaussian input writer adds `Frozen` to non-total-symmetric final GIC labels
+when producing a symmetry-preserving optimization input. Optimizers and
 least-squares refinements should use `TOTAL_SYMMETRIC_GICS` for
-symmetry-preserving active variables and reevaluate the B matrix from the frozen
-definition at each geometry step.
+symmetry-preserving active variables and reevaluate the B matrix from the
+frozen definition at each geometry step.
 
 ## Compatibility
 
