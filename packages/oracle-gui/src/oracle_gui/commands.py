@@ -210,9 +210,15 @@ def gf_command(
     fchk: Path | str | None = None,
     out: Path | str | None = None,
     csv_dir: Path | str | None = None,
+    scale_file: Path | str | None = None,
+    scale_records: Sequence[str] = (),
     local: bool = False,
     symmetry_blocks: bool = True,
     force_threshold: float | None = None,
+    subtract_electrostatic: bool = False,
+    subtract_uff_vdw: bool = False,
+    nonbonded_14_scale: float = 0.5,
+    write_section: bool = True,
 ) -> OracleGuiCommand:
     argv = [*_oracle(), "gf", "--xyzin", str(Path(xyzin))]
     if fchk is not None:
@@ -221,10 +227,20 @@ def gf_command(
         argv.extend(["--out", str(Path(out))])
     if csv_dir is not None:
         argv.extend(["--csv-dir", str(Path(csv_dir))])
+    if scale_file is not None:
+        argv.extend(["--scale-file", str(Path(scale_file))])
+    for record in scale_records:
+        if str(record).strip():
+            argv.extend(["--scale", str(record).strip()])
     _append_flag(argv, "--local", local)
     _append_flag(argv, "--symmetry-blocks", symmetry_blocks)
     if force_threshold is not None:
         argv.extend(["--force-threshold", str(force_threshold)])
+    _append_flag(argv, "--subtract-electrostatic", subtract_electrostatic)
+    _append_flag(argv, "--subtract-uff-vdw", subtract_uff_vdw)
+    if nonbonded_14_scale != 0.5:
+        argv.extend(["--nonbonded-14-scale", str(nonbonded_14_scale)])
+    _append_flag(argv, "--no-write-section", not write_section)
     return OracleGuiCommand(
         "Run GF/PED",
         tuple(argv),

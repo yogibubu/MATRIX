@@ -7,26 +7,33 @@ import sys
 
 from oracle_chem import preprocess_to_enriched_xyz, write_validation_section
 from oracle_dvr import DVRRequest, dvr_section_from_request, write_dvr_section
+from oracle_gf import GFGICRow, GFModeRow, GFPEDSection, write_gf_ped_section
 from oracle_gicforge import write_gicforge_build_sections
 from oracle_gui import (
     DashboardActionTemplate,
     ORACLE_GUI_WINDOWS,
     OracleDashboardController,
     OracleGICForgeController,
+    OracleGFController,
     OracleGuiCommand,
     OracleStructureController,
     WorkflowStatus,
     all_known_sections,
     avogadro_command,
+    default_gf_csv_dir,
+    default_gf_report_output,
     default_gicforge_bmatrix_output,
     default_gicforge_gaussian_output,
     default_gicforge_report_output,
     dvr_gui_state_lines,
     gaussian_promote_fchk_command,
     gaussian_promote_rovib_command,
+    gf_command,
+    gf_gui_state_lines,
     gicforge_gui_state_lines,
     gicforge_build_command,
     load_dvr_gui_state,
+    load_gf_gui_state,
     load_gicforge_gui_state,
     load_oracle_project_state,
     load_structure_gui_state,
@@ -411,6 +418,99 @@ def test_gicforge_controller_builds_dedicated_commands(tmp_path):
     )
 
 
+def test_gf_gui_state_reports_missing_section_without_crashing(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
+
+    state = load_gf_gui_state(xyzin)
+    lines = gf_gui_state_lines(state)
+
+    assert state.exists
+    assert not state.ready
+    assert "missing #GF_PED section" in state.messages
+    assert "ready: 0" in lines
+
+
+def test_gf_gui_state_reads_normalized_gf_ped_section(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    report = tmp_path / "gf.report"
+    csv_dir = tmp_path / "gf_csv"
+    xyzin.write_text("1\nh\nH 0.0 0.0 0.0\n", encoding="utf-8")
+    write_gf_ped_section(
+        xyzin,
+        GFPEDSection(
+            source_kind="fchk",
+            source_path=tmp_path / "job.fchk",
+            hessian_source="FCHK job.fchk",
+            coordinate_source="xyzin-frozen-gic:C2V",
+            report_path=report,
+            csv_dir=csv_dir,
+            status="complete",
+            point_group="C2V",
+            symmetrized_gics=True,
+            matrix_model="LOCAL+IRREP_BLOCKS",
+            hessian_correction="ELECTROSTATIC(Synthons)+UFF_VDW; 1-4 scale=0.5",
+            force_threshold=1.0e-8,
+            modes=(
+                GFModeRow(1, 1000.0, "A1"),
+                GFModeRow(2, 1500.0, "B2"),
+            ),
+            gics=(
+                GFGICRow("GIC001", "A1Str001", "A1", "R(1,2)", (90.0, 10.0), 0.9),
+                GFGICRow("GIC002", "B2Bend001", "B2", "A(1,2,3)", (5.0, 95.0)),
+            ),
+        ),
+    )
+
+    state = load_gf_gui_state(xyzin)
+    lines = gf_gui_state_lines(state)
+
+    assert state.ready
+    assert state.summary.point_group == "C2V"
+    assert state.summary.mode_count == 2
+    assert state.summary.gic_count == 2
+    assert state.frequencies.rows[0] == ("1", "1000", "A1")
+    assert state.gics.rows[0][:6] == ("GIC001", "A1Str001", "A1", "0.9", "1", "90")
+    assert state.ped.columns == ("GIC", "Name", "Irrep", "M01", "M02")
+    assert state.ped.rows[1] == ("GIC002", "B2Bend001", "B2", "5", "95")
+    assert "matrix model: LOCAL+IRREP_BLOCKS" in lines
+    assert f"report: {report}" in lines
+
+
+def test_gf_controller_builds_run_command_with_options(tmp_path):
+    xyzin = tmp_path / "molecule.xyzin"
+    fchk = tmp_path / "job.fchk"
+    scale = tmp_path / "scale.txt"
+    controller = OracleGFController(xyzin)
+
+    command = controller.run_command(
+        fchk=fchk,
+        out=default_gf_report_output(xyzin),
+        csv_dir=default_gf_csv_dir(xyzin),
+        scale_file=scale,
+        scale_records=("GIC003=0.9",),
+        local=True,
+        symmetry_blocks=False,
+        force_threshold=1.0e-8,
+        subtract_electrostatic=True,
+        subtract_uff_vdw=True,
+        nonbonded_14_scale=0.25,
+        write_section=False,
+    )
+
+    assert command.argv[:4] == (sys.executable, "-m", "oracle", "gf")
+    assert ("--xyzin", str(xyzin)) == command.argv[4:6]
+    assert "--fchk" in command.argv
+    assert "--local" in command.argv
+    assert "--symmetry-blocks" not in command.argv
+    assert command.argv[command.argv.index("--scale") + 1] == "GIC003=0.9"
+    assert command.argv[command.argv.index("--force-threshold") + 1] == "1e-08"
+    assert "--subtract-electrostatic" in command.argv
+    assert "--subtract-uff-vdw" in command.argv
+    assert command.argv[command.argv.index("--nonbonded-14-scale") + 1] == "0.25"
+    assert "--no-write-section" in command.argv
+
+
 def test_gui_window_specs_cover_primary_oracle_workflows():
     keys = {spec.key for spec in ORACLE_GUI_WINDOWS}
 
@@ -458,6 +558,17 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
         jmax=20,
     )
     gic = gicforge_build_command(xyzin)
+    gf = gf_command(
+        xyzin,
+        fchk=fchk,
+        out=tmp_path / "gf.report",
+        csv_dir=tmp_path / "gf_csv",
+        scale_records=("GIC001=0.95",),
+        local=True,
+        subtract_electrostatic=True,
+        subtract_uff_vdw=True,
+        nonbonded_14_scale=0.25,
+    )
 
     assert preprocess.argv[1:4] == ("-m", "oracle", "babel")
     assert preprocess.argv[-2:] == ("--source-kind", "xyz")
@@ -475,3 +586,9 @@ def test_gui_command_specs_use_oracle_cli_without_shell(tmp_path):
         f"{xyzin} --symmetrize --sycart --improper-dihedrals"
     )
     assert gic.required_sections == ("SYMMETRY", "TOPOLOGY", "SYNTHONS")
+    assert gf.argv[3:6] == ("gf", "--xyzin", str(xyzin))
+    assert "--local" in gf.argv
+    assert "--subtract-electrostatic" in gf.argv
+    assert "--subtract-uff-vdw" in gf.argv
+    assert gf.argv[gf.argv.index("--nonbonded-14-scale") + 1] == "0.25"
+    assert gf.produced_sections == ("GF_PED",)

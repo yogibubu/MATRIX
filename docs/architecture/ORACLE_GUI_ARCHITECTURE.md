@@ -151,3 +151,21 @@ It must not construct primitives, symmetrize coordinates or evaluate B rows in
 GUI code. Those operations remain in `oracle-gicforge`, because the same
 utilities are required by optimizers and least-squares fitting at each geometry
 iteration.
+
+## GF / PED Tab
+
+The GF/PED tab uses `oracle_gui.gf` and the `#GF_PED` section written by
+`oracle gf`. It provides:
+
+- optional Gaussian FCHK selection when the project does not already contain a
+  `#CARTESIAN_HESSIAN` section;
+- report and CSV output locations;
+- controls for symmetry blocks, local force-field filtering, Pulay scaling,
+  force-constant thresholding, electrostatic/UFF-vdW subtraction and 1-4
+  scaling;
+- read-only tables for frequencies, GIC labels/irreps, dominant PED
+  contributions, the full PED matrix and run diagnostics.
+
+The tab must not parse Gaussian/FCHK data, reconstruct Hessians or solve GF
+itself. It launches `oracle gf`, then reloads `#GF_PED` through
+`oracle_gf.read_gf_ped_section`.

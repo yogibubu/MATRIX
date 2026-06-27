@@ -12,6 +12,7 @@ from .commands import (
     avogadro_command,
     dvr_collect_command,
     fragments_command,
+    gf_command,
     gicforge_bmatrix_command,
     gicforge_build_command,
     gicforge_report_command,
@@ -100,6 +101,17 @@ def default_dashboard_action_templates() -> tuple[DashboardActionTemplate, ...]:
                 xyzin.with_name(f"{xyzin.stem}.gic_bmatrix.txt"),
             ),
             required_sections=("GIC",),
+        ),
+        DashboardActionTemplate(
+            "gf_run",
+            "gf",
+            "Run GF/PED",
+            lambda xyzin: gf_command(
+                xyzin,
+                out=xyzin.with_name(f"{xyzin.stem}.gf_ped_report.txt"),
+                csv_dir=xyzin.with_name(f"{xyzin.stem}.gf_csv"),
+            ),
+            required_sections=("GIC", "CARTESIAN_HESSIAN"),
         ),
         DashboardActionTemplate(
             "rovib_summary",

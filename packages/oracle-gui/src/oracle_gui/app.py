@@ -14,6 +14,14 @@ from .gicforge import (
     gicforge_gui_state_lines,
     load_gicforge_gui_state,
 )
+from .gf import (
+    GFTable,
+    OracleGFController,
+    default_gf_csv_dir,
+    default_gf_report_output,
+    gf_gui_state_lines,
+    load_gf_gui_state,
+)
 from .project import load_oracle_project_state
 from .structure import (
     OracleStructureController,
@@ -72,6 +80,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.controller = OracleDashboardController(xyzin)
             self.structure_controller = OracleStructureController(xyzin)
             self.gicforge_controller = OracleGICForgeController(xyzin)
+            self.gf_controller = OracleGFController(xyzin)
             self.process: QProcess | None = None
             self.current_actions: tuple[DashboardAction, ...] = ()
             self.pending_xyzin_after_run: Path | None = None
@@ -119,6 +128,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             tabs.addTab(structure_tab, "Structure")
             gicforge_tab = self._build_gicforge_tab()
             tabs.addTab(gicforge_tab, "GICForge")
+            gf_tab = self._build_gf_tab()
+            tabs.addTab(gf_tab, "GF/PED")
             layout.addWidget(tabs, stretch=2)
 
             self.details = QTextEdit()
@@ -144,6 +155,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.controller.set_xyzin(Path(path))
                 self.structure_controller.set_xyzin(Path(path))
                 self.gicforge_controller.set_xyzin(Path(path))
+                self.gf_controller.set_xyzin(Path(path))
                 self.refresh()
 
         def refresh(self) -> None:
@@ -152,9 +164,11 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.action_table.setRowCount(0)
             self._clear_structure_tables()
             self._clear_gicforge_tables()
+            self._clear_gf_tables()
             if self.controller.xyzin is None:
                 self.path_label.setText("No ORACLE project loaded")
                 self.gicforge_summary.setPlainText("No ORACLE project loaded")
+                self.gf_summary.setPlainText("No ORACLE project loaded")
                 self.details.setPlainText(
                     "\n".join(
                         f"{spec.title}: {spec.description}" for spec in ORACLE_GUI_WINDOWS
@@ -167,8 +181,10 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             state = load_oracle_project_state(self.controller.xyzin)
             self.structure_controller.set_xyzin(state.xyzin)
             self.gicforge_controller.set_xyzin(state.xyzin)
+            self.gf_controller.set_xyzin(state.xyzin)
             self.structure_output_path.setText(str(state.xyzin))
             self._set_default_gicforge_outputs(state.xyzin)
+            self._set_default_gf_outputs(state.xyzin)
             self.path_label.setText(str(state.xyzin))
             for workflow in state.workflows:
                 self.workflow_list.addItem(
@@ -200,6 +216,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             )
             self._populate_structure_tables(state.xyzin)
             self._populate_gicforge_tables(state.xyzin)
+            self._populate_gf_tables(state.xyzin)
 
         def show_workflow_details(self, _item=None) -> None:
             if self.controller.xyzin is None:
@@ -316,6 +333,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 self.controller.set_xyzin(self.pending_xyzin_after_run)
                 self.structure_controller.set_xyzin(self.pending_xyzin_after_run)
                 self.gicforge_controller.set_xyzin(self.pending_xyzin_after_run)
+                self.gf_controller.set_xyzin(self.pending_xyzin_after_run)
             self.pending_xyzin_after_run = None
             self.refresh()
 
@@ -671,7 +689,254 @@ def _run_qt(initial_xyzin: Path | None) -> int:
                 if table is not None:
                     table.setRowCount(0)
 
-        def _fill_table(self, widget: QTableWidget, table: StructureTable | GICForgeTable) -> None:
+        def _build_gf_tab(self) -> QWidget:
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+
+            source_row = QHBoxLayout()
+            source_row.addWidget(QLabel("FCHK"))
+            self.gf_fchk_path = QLineEdit()
+            fchk_browse = QPushButton("Browse")
+            fchk_browse.clicked.connect(self.browse_gf_fchk)
+            source_row.addWidget(self.gf_fchk_path, stretch=1)
+            source_row.addWidget(fchk_browse)
+            layout.addLayout(source_row)
+
+            output_row = QHBoxLayout()
+            output_row.addWidget(QLabel("Report"))
+            self.gf_report_output = QLineEdit()
+            report_browse = QPushButton("Save As")
+            report_browse.clicked.connect(self.browse_gf_report_output)
+            output_row.addWidget(self.gf_report_output, stretch=1)
+            output_row.addWidget(report_browse)
+            output_row.addWidget(QLabel("CSV dir"))
+            self.gf_csv_dir = QLineEdit()
+            csv_browse = QPushButton("Browse")
+            csv_browse.clicked.connect(self.browse_gf_csv_dir)
+            output_row.addWidget(self.gf_csv_dir, stretch=1)
+            output_row.addWidget(csv_browse)
+            layout.addLayout(output_row)
+
+            scale_row = QHBoxLayout()
+            scale_row.addWidget(QLabel("Scale file"))
+            self.gf_scale_file = QLineEdit()
+            scale_browse = QPushButton("Browse")
+            scale_browse.clicked.connect(self.browse_gf_scale_file)
+            self.gf_scale_records = QLineEdit()
+            scale_row.addWidget(self.gf_scale_file, stretch=1)
+            scale_row.addWidget(scale_browse)
+            scale_row.addWidget(QLabel("Scale"))
+            scale_row.addWidget(self.gf_scale_records, stretch=1)
+            layout.addLayout(scale_row)
+
+            options_row = QHBoxLayout()
+            self.gf_symmetry_blocks = QCheckBox("Symmetry blocks")
+            self.gf_symmetry_blocks.setChecked(True)
+            self.gf_local = QCheckBox("Local")
+            self.gf_subtract_electrostatic = QCheckBox("Subtract electrostatic")
+            self.gf_subtract_uff_vdw = QCheckBox("Subtract UFF vdW")
+            self.gf_write_section = QCheckBox("Update #GF_PED")
+            self.gf_write_section.setChecked(True)
+            self.gf_force_threshold = QLineEdit()
+            self.gf_force_threshold.setPlaceholderText("force threshold")
+            self.gf_nonbonded_14_scale = QLineEdit("0.5")
+            run_button = QPushButton("Run GF/PED")
+            run_button.clicked.connect(self.run_gf)
+            options_row.addWidget(self.gf_symmetry_blocks)
+            options_row.addWidget(self.gf_local)
+            options_row.addWidget(self.gf_subtract_electrostatic)
+            options_row.addWidget(self.gf_subtract_uff_vdw)
+            options_row.addWidget(self.gf_write_section)
+            options_row.addWidget(QLabel("Threshold"))
+            options_row.addWidget(self.gf_force_threshold)
+            options_row.addWidget(QLabel("1-4"))
+            options_row.addWidget(self.gf_nonbonded_14_scale)
+            options_row.addWidget(run_button)
+            layout.addLayout(options_row)
+
+            self.gf_summary = QTextEdit()
+            self.gf_summary.setReadOnly(True)
+            self.gf_summary.setMaximumHeight(150)
+            layout.addWidget(self.gf_summary)
+
+            self.gf_table_tabs = QTabWidget()
+            self.gf_frequency_table = QTableWidget(0, 3)
+            self.gf_gic_table = QTableWidget(0, 7)
+            self.gf_ped_table = QTableWidget(0, 3)
+            self.gf_diagnostics_table = QTableWidget(0, 2)
+            self.gf_table_tabs.addTab(self.gf_frequency_table, "Frequencies")
+            self.gf_table_tabs.addTab(self.gf_gic_table, "GICs")
+            self.gf_table_tabs.addTab(self.gf_ped_table, "PED")
+            self.gf_table_tabs.addTab(self.gf_diagnostics_table, "Diagnostics")
+            layout.addWidget(self.gf_table_tabs, stretch=1)
+            return tab
+
+        def browse_gf_fchk(self) -> None:
+            path, _selected = QFileDialog.getOpenFileName(
+                self,
+                "Select Gaussian FCHK",
+                str(Path.cwd()),
+                "Gaussian FCHK (*.fchk *.fch);;All files (*)",
+            )
+            if path:
+                self.gf_fchk_path.setText(path)
+
+        def browse_gf_report_output(self) -> None:
+            path, _selected = QFileDialog.getSaveFileName(
+                self,
+                "Write GF/PED report",
+                self.gf_report_output.text().strip() or str(Path.cwd() / "gf_ped_report.txt"),
+                "Text reports (*.txt *.report);;All files (*)",
+            )
+            if path:
+                self.gf_report_output.setText(path)
+
+        def browse_gf_csv_dir(self) -> None:
+            path = QFileDialog.getExistingDirectory(
+                self,
+                "Select GF/PED CSV directory",
+                self.gf_csv_dir.text().strip() or str(Path.cwd()),
+            )
+            if path:
+                self.gf_csv_dir.setText(path)
+
+        def browse_gf_scale_file(self) -> None:
+            path, _selected = QFileDialog.getOpenFileName(
+                self,
+                "Select GF scaling file",
+                str(Path.cwd()),
+                "Scaling files (*.txt *.csv *.dat);;All files (*)",
+            )
+            if path:
+                self.gf_scale_file.setText(path)
+
+        def run_gf(self) -> None:
+            if not self._ensure_gf_ready_for_command("GF/PED"):
+                return
+            if not self._ensure_gf_inputs_ready("GF/PED"):
+                return
+            force_threshold = self._optional_float_field(
+                self.gf_force_threshold,
+                "GF/PED",
+                "force threshold",
+            )
+            if force_threshold is False:
+                return
+            nonbonded_14_scale = self._optional_float_field(
+                self.gf_nonbonded_14_scale,
+                "GF/PED",
+                "1-4 scale",
+                default=0.5,
+            )
+            if nonbonded_14_scale is False:
+                return
+            self.gf_controller.set_xyzin(self.controller.xyzin)
+            command = self.gf_controller.run_command(
+                fchk=self._optional_path_text(self.gf_fchk_path),
+                out=self._gf_output_path(self.gf_report_output, default_gf_report_output),
+                csv_dir=self._gf_output_path(self.gf_csv_dir, default_gf_csv_dir),
+                scale_file=self._optional_path_text(self.gf_scale_file),
+                scale_records=self._scale_records(),
+                local=self.gf_local.isChecked(),
+                symmetry_blocks=self.gf_symmetry_blocks.isChecked(),
+                force_threshold=force_threshold,
+                subtract_electrostatic=self.gf_subtract_electrostatic.isChecked(),
+                subtract_uff_vdw=self.gf_subtract_uff_vdw.isChecked(),
+                nonbonded_14_scale=nonbonded_14_scale,
+                write_section=self.gf_write_section.isChecked(),
+            )
+            self._start_command(command, command.label)
+
+        def _ensure_gf_ready_for_command(self, title: str) -> bool:
+            if self.controller.xyzin is None:
+                QMessageBox.warning(self, title, "Open or preprocess an ORACLE xyzin first.")
+                return False
+            if self.process is not None:
+                QMessageBox.information(self, "ORACLE", "A command is already running.")
+                return False
+            self.gf_controller.set_xyzin(self.controller.xyzin)
+            return True
+
+        def _ensure_gf_inputs_ready(self, title: str) -> bool:
+            if self.controller.xyzin is None:
+                return False
+            state = load_oracle_project_state(self.controller.xyzin)
+            sections = set(state.section_names)
+            missing = []
+            if "GIC" not in sections:
+                missing.append("#GIC")
+            if not self.gf_fchk_path.text().strip() and "CARTESIAN_HESSIAN" not in sections:
+                missing.append("#CARTESIAN_HESSIAN or FCHK")
+            if not missing:
+                return True
+            QMessageBox.warning(self, title, "Missing " + ", ".join(missing))
+            return False
+
+        def _optional_float_field(
+            self,
+            field: QLineEdit,
+            title: str,
+            label: str,
+            *,
+            default=None,
+        ):
+            text = field.text().strip()
+            if not text:
+                return default
+            try:
+                return float(text)
+            except ValueError:
+                QMessageBox.warning(self, title, f"Invalid {label}: {text}")
+                return False
+
+        def _optional_path_text(self, field: QLineEdit) -> Path | None:
+            text = field.text().strip()
+            return Path(text) if text else None
+
+        def _scale_records(self) -> tuple[str, ...]:
+            text = self.gf_scale_records.text().strip()
+            if not text:
+                return ()
+            return tuple(item.strip() for item in text.split(";") if item.strip())
+
+        def _gf_output_path(self, field: QLineEdit, default_factory) -> Path:
+            if self.controller.xyzin is None:
+                raise ValueError("no ORACLE xyzin project is loaded")
+            text = field.text().strip()
+            output = Path(text) if text else default_factory(self.controller.xyzin)
+            field.setText(str(output))
+            return output
+
+        def _set_default_gf_outputs(self, xyzin: Path) -> None:
+            self.gf_report_output.setText(str(default_gf_report_output(xyzin)))
+            self.gf_csv_dir.setText(str(default_gf_csv_dir(xyzin)))
+
+        def _populate_gf_tables(self, xyzin: Path) -> None:
+            state = load_gf_gui_state(xyzin)
+            self.gf_summary.setPlainText("\n".join(gf_gui_state_lines(state)))
+            self._fill_table(self.gf_frequency_table, state.frequencies)
+            self._fill_table(self.gf_gic_table, state.gics)
+            self._fill_table(self.gf_ped_table, state.ped)
+            self._fill_table(self.gf_diagnostics_table, state.diagnostics)
+
+        def _clear_gf_tables(self) -> None:
+            summary = getattr(self, "gf_summary", None)
+            if summary is not None:
+                summary.clear()
+            for table in (
+                getattr(self, "gf_frequency_table", None),
+                getattr(self, "gf_gic_table", None),
+                getattr(self, "gf_ped_table", None),
+                getattr(self, "gf_diagnostics_table", None),
+            ):
+                if table is not None:
+                    table.setRowCount(0)
+
+        def _fill_table(
+            self,
+            widget: QTableWidget,
+            table: StructureTable | GICForgeTable | GFTable,
+        ) -> None:
             widget.setColumnCount(len(table.columns))
             widget.setHorizontalHeaderLabels(table.columns)
             widget.setRowCount(len(table.rows))
