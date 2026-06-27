@@ -18,6 +18,10 @@ from .contracts import (
 from .policy import (
     B_MATRIX_BACKEND,
     DIAGNOSTIC_FINITE_DIFFERENCE_STEP,
+    FRAGMENT_MODE_NONE,
+    FRAGMENT_MODE_PSEUDO_BONDS,
+    FRAGMENT_MODE_SPECIAL_COORDINATES,
+    FRAGMENT_MODES,
     GIC_BACKEND,
     LINEAR_ANGLE_DEGREES,
     LOCAL_SYMMETRIZATION_METHOD,
@@ -137,6 +141,8 @@ class GICDefinition:
     gics: tuple[FrozenGIC, ...]
     reduction_diagnostics: GICReductionDiagnostics | None = None
     symmetry_diagnostics: GICSymmetrizationDiagnostics | None = None
+    fragment_mode: str = FRAGMENT_MODE_NONE
+    pseudo_bonds: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -162,12 +168,14 @@ def build_gic_definition_from_xyzin(
     *,
     symmetrize: bool = False,
     improper_dihedrals: bool | None = None,
+    fragment_mode: str | None = None,
     rank_tolerance: float = RANK_TOLERANCE,
 ) -> GICDefinition:
     """Build a frozen ORACLE GIC definition from saved xyzin state."""
     definition, atom_symbols, operations = construct_gic_definition_from_xyzin(
         path,
         improper_dihedrals=improper_dihedrals,
+        fragment_mode=fragment_mode,
         rank_tolerance=rank_tolerance,
         retain_candidate_primitives=symmetrize,
     )
@@ -184,6 +192,7 @@ def construct_gic_definition_from_xyzin(
     path: Path,
     *,
     improper_dihedrals: bool | None = None,
+    fragment_mode: str | None = None,
     rank_tolerance: float = RANK_TOLERANCE,
     retain_candidate_primitives: bool = False,
 ) -> tuple[GICDefinition, tuple[str, ...], tuple[GICPointGroupOperation, ...]]:
@@ -197,6 +206,7 @@ def construct_gic_definition_from_xyzin(
     symmetry_operations = _symmetry_operations(lines)
     if improper_dihedrals is None:
         improper_dihedrals = _planned_improper_dihedrals(lines)
+    mode = _planned_fragment_mode(lines) if fragment_mode is None else _fragment_mode(fragment_mode)
     fragment_records = _fragment_records(target)
     interaction_centers = _interaction_center_definition(target)
 
@@ -211,14 +221,26 @@ def construct_gic_definition_from_xyzin(
 
     bonds = _topology_bonds(lines, natoms=geometry.natoms)
     rings = _topology_rings(lines, natoms=geometry.natoms)
+    pseudo_bonds: tuple[tuple[int, int], ...] = ()
+    candidate_fragment_records = fragment_records
+    candidate_interaction_centers = interaction_centers
+    if fragment_records and mode == FRAGMENT_MODE_PSEUDO_BONDS:
+        pseudo_bonds = _pseudo_bonds_for_fragments(
+            fragment_records,
+            bonds=bonds,
+            coords=coords,
+        )
+        bonds = tuple(sorted(set(bonds + pseudo_bonds)))
+        candidate_fragment_records = ()
+        candidate_interaction_centers = None
     candidates = _primitive_candidates(
         bonds,
         rings=rings,
         coords=coords,
         natoms=geometry.natoms,
         improper_dihedrals=improper_dihedrals,
-        fragment_records=fragment_records,
-        interaction_centers=interaction_centers,
+        fragment_records=candidate_fragment_records,
+        interaction_centers=candidate_interaction_centers,
     )
     target_rank = _vibrational_rank(coords)
     selected, rank, reduction_diagnostics = _select_ranked_primitives_with_diagnostics(
@@ -260,6 +282,8 @@ def construct_gic_definition_from_xyzin(
         gics=gics,
         reduction_diagnostics=reduction_diagnostics,
         symmetry_diagnostics=_empty_symmetry_diagnostics(point_group, requested=False),
+        fragment_mode=mode if fragment_records else FRAGMENT_MODE_NONE,
+        pseudo_bonds=pseudo_bonds,
     )
     return definition, tuple(geometry.atoms), symmetry_operations
 
@@ -537,6 +561,8 @@ def symmetrize_gic_definition(
         gics=gics,
         reduction_diagnostics=definition.reduction_diagnostics,
         symmetry_diagnostics=symmetry_diagnostics,
+        fragment_mode=definition.fragment_mode,
+        pseudo_bonds=definition.pseudo_bonds,
     )
 
 
@@ -574,6 +600,8 @@ def gic_definition_section_lines(definition: GICDefinition) -> list[str]:
         f"SYMMETRIZE {_bool_text(definition.symmetrize)}",
         f"SYMMETRY_MODE {_symmetry_mode(definition)}",
         f"OUT_OF_PLANE_MODE {_out_of_plane_mode(definition.primitives)}",
+        f"FRAGMENT_MODE {definition.fragment_mode}",
+        f"PSEUDO_BOND_COUNT {len(definition.pseudo_bonds)}",
         f"TARGET_RANK {definition.target_rank}",
         f"RANK {definition.rank}",
         f"CANDIDATE_COUNT {definition.candidate_count}",
@@ -601,6 +629,12 @@ def gic_definition_section_lines(definition: GICDefinition) -> list[str]:
     lines.extend(_reduction_diagnostics_lines(definition))
     lines.append("[SYMMETRY_DIAGNOSTICS]")
     lines.extend(_symmetry_diagnostics_lines(definition))
+    lines.append("[PSEUDO_BONDS]")
+    if definition.pseudo_bonds:
+        for index, (left, right) in enumerate(definition.pseudo_bonds, start=1):
+            lines.append(f"{index} {left} {right} KIND=INTERFRAGMENT_CLOSEST")
+    else:
+        lines.append("NONE")
     lines.append("[GAUSSIAN_GIC]")
     gaussian_gics = _gaussian_gic_block_lines(definition)
     if gaussian_gics:
@@ -644,12 +678,14 @@ def write_gicforge_build_sections(
     symmetrize: bool = False,
     sycart: bool = False,
     improper_dihedrals: bool | None = None,
+    fragment_mode: str | None = None,
 ) -> GICDefinition:
     target = Path(path)
     definition = build_gic_definition_from_xyzin(
         target,
         symmetrize=symmetrize,
         improper_dihedrals=improper_dihedrals,
+        fragment_mode=fragment_mode,
     )
     replace_section(target, "GIC", gic_definition_section_lines(definition))
     if sycart:
@@ -829,6 +865,8 @@ def read_gic_definition_from_xyzin(path: Path) -> GICDefinition:
         gics=gics,
         reduction_diagnostics=diagnostics,
         symmetry_diagnostics=symmetry_diagnostics,
+        fragment_mode=_fragment_mode(_section_value(section, "FRAGMENT_MODE")),
+        pseudo_bonds=_parse_pseudo_bonds(section),
     )
 
 
@@ -3918,6 +3956,79 @@ def _fragment_records(path: Path) -> tuple[object, ...]:
     return tuple(read_fragment_records(Path(path)))
 
 
+def _pseudo_bonds_for_fragments(
+    fragment_records: tuple[object, ...],
+    *,
+    bonds: tuple[tuple[int, int], ...],
+    coords: np.ndarray,
+) -> tuple[tuple[int, int], ...]:
+    records = tuple(
+        record
+        for record in sorted(fragment_records, key=lambda item: getattr(item, "identifier"))
+        if tuple(getattr(record, "atoms", ()))
+    )
+    if len(records) <= 1:
+        return ()
+    covalent = {tuple(sorted(bond)) for bond in bonds}
+    fragment_edges: list[tuple[float, int, int, tuple[int, int]]] = []
+    for left_index, left in enumerate(records):
+        left_atoms = tuple(int(atom) for atom in getattr(left, "atoms"))
+        for right_index, right in enumerate(records[left_index + 1 :], start=left_index + 1):
+            right_atoms = tuple(int(atom) for atom in getattr(right, "atoms"))
+            contact = _closest_interfragment_atom_pair(
+                left_atoms,
+                right_atoms,
+                covalent=covalent,
+                coords=coords,
+            )
+            if contact is None:
+                continue
+            distance, pair = contact
+            fragment_edges.append((distance, left_index, right_index, pair))
+    parent = list(range(len(records)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    selected: list[tuple[int, int]] = []
+    for _distance, left_index, right_index, pair in sorted(fragment_edges):
+        left_root = find(left_index)
+        right_root = find(right_index)
+        if left_root == right_root:
+            continue
+        parent[right_root] = left_root
+        selected.append(pair)
+        if len(selected) == len(records) - 1:
+            break
+    if len(selected) != len(records) - 1:
+        raise GICForgeContractError(
+            "cannot connect all fragments with pseudo-bonds from closest atom pairs"
+        )
+    return tuple(sorted(set(selected)))
+
+
+def _closest_interfragment_atom_pair(
+    left_atoms: tuple[int, ...],
+    right_atoms: tuple[int, ...],
+    *,
+    covalent: set[tuple[int, int]],
+    coords: np.ndarray,
+) -> tuple[float, tuple[int, int]] | None:
+    best: tuple[float, tuple[int, int]] | None = None
+    for left in left_atoms:
+        for right in right_atoms:
+            pair = tuple(sorted((int(left), int(right))))
+            if pair in covalent:
+                continue
+            distance = float(np.linalg.norm(coords[pair[0] - 1] - coords[pair[1] - 1]))
+            if best is None or (distance, pair) < best:
+                best = (distance, pair)
+    return best
+
+
 def _interaction_center_definition(path: Path) -> object | None:
     try:
         from matrix_fragments import read_interaction_center_definition
@@ -4391,6 +4502,32 @@ def _planned_improper_dihedrals(lines: list[str]) -> bool:
     return (mode or "").strip().upper() in {"IMPROPER_DIHEDRAL", "IMPROPER", "IMPD", "G16"}
 
 
+def _planned_fragment_mode(lines: list[str]) -> str:
+    gic = section_content(lines, "GIC")
+    mode = _section_value(gic, "FRAGMENT_MODE")
+    if mode is None:
+        return FRAGMENT_MODE_SPECIAL_COORDINATES
+    return _fragment_mode(mode)
+
+
+def _fragment_mode(value: str | None) -> str:
+    text = (value or FRAGMENT_MODE_NONE).strip().upper().replace("-", "_")
+    aliases = {
+        "SPECIAL": FRAGMENT_MODE_SPECIAL_COORDINATES,
+        "FRAGMENT": FRAGMENT_MODE_SPECIAL_COORDINATES,
+        "FRAGMENT_COORDINATES": FRAGMENT_MODE_SPECIAL_COORDINATES,
+        "PSEUDO": FRAGMENT_MODE_PSEUDO_BONDS,
+        "PSEUDOBONDS": FRAGMENT_MODE_PSEUDO_BONDS,
+        "HBOND": FRAGMENT_MODE_PSEUDO_BONDS,
+        "HBONDS": FRAGMENT_MODE_PSEUDO_BONDS,
+        "H_BONDS": FRAGMENT_MODE_PSEUDO_BONDS,
+    }
+    normalized = aliases.get(text, text)
+    if normalized not in FRAGMENT_MODES:
+        raise GICForgeContractError(f"unsupported fragment mode: {value}")
+    return normalized
+
+
 def _out_of_plane_mode(primitives: tuple[GICPrimitive, ...]) -> str:
     if any(primitive.function == "IMPD" for primitive in primitives):
         return "IMPROPER_DIHEDRAL"
@@ -4404,6 +4541,26 @@ def _parse_int(text: str | None) -> int:
         return int(text)
     except ValueError as exc:
         raise GICForgeContractError(f"invalid integer field: {text}") from exc
+
+
+def _parse_pseudo_bonds(section: list[str]) -> tuple[tuple[int, int], ...]:
+    bonds: list[tuple[int, int]] = []
+    for line in _subsection(section, "PSEUDO_BONDS"):
+        text = line.strip()
+        if not text or text.upper() == "NONE":
+            continue
+        parts = text.split()
+        if len(parts) < 3:
+            raise GICForgeContractError(f"invalid pseudo-bond line: {line}")
+        try:
+            left = int(parts[1])
+            right = int(parts[2])
+        except ValueError as exc:
+            raise GICForgeContractError(f"invalid pseudo-bond line: {line}") from exc
+        if left == right or left < 1 or right < 1:
+            raise GICForgeContractError(f"invalid pseudo-bond indexes: {line}")
+        bonds.append(tuple(sorted((left, right))))
+    return tuple(sorted(set(bonds)))
 
 
 def _cartesian_column_labels(natoms: int) -> tuple[str, ...]:

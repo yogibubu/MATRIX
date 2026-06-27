@@ -646,11 +646,22 @@ def build_parser(
     gic_plan.add_argument("--symmetrize", action="store_true")
     gic_plan.add_argument("--sycart", action="store_true")
     gic_plan.add_argument("--improper-dihedrals", action="store_true")
+    gic_plan.add_argument(
+        "--fragment-mode",
+        choices=("special-coordinates", "pseudo-bonds", "none"),
+        default="special-coordinates",
+        help="How NEO should handle prebuilt molecular fragments",
+    )
     gic_build = gicforge_sub.add_parser("build", help="Build frozen #GIC/#SYCART sections")
     gic_build.add_argument("xyzin", type=Path)
     gic_build.add_argument("--symmetrize", action="store_true")
     gic_build.add_argument("--sycart", action="store_true")
     gic_build.add_argument("--improper-dihedrals", action="store_true")
+    gic_build.add_argument(
+        "--fragment-mode",
+        choices=("special-coordinates", "pseudo-bonds", "none"),
+        help="Override the planned fragment handling mode",
+    )
     bmatrix = gicforge_sub.add_parser("bmatrix", help="Evaluate the frozen GIC B matrix")
     bmatrix.add_argument("xyzin", type=Path)
     bmatrix.add_argument("output", type=Path, nargs="?")
@@ -1950,6 +1961,7 @@ def main(
         plan_kwargs = {
             "symmetrize": args.symmetrize,
             "sycart": args.sycart,
+            "fragment_mode": args.fragment_mode,
         }
         if args.improper_dihedrals:
             plan_kwargs["improper_dihedrals"] = True
@@ -1968,6 +1980,8 @@ def main(
         }
         if args.improper_dihedrals:
             build_kwargs["improper_dihedrals"] = True
+        if args.fragment_mode:
+            build_kwargs["fragment_mode"] = args.fragment_mode
         definition = write_gicforge_build_sections(
             args.xyzin,
             **build_kwargs,

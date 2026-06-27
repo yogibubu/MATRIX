@@ -33,7 +33,9 @@ def gic_plan_section_lines(
     *,
     symmetrize: bool = False,
     improper_dihedrals: bool = False,
+    fragment_mode: str = "SPECIAL_COORDINATES",
 ) -> list[str]:
+    mode = _normalized_fragment_mode(fragment_mode)
     return [
         f"SCHEMA {ORACLE_XYZ_GIC_SCHEMA}",
         "STATUS PLANNED",
@@ -44,6 +46,7 @@ def gic_plan_section_lines(
         f"SYMMETRIZE {_bool_text(symmetrize)}",
         "OUT_OF_PLANE_MODE "
         f"{'IMPROPER_DIHEDRAL' if improper_dihedrals else 'OUT_OF_PLANE'}",
+        f"FRAGMENT_MODE {mode}",
         "BACKEND UNASSIGNED",
         "[FROZEN_GICS]",
         "PENDING GICFORGE_IMPLEMENTATION",
@@ -67,6 +70,7 @@ def write_gicforge_plan_sections(
     symmetrize: bool = False,
     sycart: bool = False,
     improper_dihedrals: bool = False,
+    fragment_mode: str = "SPECIAL_COORDINATES",
 ) -> None:
     target = Path(path)
     validate_gicforge_prerequisites(target)
@@ -76,6 +80,7 @@ def write_gicforge_plan_sections(
         gic_plan_section_lines(
             symmetrize=symmetrize,
             improper_dihedrals=improper_dihedrals,
+            fragment_mode=fragment_mode,
         ),
     )
     if sycart:
@@ -115,3 +120,22 @@ def _validation_status(validation_lines: list[str]) -> str | None:
 
 def _bool_text(value: bool) -> str:
     return "TRUE" if value else "FALSE"
+
+
+def _normalized_fragment_mode(value: str | None) -> str:
+    text = (value or "SPECIAL_COORDINATES").strip().upper().replace("-", "_")
+    aliases = {
+        "SPECIAL": "SPECIAL_COORDINATES",
+        "FRAGMENT_COORDINATES": "SPECIAL_COORDINATES",
+        "FRAGMENT": "SPECIAL_COORDINATES",
+        "PSEUDO": "PSEUDO_BONDS",
+        "PSEUDOBONDS": "PSEUDO_BONDS",
+        "HBOND": "PSEUDO_BONDS",
+        "HBONDS": "PSEUDO_BONDS",
+        "H_BONDS": "PSEUDO_BONDS",
+        "NONE": "NONE",
+    }
+    normalized = aliases.get(text, text)
+    if normalized not in {"SPECIAL_COORDINATES", "PSEUDO_BONDS", "NONE"}:
+        raise GICForgeContractError(f"unsupported fragment mode: {value}")
+    return normalized

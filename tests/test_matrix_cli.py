@@ -1269,17 +1269,23 @@ def test_gicforge_plan_cli_calls_writer(tmp_path, monkeypatch, capsys):
     calls = {}
     path = tmp_path / "molecule.xyz"
 
-    def fake_write(target, *, symmetrize=False, sycart=False):
+    def fake_write(target, *, symmetrize=False, sycart=False, fragment_mode="special-coordinates"):
         calls["target"] = target
         calls["symmetrize"] = symmetrize
         calls["sycart"] = sycart
+        calls["fragment_mode"] = fragment_mode
 
     monkeypatch.setattr("matrix_neo.write_gicforge_plan_sections", fake_write)
 
     rc = matrix_run.main(["gicforge", "plan", str(path), "--symmetrize", "--sycart"])
 
     assert rc == 0
-    assert calls == {"target": path, "symmetrize": True, "sycart": True}
+    assert calls == {
+        "target": path,
+        "symmetrize": True,
+        "sycart": True,
+        "fragment_mode": "special-coordinates",
+    }
     assert "Planned GICForge workflow" in capsys.readouterr().out
 
 
@@ -1337,11 +1343,25 @@ def test_gicforge_cli_passes_improper_dihedrals_flag(tmp_path, monkeypatch, caps
         gics = (object(),)
         rank = 1
 
-    def fake_plan(target, *, symmetrize=False, sycart=False, improper_dihedrals=False):
-        calls["plan"] = (target, symmetrize, sycart, improper_dihedrals)
+    def fake_plan(
+        target,
+        *,
+        symmetrize=False,
+        sycart=False,
+        improper_dihedrals=False,
+        fragment_mode="special-coordinates",
+    ):
+        calls["plan"] = (target, symmetrize, sycart, improper_dihedrals, fragment_mode)
 
-    def fake_build(target, *, symmetrize=False, sycart=False, improper_dihedrals=False):
-        calls["build"] = (target, symmetrize, sycart, improper_dihedrals)
+    def fake_build(
+        target,
+        *,
+        symmetrize=False,
+        sycart=False,
+        improper_dihedrals=False,
+        fragment_mode=None,
+    ):
+        calls["build"] = (target, symmetrize, sycart, improper_dihedrals, fragment_mode)
         return FakeDefinition()
 
     monkeypatch.setattr("matrix_neo.write_gicforge_plan_sections", fake_plan)
@@ -1352,8 +1372,40 @@ def test_gicforge_cli_passes_improper_dihedrals_flag(tmp_path, monkeypatch, caps
 
     assert rc_plan == 0
     assert rc_build == 0
-    assert calls["plan"] == (path, False, False, True)
-    assert calls["build"] == (path, False, False, True)
+    assert calls["plan"] == (path, False, False, True, "special-coordinates")
+    assert calls["build"] == (path, False, False, True, None)
+    assert "Built GICForge definition" in capsys.readouterr().out
+
+
+def test_gicforge_cli_passes_fragment_mode_override(tmp_path, monkeypatch, capsys):
+    calls = {}
+    path = tmp_path / "molecule.xyzin"
+
+    class FakeDefinition:
+        gics = (object(),)
+        rank = 1
+
+    def fake_plan(target, *, fragment_mode="special-coordinates", **_kwargs):
+        calls["plan"] = (target, fragment_mode)
+
+    def fake_build(target, *, fragment_mode=None, **_kwargs):
+        calls["build"] = (target, fragment_mode)
+        return FakeDefinition()
+
+    monkeypatch.setattr("matrix_neo.write_gicforge_plan_sections", fake_plan)
+    monkeypatch.setattr("matrix_neo.write_gicforge_build_sections", fake_build)
+
+    rc_plan = matrix_run.main(
+        ["gicforge", "plan", str(path), "--fragment-mode", "pseudo-bonds"]
+    )
+    rc_build = matrix_run.main(
+        ["gicforge", "build", str(path), "--fragment-mode", "pseudo-bonds"]
+    )
+
+    assert rc_plan == 0
+    assert rc_build == 0
+    assert calls["plan"] == (path, "pseudo-bonds")
+    assert calls["build"] == (path, "pseudo-bonds")
     assert "Built GICForge definition" in capsys.readouterr().out
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from matrix_core import section_content
@@ -124,6 +125,54 @@ def test_fragment_build_materializes_components_centers_and_frames(tmp_path):
     assert any(line.startswith("F001 X=") and " Y=" in line for line in fragments)
     assert len(records) == 2
     assert records[0].atoms == (1, 2, 3)
+
+
+def test_fragment_workflow_handles_non_covalent_formic_acid_water_probe(tmp_path):
+    source = tmp_path / "formic_acid_water.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "8",
+                "formic acid-water non-covalent probe",
+                "6    -1.171727   -0.018999   -0.001370",
+                "1    -2.256869    0.130369   -0.015107",
+                "8    -0.651376   -1.113045    0.004964",
+                "8    -0.533544    1.143228    0.007603",
+                "1     0.435203    0.960633    0.019343",
+                "8     1.930145   -0.025976   -0.052269",
+                "1     2.594643   -0.128917    0.633345",
+                "1     1.351317   -0.802634    0.008831",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "formic_acid_water.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    fragments = write_fragment_build_section(xyzin)
+    centers = write_interaction_center_section(xyzin)
+    read_back = read_interaction_center_definition(xyzin)
+
+    assert len(fragments.fragments) == 2
+    assert fragments.fragments[0].atoms == (1, 2, 3, 4, 5)
+    assert fragments.fragments[1].atoms == (6, 7, 8)
+    assert len(centers.centers) == 6
+    assert centers.interactions == ()
+    assert [center.identifier for center in read_back.centers] == [
+        center.identifier for center in centers.centers
+    ]
+    assert [center.kind for center in read_back.centers] == [
+        center.kind for center in centers.centers
+    ]
+    assert [center.atoms for center in read_back.centers] == [
+        center.atoms for center in centers.centers
+    ]
+    assert np.allclose(
+        [center.center for center in read_back.centers],
+        [center.center for center in centers.centers],
+    )
+    assert read_back.interactions == ()
 
 
 def test_interaction_centers_materialize_ring_center_atom_candidate(tmp_path):

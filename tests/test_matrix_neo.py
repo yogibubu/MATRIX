@@ -393,6 +393,7 @@ def test_gicforge_plan_writes_gic_and_sycart_sections(tmp_path):
     assert "STATUS PLANNED" in gic
     assert "SYMMETRIZE TRUE" in gic
     assert "OUT_OF_PLANE_MODE OUT_OF_PLANE" in gic
+    assert "FRAGMENT_MODE SPECIAL_COORDINATES" in gic
     assert "PENDING GICFORGE_IMPLEMENTATION" in gic
     assert sycart[0] == "SCHEMA oracle.xyz.sycart.v1"
 
@@ -419,6 +420,30 @@ def test_gicforge_plan_can_request_improper_dihedrals(tmp_path):
     gic = section_content(path.read_text(encoding="utf-8").splitlines(), "GIC")
 
     assert "OUT_OF_PLANE_MODE IMPROPER_DIHEDRAL" in gic
+
+
+def test_gicforge_plan_can_request_pseudo_bond_fragment_mode(tmp_path):
+    path = tmp_path / "molecule.xyz"
+    path.write_text(
+        "\n".join(
+            [
+                "1",
+                "h",
+                "H 0 0 0",
+                "",
+                "#VALIDATION",
+                "SCHEMA oracle.xyz.validation.v1",
+                "STATUS PASS",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    write_gicforge_plan_sections(path, fragment_mode="h-bonds")
+    gic = section_content(path.read_text(encoding="utf-8").splitlines(), "GIC")
+
+    assert "FRAGMENT_MODE PSEUDO_BONDS" in gic
 
 
 def test_preprocess_validate_then_gicforge_plan_pipeline(tmp_path):
@@ -936,6 +961,107 @@ def test_gicforge_build_uses_built_fragments_for_relative_coordinates(tmp_path):
     assert any("ExF002F001" in line for line in gaussian_lines)
     assert any("1.0D-24" in line and line.startswith("KnF002F001") for line in gaussian_lines)
     assert any(" = ExF002F001" in line for line in gaussian_lines)
+
+
+def test_gicforge_pseudo_bond_fragment_mode_uses_standard_internal_coordinates(tmp_path):
+    source = tmp_path / "formic_acid_water.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "8",
+                "formic acid-water non-covalent probe",
+                "6    -1.171727   -0.018999   -0.001370",
+                "1    -2.256869    0.130369   -0.015107",
+                "8    -0.651376   -1.113045    0.004964",
+                "8    -0.533544    1.143228    0.007603",
+                "1     0.435203    0.960633    0.019343",
+                "8     1.930145   -0.025976   -0.052269",
+                "1     2.594643   -0.128917    0.633345",
+                "1     1.351317   -0.802634    0.008831",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "formic_acid_water.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    write_fragment_build_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, fragment_mode="pseudo-bonds")
+    matrix = build_gic_b_matrix_from_xyzin(xyzin)
+    rows = np.asarray(matrix.rows, dtype=float)
+    gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
+
+    assert definition.fragment_mode == "PSEUDO_BONDS"
+    assert definition.pseudo_bonds == ((5, 6),)
+    assert definition.target_rank == 18
+    assert definition.rank == 18
+    assert np.linalg.matrix_rank(rows, tol=1.0e-8) == 18
+    assert {gic.family for gic in definition.gics} == {"STRETCH", "BEND", "TORSION"}
+    assert not any(gic.family.startswith("FRAG_") for gic in definition.gics)
+    assert any(
+        primitive.family == "STRETCH" and primitive.atoms == (5, 6)
+        for primitive in definition.primitives
+    )
+    assert "FRAGMENT_MODE PSEUDO_BONDS" in gic
+    assert "PSEUDO_BOND_COUNT 1" in gic
+    assert "[PSEUDO_BONDS]" in gic
+    assert "1 5 6 KIND=INTERFRAGMENT_CLOSEST" in gic
+
+
+def test_gicforge_non_covalent_probe_runs_fragment_and_hbond_coordinate_models(tmp_path):
+    xyz = "\n".join(
+        [
+            "8",
+            "formic acid-water non-covalent probe",
+            "6    -1.171727   -0.018999   -0.001370",
+            "1    -2.256869    0.130369   -0.015107",
+            "8    -0.651376   -1.113045    0.004964",
+            "8    -0.533544    1.143228    0.007603",
+            "1     0.435203    0.960633    0.019343",
+            "8     1.930145   -0.025976   -0.052269",
+            "1     2.594643   -0.128917    0.633345",
+            "1     1.351317   -0.802634    0.008831",
+        ]
+    )
+    results = {}
+
+    for mode in ("special-coordinates", "pseudo-bonds"):
+        source = tmp_path / f"{mode}.xyz"
+        xyzin = tmp_path / f"{mode}.xyzin"
+        source.write_text(xyz + "\n", encoding="utf-8")
+        preprocess_to_enriched_xyz(source, xyzin)
+        write_validation_section(xyzin)
+        write_fragment_build_section(xyzin)
+        definition = write_gicforge_build_sections(xyzin, fragment_mode=mode)
+        matrix = build_gic_b_matrix_from_xyzin(xyzin)
+        rows = np.asarray(matrix.rows, dtype=float)
+        results[mode] = definition
+
+        assert definition.target_rank == 18
+        assert definition.rank == 18
+        assert np.linalg.matrix_rank(rows, tol=1.0e-8) == 18
+
+    fragment_definition = results["special-coordinates"]
+    fragment_families = {gic.family for gic in fragment_definition.gics}
+    assert fragment_definition.fragment_mode == "SPECIAL_COORDINATES"
+    assert {
+        "FRAG_DISTANCE",
+        "FRAG_CENTER_ATOM_DISTANCE",
+        "FRAG_TRANSLATION",
+        "FRAG_ORIENTATION",
+    }.issubset(fragment_families)
+
+    hbond_definition = results["pseudo-bonds"]
+    hbond_families = {gic.family for gic in hbond_definition.gics}
+    assert hbond_definition.fragment_mode == "PSEUDO_BONDS"
+    assert hbond_definition.pseudo_bonds == ((5, 6),)
+    assert hbond_families == {"STRETCH", "BEND", "TORSION"}
+    assert not any(
+        primitive.family.startswith(("FRAG_", "RING_", "CYCLIC_"))
+        for primitive in hbond_definition.primitives
+    )
 
 
 def test_gicforge_classifies_ring_and_butterfly_primitives_like_merlino():

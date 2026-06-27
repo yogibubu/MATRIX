@@ -399,7 +399,7 @@ def read_interaction_center_definition(path: Path) -> InteractionCenterDefinitio
         return InteractionCenterDefinition(strategy="NONE", centers=(), interactions=())
     centers: list[InteractionCenterRecord] = []
     for row in _subsection(section, "CENTERS"):
-        if row.strip().upper() == "NONE":
+        if not row.strip() or row.strip().upper() == "NONE":
             continue
         parts = row.split()
         fields = _key_values(parts[1:])
@@ -424,7 +424,7 @@ def read_interaction_center_definition(path: Path) -> InteractionCenterDefinitio
     center_ids = {center.identifier for center in centers}
     interactions: list[AtomCenterInteractionRecord] = []
     for row in _subsection(section, "INTERACTIONS"):
-        if row.strip().upper() == "NONE":
+        if not row.strip() or row.strip().upper() == "NONE":
             continue
         parts = row.split()
         fields = _key_values(parts[1:])
