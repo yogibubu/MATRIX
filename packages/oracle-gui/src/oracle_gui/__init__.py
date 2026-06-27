@@ -64,6 +64,12 @@ from .gf import (
     gf_gui_state_lines,
     load_gf_gui_state,
 )
+from .guidance import (
+    SectionCompletionHint,
+    missing_sections_guidance,
+    missing_sections_message,
+    section_completion_hint,
+)
 from .project import (
     OracleProjectState,
     SectionState,
@@ -142,6 +148,7 @@ __all__ = [
     "SEFitSummary",
     "SEFitTable",
     "SectionState",
+    "SectionCompletionHint",
     "StructureGuiState",
     "StructureTable",
     "ToolContractGuiState",
@@ -192,6 +199,8 @@ __all__ = [
     "load_trinity_gui_state",
     "load_vpt2_vci_gui_state",
     "load_workbench_gui_state",
+    "missing_sections_guidance",
+    "missing_sections_message",
     "molden_command",
     "preprocess_command",
     "project_state_lines",
@@ -201,6 +210,7 @@ __all__ = [
     "semiexp_benchmark_command",
     "semiexp_command",
     "sefit_gui_state_lines",
+    "section_completion_hint",
     "thermo_command",
     "tool_contract_gui_state_lines",
     "trinity_gui_state_lines",

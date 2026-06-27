@@ -36,7 +36,6 @@ The project/workflow windows are:
 | GF / PED | Harmonic force-field analysis from Hessian plus GICs | `#CARTESIAN_HESSIAN`, `#GF_PED` |
 | SEFit / MORPHEUS | Single-molecule and ensemble semiexperimental refinement | `#ISOTOPOLOGUES`, `#MORPHEUS` |
 | TRINITY Geometry Optimization | Prepare external energy/gradient geometry optimization requests | `#TRINITY` |
-| Rovib / Thermo Utilities | Rotational/vibrational summaries and thermochemistry utilities | `#ROTATIONAL`, `#VIBRATIONAL`, `#THERMO` |
 | Anharmonic: VPT2 / VCI / DVR | Run and collect anharmonic workflow state | `#QFF`, `#VPT2_VCI`, `#DVR` |
 | QM Jobs | Generate Gaussian inputs and normalize QM output sections | `#CARTESIAN_HESSIAN`, `#NORMAL_MODES`, `#QFF` |
 | Diagnostics / Regression | Corpus, Python/Fortran and benchmark audits | reports/artifacts |
@@ -218,14 +217,21 @@ only prepares the autonomous `#TRINITY` request and then reloads it through
 
 ## Generic Workbench Tabs
 
-The Rovib/Thermo, Anharmonic, QM Jobs, Diagnostics, Rotational, Vibrational,
-Electronic and Thermo/Kinetics tabs use `oracle_gui.workbench`. They expose the
-central `oracle_gui.workflows.WindowSpec` contract as four read-only tables:
+The Anharmonic, QM Jobs, Diagnostics, Rotational, Vibrational, Electronic and
+Thermo/Kinetics tabs use `oracle_gui.workbench`. They expose the central
+`oracle_gui.workflows.WindowSpec` contract as four read-only tables:
 required/produced sections, available actions, capabilities and publication or
-viewer exports.
+viewer exports. The former Rovib/Thermo utility view is part of
+Thermo/Kinetics, because rovibrational summaries and densities are inputs to
+thermochemistry and kinetics rather than a separate publication workbench.
 
 These tabs are intentionally thin until their plotting or launcher controllers
 are implemented. They must not duplicate parser, projector, GF, SEFit,
 VPT2/VCI, DVR, thermo or spectroscopy logic. A workbench becomes operational by
 adding or improving the owning service/CLI and its `xyzin` sections, then
 teaching the GUI to call that service.
+
+When an action is not ready, the GUI must report both the missing `xyzin`
+sections and the tool/window that normally creates them. The source of truth is
+`oracle_gui.guidance`, shared by the dashboard, workflow state and workbench
+tables.

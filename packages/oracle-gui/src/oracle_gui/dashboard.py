@@ -22,6 +22,7 @@ from .commands import (
     validate_command,
     vpt2_vci_collect_command,
 )
+from .guidance import missing_sections_message
 from .project import OracleProjectState, load_oracle_project_state
 
 
@@ -248,6 +249,4 @@ class OracleDashboardController:
 
 
 def _missing_reason(missing_sections: tuple[str, ...]) -> str:
-    if not missing_sections:
-        return "project is not available"
-    return "missing " + ", ".join(missing_sections)
+    return missing_sections_message(missing_sections)

@@ -449,6 +449,7 @@ def trinity_prepare_command(
     return OracleGuiCommand(
         "Prepare TRINITY",
         tuple(argv),
+        required_sections=("BASIC",),
         produced_sections=("TRINITY",),
     )
 

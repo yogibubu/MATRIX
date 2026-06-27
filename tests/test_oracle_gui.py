@@ -47,6 +47,7 @@ from oracle_gui import (
     load_tool_contract_gui_state,
     load_vpt2_vci_gui_state,
     load_workbench_gui_state,
+    missing_sections_message,
     molden_command,
     preprocess_command,
     project_state_lines,
@@ -275,9 +276,24 @@ def test_gui_workbench_state_reads_window_specs_and_project_sections(tmp_path):
     assert ("required", "VIBRATIONAL", "yes") in vibrational.sections.rows
     assert ("produced", "GF_PED", "no") in vibrational.sections.rows
     assert any(row[0] == "vpt2_vci_run" and row[3] == "yes" for row in vibrational.actions.rows)
+    assert any(
+        row[0] == "gf_run"
+        and row[3] == "no"
+        and "oracle gicforge build" in row[5]
+        and "oracle gaussian promote-fchk" in row[5]
+        for row in vibrational.actions.rows
+    )
     assert any(row[1] == "mode heat-map" for row in vibrational.exports.rows)
     assert anharmonic.status == "ready"
     assert "window: Anharmonic: VPT2 / VCI / DVR" in workbench_gui_state_lines(anharmonic)
+
+
+def test_gui_missing_section_message_suggests_producer_tools():
+    message = missing_sections_message(("GIC", "CARTESIAN_HESSIAN"))
+
+    assert message.startswith("missing GIC, CARTESIAN_HESSIAN")
+    assert "GICForge -> Build GICs" in message
+    assert "QM Jobs -> Promote Gaussian FCHK" in message
 
 
 def test_dashboard_controller_builds_ready_actions_from_xyzin_sections(tmp_path):
@@ -320,7 +336,8 @@ def test_dashboard_controller_builds_ready_actions_from_xyzin_sections(tmp_path)
     assert actions["gicforge_build"].enabled
     assert actions["gicforge_report"].enabled
     assert actions["rovib_summary"].enabled is False
-    assert actions["rovib_summary"].reason == "missing ROTATIONAL"
+    assert actions["rovib_summary"].reason.startswith("missing ROTATIONAL")
+    assert "oracle gaussian promote-rovib" in actions["rovib_summary"].reason
     assert actions["gicforge_build"].command.cwd == ROOT
     assert actions["avogadro"].command.cwd is None
 
@@ -765,6 +782,7 @@ def test_trinity_controller_builds_prepare_command(tmp_path):
     assert command.argv[command.argv.index("--engine-command") + 1] == "engine --gradient"
     assert command.argv[command.argv.index("--coordinate-model") + 1] == "cartesian"
     assert command.argv[command.argv.index("--active-space") + 1] == "cartesian"
+    assert command.required_sections == ("BASIC",)
     assert command.produced_sections == ("TRINITY",)
 
 
@@ -779,7 +797,6 @@ def test_gui_window_specs_cover_primary_oracle_workflows():
         "gf",
         "sefit",
         "trinity",
-        "rovib_thermo",
         "anharmonic",
         "rotational_spectroscopy",
         "vibrational_spectroscopy",
@@ -792,6 +809,7 @@ def test_gui_window_specs_cover_primary_oracle_workflows():
     assert "mode heat-map" in window_spec("vibrational_spectroscopy").publication_exports
     assert "Molden" in window_spec("electronic_spectroscopy").external_viewers
     assert "KINETICS" in window_spec("thermochemistry_kinetics").produced_sections
+    assert any(action.key == "rovib_summary" for action in window_spec("thermochemistry_kinetics").actions)
     assert window_spec("trinity").produced_sections == ("TRINITY",)
     assert "GIC" in all_known_sections()
     assert "KINETICS" in all_known_sections()

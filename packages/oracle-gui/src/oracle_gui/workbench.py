@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .guidance import missing_sections_guidance
 from .project import load_oracle_project_state
 from .workflows import WindowSpec, window_spec
 
@@ -76,7 +77,7 @@ def _section_table(spec: WindowSpec, present: set[str]) -> WorkbenchTable:
 
 
 def _action_table(spec: WindowSpec, present: set[str]) -> WorkbenchTable:
-    rows: list[tuple[str, str, str, str, str]] = []
+    rows: list[tuple[str, str, str, str, str, str]] = []
     for action in spec.actions:
         missing = tuple(section for section in action.required_sections if section not in present)
         rows.append(
@@ -86,11 +87,12 @@ def _action_table(spec: WindowSpec, present: set[str]) -> WorkbenchTable:
                 action.command,
                 "yes" if not missing else "no",
                 ", ".join(missing) if missing else "none",
+                " | ".join(missing_sections_guidance(missing)) if missing else "none",
             )
         )
     return WorkbenchTable(
         "Actions",
-        ("Key", "Action", "Command", "Ready", "Missing"),
+        ("Key", "Action", "Command", "Ready", "Missing", "Suggestion"),
         tuple(rows),
     )
 
@@ -104,4 +106,3 @@ def _exports_table(spec: WindowSpec) -> WorkbenchTable:
 
 def _single_column_table(title: str, values: tuple[str, ...]) -> WorkbenchTable:
     return WorkbenchTable(title, (title.rstrip("s"),), tuple((value,) for value in values))
-

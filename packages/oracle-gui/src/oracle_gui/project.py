@@ -12,6 +12,7 @@ from oracle_core import (
 )
 from oracle_chem import read_enriched_xyz, validate_enriched_molecule
 
+from .guidance import missing_sections_message
 from .workflows import ORACLE_GUI_WINDOWS, WorkflowStatus
 
 
@@ -246,13 +247,13 @@ def _workflow_message(
         return "open or create an ORACLE xyzin project"
     if key == "babel":
         missing = sorted({"SYMMETRY", "TOPOLOGY", "SYNTHONS"} - present)
-        return "preprocessing complete" if not missing else "missing " + ", ".join(missing)
+        return "preprocessing complete" if not missing else missing_sections_message(missing)
     if produced and set(produced).intersection(present):
         produced_now = ", ".join(section for section in produced if section in present)
         return f"available sections: {produced_now}"
     missing = [section for section in required if section not in present]
     if missing:
-        return "missing " + ", ".join(missing)
+        return missing_sections_message(missing)
     if validation_status == "FAIL" and key in {"gicforge", "gf", "sefit"}:
         return "inputs present, but validation has failures"
     return "ready"

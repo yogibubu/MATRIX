@@ -27,6 +27,7 @@ from .gf import (
     gf_gui_state_lines,
     load_gf_gui_state,
 )
+from .guidance import missing_sections_message
 from .project import load_oracle_project_state
 from .sefit import (
     OracleSEFitController,
@@ -111,7 +112,6 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.current_actions: tuple[DashboardAction, ...] = ()
             self.pending_xyzin_after_run: Path | None = None
             self.workbench_tabs = (
-                ("rovib_thermo", "Rovib/Thermo"),
                 ("anharmonic", "Anharmonic"),
                 ("qm_jobs", "QM Jobs"),
                 ("diagnostics", "Diagnostics"),
@@ -384,7 +384,7 @@ def _run_qt(initial_xyzin: Path | None) -> int:
 
             tables = QTabWidget()
             section_table = QTableWidget(0, 3)
-            action_table = QTableWidget(0, 5)
+            action_table = QTableWidget(0, 6)
             capability_table = QTableWidget(0, 1)
             export_table = QTableWidget(0, 2)
             self.workbench_section_tables[key] = section_table
@@ -439,6 +439,8 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self._start_command(action.command, action.label)
 
         def _start_command(self, command: OracleGuiCommand, label: str) -> None:
+            if not self._ensure_command_sections(command, label):
+                return
             prepared = self.controller.prepare_command(command)
             self.controller.log(f"$ {prepared.shell_line()}")
             self.log_output.setPlainText("\n".join(self.controller.log_lines))
@@ -454,6 +456,17 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             self.process = process
             self.run_button.setEnabled(False)
             process.start()
+
+        def _ensure_command_sections(self, command: OracleGuiCommand, title: str) -> bool:
+            if self.controller.xyzin is None or not command.required_sections:
+                return True
+            state = load_oracle_project_state(self.controller.xyzin)
+            present = set(state.section_names)
+            missing = tuple(section for section in command.required_sections if section not in present)
+            if not missing:
+                return True
+            QMessageBox.warning(self, title, missing_sections_message(missing))
+            return False
 
         def _read_process_stdout(self) -> None:
             if self.process is None:
@@ -1009,12 +1022,15 @@ def _run_qt(initial_xyzin: Path | None) -> int:
             sections = set(state.section_names)
             missing = []
             if "GIC" not in sections:
-                missing.append("#GIC")
+                missing.append("GIC")
             if not self.gf_fchk_path.text().strip() and "CARTESIAN_HESSIAN" not in sections:
-                missing.append("#CARTESIAN_HESSIAN or FCHK")
+                missing.append("CARTESIAN_HESSIAN")
             if not missing:
                 return True
-            QMessageBox.warning(self, title, "Missing " + ", ".join(missing))
+            message = missing_sections_message(tuple(missing))
+            if "CARTESIAN_HESSIAN" in missing:
+                message += "\n\nAlternative: select a Gaussian FCHK file in the GF/PED tab."
+            QMessageBox.warning(self, title, message)
             return False
 
         def _optional_float_field(

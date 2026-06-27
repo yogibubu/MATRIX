@@ -239,28 +239,6 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
         ),
     ),
     WindowSpec(
-        key="rovib_thermo",
-        title="Rovib / Thermo Utilities",
-        description="Inspect rotational and vibrational sections and run thermochemistry utilities.",
-        category="thermochemistry",
-        required_sections=("BASIC", "ROTATIONAL"),
-        produced_sections=("THERMO",),
-        capabilities=(
-            "summarize rotational and vibrational xyzin sections",
-            "build vibrational and rovibrational density of states",
-            "run thermochemistry from normalized ORACLE sections",
-        ),
-        actions=(
-            WorkflowActionSpec(
-                key="thermo_run",
-                label="Run Thermo",
-                command="thermo",
-                required_sections=("BASIC", "ROTATIONAL"),
-                produced_sections=("THERMO",),
-            ),
-        ),
-    ),
-    WindowSpec(
         key="anharmonic",
         title="Anharmonic: VPT2 / VCI / DVR",
         description="Prepare, run and collect VPT2/VCI and DVR workflow state.",
@@ -429,6 +407,7 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
         required_sections=("BASIC", "ROTATIONAL"),
         produced_sections=("THERMO", "KINETICS"),
         capabilities=(
+            "summarize rotational and vibrational xyzin sections",
             "run thermochemistry from normalized ORACLE sections",
             "combine vibrational and rovibrational density of states",
             "prepare kinetic-model inputs and compare rates",
@@ -437,11 +416,23 @@ ORACLE_GUI_WINDOWS: tuple[WindowSpec, ...] = (
         publication_exports=("CSV thermo table", "LaTeX thermo table", "SVG plots", "PDF plots"),
         actions=(
             WorkflowActionSpec(
+                key="rovib_summary",
+                label="Summarize rovibrational state",
+                command="rovib summarize",
+                required_sections=("ROTATIONAL",),
+            ),
+            WorkflowActionSpec(
                 key="thermo_run",
                 label="Run Thermo",
                 command="thermo",
                 required_sections=("BASIC", "ROTATIONAL"),
                 produced_sections=("THERMO",),
+            ),
+            WorkflowActionSpec(
+                key="vibrational_dos",
+                label="Build vibrational DOS",
+                command="rovib dos",
+                required_sections=("VIBRATIONAL",),
             ),
             WorkflowActionSpec(
                 key="rovib_dos",
