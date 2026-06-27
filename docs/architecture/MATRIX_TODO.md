@@ -55,6 +55,9 @@
 - Add packaging/versioning policy for the MATRIX transition, including final
   command aliases, deprecation messages for ORACLE/Merlino names and a
   reproducible environment lock for optional heavy dependencies.
+- Make the repository-wide `ruff check packages tests` clean and turn it into a
+  CI/release gate. Current full-repo lint debt is legacy cleanup work and should
+  be separated from scientific feature changes.
 
 ## WMS-Rot Homologation
 

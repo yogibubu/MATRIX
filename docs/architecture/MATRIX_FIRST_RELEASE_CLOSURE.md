@@ -40,6 +40,8 @@ The following items start the next release and are not blockers for this one:
 - vibronic spectroscopy;
 - ionization-potential and electron-affinity workflows;
 - online help/manual generation for the most important CLI and GUI tools;
+- repository-wide `ruff` cleanup and promotion of full-repo linting to a CI
+  release gate;
 - rotational database comparison adapters for CDMS/JPL/Splatalogue;
 - deeper WMS-Rot homologation and removal of temporary `pandas` compatibility
   boundaries.
