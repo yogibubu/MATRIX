@@ -241,6 +241,8 @@ def test_large_amplitude_dvr_plan_uses_global_g_inverse_diagonal():
     assert analysis.g_inverse[0][0] == pytest.approx(full_inverse[0, 0])
     assert np.asarray(torsion_block.g_inverse_block) == pytest.approx(full_inverse[:2, :2])
     assert not np.allclose(torsion_block.g_inverse_block, torsion_subblock_inverse)
+    assert torsion_block.metric_role == "EQUILIBRIUM_REFERENCE_ONLY"
+    assert torsion_block.kinetic_operator_status == "REQUIRES_PODOLSKY_GRID_METRIC"
 
 
 def test_large_amplitude_dvr_plan_excludes_high_frequency_and_double_bond_torsions():
@@ -479,6 +481,10 @@ def test_xyzin_gf_report_runs_from_fchk_and_frozen_gics(tmp_path):
     assert len(reread.gics) == definition.rank
     assert len(reread.gics[0].ped) == definition.rank
     assert reread.large_amplitude_blocks == section.large_amplitude_blocks
+    assert all(
+        block.kinetic_operator_status == "REQUIRES_PODOLSKY_GRID_METRIC"
+        for block in reread.large_amplitude_blocks
+    )
 
 
 def test_gf_report_and_csv_include_large_amplitude_ring_coordinates(tmp_path):
@@ -508,6 +514,7 @@ def test_gf_report_and_csv_include_large_amplitude_ring_coordinates(tmp_path):
     assert reread.large_amplitude_coordinates == section.large_amplitude_coordinates
     assert any(block.family == "ring_puckering" for block in reread.large_amplitude_blocks)
     assert all(block.g_inverse_block for block in reread.large_amplitude_blocks)
+    assert all(block.metric_role == "EQUILIBRIUM_REFERENCE_ONLY" for block in large.blocks)
 
 
 def test_xyzin_gf_report_can_use_symmetry_blocks(tmp_path):

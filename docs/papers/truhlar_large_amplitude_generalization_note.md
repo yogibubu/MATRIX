@@ -8,9 +8,10 @@ identification approach of Chen, Zhang, Truhlar, Zheng and Xu
 The goal is not to reproduce their projection machinery inside MATRIX.  MATRIX
 already owns a frozen, non-redundant, chemically classified and optionally
 symmetry-adapted GIC basis.  GF therefore works directly in that basis and
-passes an equilibrium reference metric to DVR or thermochemistry without a
+passes equilibrium reference metric data to DVR or thermochemistry without a
 second torsional-identification layer.  A production DVR must still account for
-the coordinate dependence of the metric along the grid.
+the coordinate dependence of the metric, the metric determinant and the
+Podolsky ordering terms along the grid.
 
 ## What The Truhlar Work Solves
 
@@ -55,25 +56,28 @@ GF transforms the Cartesian Hessian to this basis and obtains
 where \(B = \partial q / \partial x\), \(M\) is the Cartesian mass matrix and
 \(J\) is the internal-to-Cartesian backtransform used by MATRIX GF.
 
-Third, the kinetic information for DVR planning starts from the inverse metric
-of the final non-redundant basis at the reference geometry:
+Third, the kinetic information for DVR planning starts from the mass metric of
+the final non-redundant basis at the reference geometry.  MATRIX follows the
+Wilson convention in which \(G\) is the contravariant kinetic matrix.  Its
+inverse is the covariant metric \(g\):
 
 \[
-  G(Q_0)^{-1} = [B(Q_0) M^{-1} B(Q_0)^T]^{-1}.
+  G(Q) = B(Q) M^{-1} B(Q)^T, \qquad
+  g(Q)=G(Q)^{-1}.
 \]
 
-For a one-dimensional torsion, \((G(Q_0)^{-1})_{ii}\) is the reduced moment in
-the reference GIC metric.  For a multidimensional large-amplitude DVR the
-object to carry forward for planning is not the list of diagonal terms but the
-complete selected sub-block
+For a one-dimensional torsion, \(g_{ii}(Q_0)=(G(Q_0)^{-1})_{ii}\) is the
+reduced moment in the reference GIC metric.  For a multidimensional
+large-amplitude DVR the object to carry forward for planning is not the list of
+diagonal terms but the complete selected sub-block
 
 \[
-  G(Q_0)^{-1}_{SS}.
+  g_{SS}(Q_0)=G(Q_0)^{-1}_{SS}.
 \]
 
 The off-diagonal elements are the kinetic couplings between large-amplitude
 coordinates at the reference geometry and are required whenever the DVR is
-multidimensional.  They are not, by themselves, a complete large-amplitude
+multidimensional.  They are not, by themselves, a quantum large-amplitude
 kinetic operator.
 
 ## Hamiltonian Contract
@@ -86,19 +90,48 @@ information delivered by GF is
 \]
 
 The downstream DVR Hamiltonian should be built from the potential
-\(V(Q_S)\) and the kinetic metric.  In general the metric is coordinate
-dependent:
+\(V(Q_S)\) and the coordinate-dependent metric.  For an active coordinate
+chart \(Q\), define
 
 \[
-  G(Q) = B(Q) M^{-1} B(Q)^T, \qquad A(Q)=G(Q)^{-1}.
+  g(Q)=G(Q)^{-1}, \qquad |g(Q)|=\det g(Q).
 \]
 
 The preferred production contract is therefore grid-metric DVR: for each DVR
 grid point or scan geometry \(Q_k\), MATRIX should rebuild the GIC B rows,
 construct \(G(Q_k)\), invert it and retain the selected block \(A_{SS}(Q_k)\).
-The quantum kinetic energy should then be built in a curvilinear
-Laplace-Beltrami/Podolsky form, including the metric determinant or the
-equivalent derivative terms required by the chosen DVR representation.
+The quantum kinetic energy must then be built as a Hermitian curvilinear
+operator.  In coordinates normalized with the natural volume element
+\(|g|^{1/2}dQ\), the scalar Laplace-Beltrami kinetic operator is
+
+\[
+  \hat{T}_{LB}
+  =
+  -\frac{1}{2}|g|^{-1/2}
+  \partial_i\left[
+    |g|^{1/2}G^{ij}(Q)\partial_j
+  \right].
+\]
+
+If the DVR representation uses the flat measure \(dQ\), the wavefunction is
+usually transformed by \(\chi=|g|^{1/4}\psi\).  The equivalent Podolsky form is
+
+\[
+  \hat{T}_{P}
+  =
+  -\frac{1}{2}|g|^{-1/4}
+  \partial_i\left[
+    |g|^{1/2}G^{ij}(Q)\partial_j |g|^{-1/4}
+  \right],
+\]
+
+or, after expanding the derivatives, a symmetric differential operator plus a
+metric pseudopotential \(V_P(Q)\).  This pseudopotential contains derivatives
+of \(G^{ij}(Q)\) and \(\log |g(Q)|\).  It must not be omitted in a rigorous QM
+level calculation unless the metric is constant in the chosen coordinates.
+The simple expression \(-\frac{1}{2}G^{ij}(Q)\partial_i\partial_j\) is not a
+valid general Hamiltonian because \(G^{ij}(Q)\) does not commute with the
+momentum operators.
 
 Only as a controlled local approximation near the reference structure may one
 use a constant-metric form,
@@ -111,7 +144,8 @@ use a constant-metric form,
 \]
 
 This is a bootstrap or diagnostic Hamiltonian, not the final model for a broad
-large-amplitude grid.
+large-amplitude grid.  In that special approximation the determinant and
+pseudopotential are constant or zero after the chosen representation is fixed.
 
 An alternative to recomputing \(G(Q_k)\) at every grid point is a derivative
 expansion around the reference geometry,
@@ -124,9 +158,9 @@ expansion around the reference geometry,
 \]
 
 with the corresponding first and, when needed, second derivatives of the
-metric included in the kinetic operator.  This is useful when analytic or
-finite-difference metric derivatives are cheaper than a full B/G rebuild on
-the DVR grid.
+metric and of \(\log |g|\) included in the kinetic operator and pseudopotential.
+This is useful when analytic or finite-difference metric derivatives are
+cheaper than a full B/G rebuild on the DVR grid.
 
 For a 1D periodic torsion with periodicity \(n\), equilibrium position \(q_0\)
 and local curvature \(F_{ii}\), the minimal one-term potential estimate is
@@ -151,8 +185,9 @@ separate them from the rest.  MATRIX moves that decision earlier:
 - Symmetry projection does not mix coordinate types.
 - GF validates the resulting basis through \(F\), \(G\), symmetry blocks and
   PED diagnostics.
-- DVR receives reference \(F_{SS}(Q_0)\) and \(G(Q_0)^{-1}_{SS}\) blocks for
-  planning, then recomputes or expands the metric along the grid.
+- DVR receives reference \(F_{SS}(Q_0)\) and \(g_{SS}(Q_0)=G(Q_0)^{-1}_{SS}\)
+  blocks for planning, then recomputes or expands the metric, determinant and
+  Podolsky terms along the grid.
 
 Thus MATRIX avoids a second torsional projection step.  The scientific
 generalization is that the same machinery applies to any explicitly protected
@@ -178,13 +213,15 @@ ordinary internal coordinates without creating artificial rings.
 
 ## Data Contract In MATRIX
 
-GF now exports the following large-amplitude kinetic data:
+GF now exports the following large-amplitude reference metric data:
 
-- `g_inverse.csv`: the full global \(G^{-1}\) matrix in frozen GIC order;
+- `g_inverse.csv`: the full global equilibrium \(g(Q_0)=G(Q_0)^{-1}\) matrix
+  in frozen GIC order;
 - `large_amplitude_blocks.csv`: each selected large-amplitude block with its
-  compact reference \(G(Q_0)^{-1}_{SS}\) block;
-- `large_amplitude_g_inverse_blocks.csv`: the same \(G^{-1}_{SS}\) blocks in
-  row/column long form;
+  compact reference \(g_{SS}(Q_0)\) block and `METRIC_ROLE` /
+  `KINETIC_OPERATOR_STATUS` fields;
+- `large_amplitude_g_inverse_blocks.csv`: the same reference \(g_{SS}(Q_0)\)
+  blocks in row/column long form;
 - `#GF_PED [LARGE_AMPLITUDE_BLOCKS]`: restartable block definitions including
   `G_INV_BLOCK`;
 - `#GF_PED [LARGE_AMPLITUDE_DVR_PLAN]`: per-coordinate status, periodicity,
@@ -197,7 +234,8 @@ contract must include one of two metric policies:
 
 - `GRID_RECOMPUTE`: rebuild B, G and \(G^{-1}_{SS}\) at every grid geometry;
 - `METRIC_DERIVATIVES`: use stored or finite-difference derivatives of
-  \(G(Q)\) or \(G(Q)^{-1}\) in the kinetic operator.
+  \(G(Q)\), \(g(Q)\), and \(\log |g(Q)|\) in the kinetic operator and
+  pseudopotential.
 
 `CONSTANT_REFERENCE` is allowed only as a declared approximation for tests,
 screening or a very small-amplitude local model.
@@ -218,7 +256,10 @@ conditions is violated:
   DVR grid;
 - scan data use a coordinate definition different from the frozen MATRIX GIC.
 - a production DVR uses the equilibrium \(G(Q_0)^{-1}_{SS}\) block without
-  declaring `CONSTANT_REFERENCE` or without recomputing/expanding the metric.
+  declaring `CONSTANT_REFERENCE` or without recomputing/expanding the metric;
+- a production DVR omits the determinant of the covariant metric or the
+  Podolsky pseudopotential/ordering terms while using a coordinate-dependent
+  metric.
 
 ## Development Consequences
 
@@ -229,10 +270,10 @@ The practical path is:
    geometry.
 3. Select large-amplitude blocks using coordinate family, frequency threshold,
    bond order, topology and \(F/G\) coupling diagnostics.
-4. Pass \(F_{SS}(Q_0)\), \(G(Q_0)^{-1}_{SS}\), periodicity/range metadata and
-   scan instructions to DVR.
-5. For production DVR, rebuild B/G on the scan grid or construct metric
-   derivative corrections.
+4. Pass \(F_{SS}(Q_0)\), \(g_{SS}(Q_0)\), periodicity/range metadata and scan
+   instructions to DVR.
+5. For production DVR, rebuild B/G/g/det(g) on the scan grid or construct
+   metric-derivative and Podolsky pseudopotential corrections.
 6. Use DVR levels or partition functions in Thermo/Kinetics and spectroscopy.
 
 This gives a direct extension of the Truhlar torsional idea to localized,
@@ -240,4 +281,5 @@ symmetry-aware and chemically protected MATRIX coordinates.  The key point is
 that the kinetic metric is already available in GF; it should be reused, not
 reconstructed by a separate rotor algorithm.  For real large-amplitude DVR,
 however, that GF metric is the reference value of a coordinate-dependent
-quantity, not a constant physical assumption.
+quantity, not a constant physical assumption and not a complete quantum kinetic
+operator.

@@ -355,7 +355,8 @@ def format_gf_report(
                 f"Fcouple={block.max_f_coupling_to_rest:.6g} "
                 f"Gcouple={block.max_g_coupling_to_rest:.6g} "
                 f"FGrel={block.relative_fg_coupling_to_rest:.6g} "
-                f"Ginv_block={len(block.g_inverse_block)}x{len(block.g_inverse_block)}"
+                f"Ginv_block={len(block.g_inverse_block)}x{len(block.g_inverse_block)} "
+                f"metric={block.metric_role} kinetic={block.kinetic_operator_status}"
             )
         dvr_ready = [
             item
@@ -1026,6 +1027,8 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
             "relative_g_coupling_to_rest",
             "relative_fg_coupling_to_rest",
             "g_inverse_source",
+            "metric_role",
+            "kinetic_operator_status",
             "g_inverse_block",
         ]
     ]
@@ -1042,6 +1045,8 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
             f"{block.relative_g_coupling_to_rest:.10g}",
             f"{block.relative_fg_coupling_to_rest:.10g}",
             block.g_inverse_source,
+            block.metric_role,
+            block.kinetic_operator_status,
             _compact_matrix_csv(block.g_inverse_block),
         ]
         for block in large.blocks

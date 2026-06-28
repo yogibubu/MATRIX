@@ -13,6 +13,8 @@ DEFAULT_LARGE_AMPLITUDE_FREQUENCY_CUTOFF_CM = 250.0
 DEFAULT_LARGE_AMPLITUDE_FG_COUPLING_TOLERANCE = 0.05
 DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD = 1.45
 DEFAULT_G_INVERSE_RCOND = 1.0e-12
+DEFAULT_METRIC_ROLE = "EQUILIBRIUM_REFERENCE_ONLY"
+DEFAULT_KINETIC_OPERATOR_STATUS = "REQUIRES_PODOLSKY_GRID_METRIC"
 DEFAULT_LARGE_AMPLITUDE_FAMILIES = (
     "torsion",
     "ring_puckering",
@@ -74,6 +76,8 @@ class LargeAmplitudeBlock:
     frequencies_cm: tuple[float, ...]
     g_inverse_block: tuple[tuple[float, ...], ...]
     g_inverse_source: str
+    metric_role: str
+    kinetic_operator_status: str
     max_f_coupling_to_rest: float
     max_g_coupling_to_rest: float
     relative_f_coupling_to_rest: float
@@ -340,6 +344,8 @@ def _large_amplitude_block(
         frequencies_cm=tuple(float(value) for value in gf.frequencies_cm),
         g_inverse_block=tuple(tuple(float(value) for value in row) for row in g_inv_sub),
         g_inverse_source=g_inverse_source,
+        metric_role=DEFAULT_METRIC_ROLE,
+        kinetic_operator_status=DEFAULT_KINETIC_OPERATOR_STATUS,
         max_f_coupling_to_rest=f_coupling,
         max_g_coupling_to_rest=g_coupling,
         relative_f_coupling_to_rest=f_relative,

@@ -115,10 +115,11 @@
 - Implement the large-amplitude metric policy before treating GF-generated
   DVR plans as production Hamiltonians.  The equilibrium `G_INV_BLOCK` from
   GF is only a reference; production DVR must either rebuild B/G and
-  \(G^{-1}_{SS}\) at each grid geometry (`GRID_RECOMPUTE`) or include
-  derivative corrections to the metric (`METRIC_DERIVATIVES`).  A constant
-  reference metric is allowed only as an explicitly declared screening/test
-  approximation.
+  \(g_{SS}=G^{-1}_{SS}\), determinant of the covariant metric, and Podolsky
+  pseudopotential/ordering terms at each grid geometry (`GRID_RECOMPUTE`) or
+  include derivative corrections to the metric and determinant
+  (`METRIC_DERIVATIVES`).  A constant reference metric is allowed only as an
+  explicitly declared screening/test approximation.
 
 ## Experimental Spectrum Databases
 

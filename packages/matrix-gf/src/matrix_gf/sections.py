@@ -55,6 +55,8 @@ class GFLargeAmplitudeBlockRow:
     frequencies_cm: tuple[float, ...]
     g_inverse_block: tuple[tuple[float, ...], ...] = ()
     g_inverse_source: str = ""
+    metric_role: str = "EQUILIBRIUM_REFERENCE_ONLY"
+    kinetic_operator_status: str = "REQUIRES_PODOLSKY_GRID_METRIC"
     max_f_coupling_to_rest: float = 0.0
     relative_f_coupling_to_rest: float = 0.0
     max_g_coupling_to_rest: float = 0.0
@@ -209,6 +211,8 @@ def gf_ped_section_from_report(
                 frequencies_cm=block.frequencies_cm,
                 g_inverse_block=_section_matrix(block.g_inverse_block),
                 g_inverse_source=block.g_inverse_source,
+                metric_role=block.metric_role,
+                kinetic_operator_status=block.kinetic_operator_status,
                 max_f_coupling_to_rest=block.max_f_coupling_to_rest,
                 relative_f_coupling_to_rest=block.relative_f_coupling_to_rest,
                 max_g_coupling_to_rest=block.max_g_coupling_to_rest,
@@ -363,6 +367,8 @@ def gf_ped_section_lines(section: GFPEDSection) -> list[str]:
                 f"G_COUPLE_REL={_format_float(block.relative_g_coupling_to_rest)} "
                 f"FG_COUPLE_REL={_format_float(block.relative_fg_coupling_to_rest)} "
                 f"G_INV_SOURCE={block.g_inverse_source or 'NA'} "
+                f"METRIC_ROLE={block.metric_role or 'NA'} "
+                f"KINETIC_OPERATOR_STATUS={block.kinetic_operator_status or 'NA'} "
                 f"G_INV_BLOCK={_format_matrix(block.g_inverse_block)}"
             )
     else:
@@ -597,6 +603,9 @@ def _parse_large_amplitude_block_line(line: str) -> GFLargeAmplitudeBlockRow:
         frequencies_cm=_float_tuple(fields.get("FREQUENCIES_CM-1", "")),
         g_inverse_block=_float_matrix(fields.get("G_INV_BLOCK", "")),
         g_inverse_source=_optional_text(fields.get("G_INV_SOURCE")),
+        metric_role=_optional_text(fields.get("METRIC_ROLE")) or "EQUILIBRIUM_REFERENCE_ONLY",
+        kinetic_operator_status=_optional_text(fields.get("KINETIC_OPERATOR_STATUS"))
+        or "REQUIRES_PODOLSKY_GRID_METRIC",
         max_f_coupling_to_rest=_optional_float(fields.get("F_COUPLE_MAX")) or 0.0,
         relative_f_coupling_to_rest=_optional_float(fields.get("F_COUPLE_REL")) or 0.0,
         max_g_coupling_to_rest=_optional_float(fields.get("G_COUPLE_MAX")) or 0.0,
