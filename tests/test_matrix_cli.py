@@ -1446,6 +1446,59 @@ def test_gicforge_cli_passes_fragment_mode_override(tmp_path, monkeypatch, capsy
     assert "Built GICForge definition" in capsys.readouterr().out
 
 
+def test_gicforge_cli_passes_local_xh_policy(tmp_path, monkeypatch, capsys):
+    calls = {}
+    path = tmp_path / "molecule.xyzin"
+
+    class FakeDefinition:
+        gics = (object(),)
+        rank = 1
+
+    def fake_plan(target, **kwargs):
+        calls["plan"] = (target, kwargs)
+
+    def fake_build(target, **kwargs):
+        calls["build"] = (target, kwargs)
+        return FakeDefinition()
+
+    monkeypatch.setattr("matrix_neo.write_gicforge_plan_sections", fake_plan)
+    monkeypatch.setattr("matrix_neo.write_gicforge_build_sections", fake_build)
+
+    rc_plan = matrix_run.main(
+        [
+            "gicforge",
+            "plan",
+            str(path),
+            "--local-xh-class",
+            "XH2",
+            "--local-xh-bond",
+            "1-2",
+        ]
+    )
+    rc_build = matrix_run.main(
+        [
+            "gicforge",
+            "build",
+            str(path),
+            "--xh-stretch-policy",
+            "local-selected",
+            "--local-xh-class",
+            "XH3",
+        ]
+    )
+
+    assert rc_plan == 0
+    assert rc_build == 0
+    assert calls["plan"][0] == path
+    assert calls["plan"][1]["xh_stretch_policy"] == "local-selected"
+    assert calls["plan"][1]["local_xh_classes"] == ("XH2",)
+    assert calls["plan"][1]["local_xh_bonds"] == ((1, 2),)
+    assert calls["build"][0] == path
+    assert calls["build"][1]["xh_stretch_policy"] == "local-selected"
+    assert calls["build"][1]["local_xh_classes"] == ("XH3",)
+    assert "Built GICForge definition" in capsys.readouterr().out
+
+
 def test_gf_cli_runs_xyzin_report_and_csv_export(tmp_path, monkeypatch, capsys):
     calls = {}
     fchk = tmp_path / "job.fchk"

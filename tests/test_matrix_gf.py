@@ -96,6 +96,44 @@ def test_gf_can_solve_separated_symmetry_blocks():
     assert np.allclose(np.sum(result.ped.values, axis=0), 100.0)
 
 
+def test_gf_xh_local_class_comes_only_from_neo_family():
+    hessian = np.diag([1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    b_matrix = np.asarray(
+        [
+            [-1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            [0.0, -1.0, 0.0, 0.0, 1.0, 0.0],
+        ],
+        dtype=float,
+    )
+    topology = LargeAmplitudeTopologyContext(
+        atomic_numbers=(6, 1),
+        bonds=((1, 2),),
+        bond_orders={(1, 2): 1.0},
+    )
+
+    ordinary = gf_from_cartesian_hessian_and_gic_b_matrix(
+        hessian,
+        b_matrix,
+        np.asarray([12.0, 1.0], dtype=float),
+        gic_labels=("R(1,2)", "AUX"),
+        gic_names=("Str0001", "Aux0001"),
+        large_amplitude_topology_context=topology,
+    )
+    local = gf_from_cartesian_hessian_and_gic_b_matrix(
+        hessian,
+        b_matrix,
+        np.asarray([12.0, 1.0], dtype=float),
+        gic_labels=("R(1,2)", "AUX"),
+        gic_names=("XHSt0001", "Aux0001"),
+        large_amplitude_topology_context=topology,
+    )
+
+    assert ordinary.gic_families[0] == "stretch"
+    assert ordinary.gic_anharmonic_classes[0] == "NORMAL_MODE_VPT2"
+    assert local.gic_families[0] == "local_xh_stretch"
+    assert local.gic_anharmonic_classes[0] == "LOCAL_XH_STRETCH_UNSYMMETRIZED"
+
+
 def test_gf_large_amplitude_subspaces_use_existing_gic_blocks_without_projection():
     result = gf_from_cartesian_hessian_and_gic_b_matrix(
         np.diag([4.0, 9.0, 16.0]),

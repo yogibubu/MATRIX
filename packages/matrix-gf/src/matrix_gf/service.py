@@ -419,7 +419,20 @@ def format_gf_report(
     for idx, label in enumerate(result.gic_labels, start=1):
         name = result.gic_names[idx - 1] if idx <= len(result.gic_names) else f"GIC{idx:03d}"
         irrep = result.gic_irreps[idx - 1] if idx <= len(result.gic_irreps) else "UNK"
-        lines.append(f"  GIC{idx:03d}: {name:12s} irrep={irrep:6s} {label}")
+        anh_class = (
+            result.gic_anharmonic_classes[idx - 1]
+            if idx <= len(result.gic_anharmonic_classes)
+            else "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+        )
+        zero_model = (
+            result.gic_zeroth_order_models[idx - 1]
+            if idx <= len(result.gic_zeroth_order_models)
+            else "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+        )
+        lines.append(
+            f"  GIC{idx:03d}: {name:12s} irrep={irrep:6s} "
+            f"anh={anh_class} zero={zero_model} {label}"
+        )
 
     lines.extend(["", "PED (%) rows=GIC cols=modes:"])
     header = "          " + " ".join(
@@ -515,7 +528,19 @@ def gf_csv_tables(report: GFReport) -> dict[str, str]:
         [[idx, f"{freq:.10g}"] for idx, freq in enumerate(report.result.frequencies_cm, start=1)]
     )
 
-    label_rows = [["gic", "name", "irrep", "label"]]
+    label_rows = [
+        [
+            "gic",
+            "name",
+            "irrep",
+            "family",
+            "anharmonic_class",
+            "zeroth_order_model",
+            "cross_coupling_policy",
+            "anharmonic_reason",
+            "label",
+        ]
+    ]
     for idx, label in enumerate(report.result.gic_labels, start=1):
         name = (
             report.result.gic_names[idx - 1]
@@ -523,7 +548,44 @@ def gf_csv_tables(report: GFReport) -> dict[str, str]:
             else f"GIC{idx:03d}"
         )
         irrep = report.result.gic_irreps[idx - 1] if idx <= len(report.result.gic_irreps) else "UNK"
-        label_rows.append([f"GIC{idx:03d}", name, irrep, label])
+        family = (
+            report.result.gic_families[idx - 1]
+            if idx <= len(report.result.gic_families)
+            else ""
+        )
+        anh_class = (
+            report.result.gic_anharmonic_classes[idx - 1]
+            if idx <= len(report.result.gic_anharmonic_classes)
+            else "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+        )
+        zero_model = (
+            report.result.gic_zeroth_order_models[idx - 1]
+            if idx <= len(report.result.gic_zeroth_order_models)
+            else "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+        )
+        cross_policy = (
+            report.result.gic_cross_coupling_policies[idx - 1]
+            if idx <= len(report.result.gic_cross_coupling_policies)
+            else "REQUIRES_SUBSPACE_COUPLING_CHECK"
+        )
+        reason = (
+            report.result.gic_anharmonic_reasons[idx - 1]
+            if idx <= len(report.result.gic_anharmonic_reasons)
+            else ""
+        )
+        label_rows.append(
+            [
+                f"GIC{idx:03d}",
+                name,
+                irrep,
+                family,
+                anh_class,
+                zero_model,
+                cross_policy,
+                reason,
+                label,
+            ]
+        )
 
     ped_rows = [
         [
@@ -999,7 +1061,20 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
     if large is None:
         return {}
     coordinate_rows = [
-        ["gic", "name", "irrep", "family", "local_frequency_cm-1", "active", "status", "label"]
+        [
+            "gic",
+            "name",
+            "irrep",
+            "family",
+            "local_frequency_cm-1",
+            "active",
+            "status",
+            "anharmonic_class",
+            "zeroth_order_model",
+            "cross_coupling_policy",
+            "anharmonic_reason",
+            "label",
+        ]
     ]
     coordinate_rows.extend(
         [
@@ -1010,6 +1085,10 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
             "" if coordinate.local_frequency_cm is None else f"{coordinate.local_frequency_cm:.10g}",
             int(coordinate.active),
             coordinate.status,
+            coordinate.anharmonic_class,
+            coordinate.zeroth_order_model,
+            coordinate.cross_coupling_policy,
+            coordinate.anharmonic_reason,
             coordinate.label,
         ]
         for coordinate in large.coordinates
@@ -1029,6 +1108,10 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
             "g_inverse_source",
             "metric_role",
             "kinetic_operator_status",
+            "anharmonic_class",
+            "zeroth_order_model",
+            "cross_coupling_policy",
+            "anharmonic_reason",
             "g_inverse_block",
         ]
     ]
@@ -1047,6 +1130,10 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
             block.g_inverse_source,
             block.metric_role,
             block.kinetic_operator_status,
+            block.anharmonic_class,
+            block.zeroth_order_model,
+            block.cross_coupling_policy,
+            block.anharmonic_reason,
             _compact_matrix_csv(block.g_inverse_block),
         ]
         for block in large.blocks

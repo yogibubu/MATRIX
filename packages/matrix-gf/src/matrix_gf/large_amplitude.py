@@ -15,6 +15,20 @@ DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD = 1.45
 DEFAULT_G_INVERSE_RCOND = 1.0e-12
 DEFAULT_METRIC_ROLE = "EQUILIBRIUM_REFERENCE_ONLY"
 DEFAULT_KINETIC_OPERATOR_STATUS = "REQUIRES_PODOLSKY_GRID_METRIC"
+ANHARMONIC_CLASS_LOCAL = "LOCAL_ANHARMONIC"
+ANHARMONIC_CLASS_XH_LOCAL = "LOCAL_XH_STRETCH_UNSYMMETRIZED"
+ANHARMONIC_CLASS_NORMAL = "NORMAL_MODE_VPT2"
+ANHARMONIC_CLASS_PENDING = "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+ZEROTH_ORDER_LOCAL = "VSCF_OR_DVR_LOCAL_MODE"
+ZEROTH_ORDER_XH_LOCAL = "UNSYMMETRIZED_XH_LOCAL_MODE_VSCF_OR_DVR"
+ZEROTH_ORDER_NORMAL = "COUPLED_HARMONIC_NORMAL_MODES"
+ZEROTH_ORDER_PENDING = "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+CROSS_COUPLING_LOCAL = "REQUIRE_SMALL_CROSS_SUBSPACE_COUPLING_THEN_VPT2"
+CROSS_COUPLING_NORMAL = "FULL_NORMAL_MODE_VPT2"
+CROSS_COUPLING_PENDING = "REQUIRES_SUBSPACE_COUPLING_CHECK"
+DEFAULT_ANHARMONIC_CLASS = ANHARMONIC_CLASS_PENDING
+DEFAULT_ZEROTH_ORDER_MODEL = ZEROTH_ORDER_PENDING
+DEFAULT_CROSS_COUPLING_POLICY = CROSS_COUPLING_PENDING
 DEFAULT_LARGE_AMPLITUDE_FAMILIES = (
     "torsion",
     "ring_puckering",
@@ -57,6 +71,15 @@ class LargeAmplitudeTopologyContext:
 
 
 @dataclass(frozen=True)
+class AnharmonicModelAssignment:
+    family: str
+    anharmonic_class: str
+    zeroth_order_model: str
+    cross_coupling_policy: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class LargeAmplitudeCoordinate:
     index: int
     name: str
@@ -66,6 +89,10 @@ class LargeAmplitudeCoordinate:
     local_frequency_cm: float | None = None
     active: bool = True
     status: str = "ACTIVE"
+    anharmonic_class: str = DEFAULT_ANHARMONIC_CLASS
+    zeroth_order_model: str = DEFAULT_ZEROTH_ORDER_MODEL
+    cross_coupling_policy: str = DEFAULT_CROSS_COUPLING_POLICY
+    anharmonic_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -78,6 +105,10 @@ class LargeAmplitudeBlock:
     g_inverse_source: str
     metric_role: str
     kinetic_operator_status: str
+    anharmonic_class: str
+    zeroth_order_model: str
+    cross_coupling_policy: str
+    anharmonic_reason: str
     max_f_coupling_to_rest: float
     max_g_coupling_to_rest: float
     relative_f_coupling_to_rest: float
@@ -140,6 +171,8 @@ class GFLargeAmplitudeAnalysis:
 def gic_coordinate_family(name: str, label: str) -> str:
     """Return the MATRIX coordinate family encoded in a frozen GIC name/label."""
     text = f"{name} {label}".lower()
+    if "local_xh_stretch" in text or "xhst" in text:
+        return "local_xh_stretch"
     if any(token in text for token in ("rpck", "qpck", "phip", "pck")):
         return "ring_puckering"
     if any(token in text for token in ("btfl", "butterfly")):
@@ -165,6 +198,40 @@ def gic_coordinate_family(name: str, label: str) -> str:
     if re.search(r"\bl\s*\(", text) or "linear_bend" in text or "lin" in text:
         return "linear"
     return ""
+
+
+def classify_gic_anharmonic_model(
+    name: str,
+    label: str,
+    *,
+    topology_context: LargeAmplitudeTopologyContext | None = None,
+) -> AnharmonicModelAssignment:
+    """Assign the default anharmonic zeroth-order model from chemical GIC type."""
+    family = gic_coordinate_family(name, label)
+    text = f"{name} {label}"
+    if family == "local_xh_stretch":
+        return AnharmonicModelAssignment(
+            family=family,
+            anharmonic_class=ANHARMONIC_CLASS_XH_LOCAL,
+            zeroth_order_model=ZEROTH_ORDER_XH_LOCAL,
+            cross_coupling_policy=CROSS_COUPLING_LOCAL,
+            reason="XH_STRETCH_LOCAL_BASIS_NOT_SYMMETRIZED",
+        )
+    if family == "oop":
+        return _local_assignment(family, "OUT_OF_PLANE")
+    if family in {"ring_puckering", "ring_bend", "butterfly"}:
+        return _local_assignment(family, "RING_MODE")
+    if family == "torsion":
+        return _torsion_assignment(text, topology_context)
+    if family == "special":
+        return _local_assignment(family, "PROTECTED_SPECIAL_COORDINATE")
+    return AnharmonicModelAssignment(
+        family=family,
+        anharmonic_class=ANHARMONIC_CLASS_NORMAL,
+        zeroth_order_model=ZEROTH_ORDER_NORMAL,
+        cross_coupling_policy=CROSS_COUPLING_NORMAL,
+        reason="DEFAULT_NORMAL_MODE",
+    )
 
 
 def large_amplitude_analysis_from_gf_matrices(
@@ -204,6 +271,11 @@ def large_amplitude_analysis_from_gf_matrices(
             local_frequency,
             frequency_cutoff_cm=frequency_cutoff_cm,
         )
+        assignment = classify_gic_anharmonic_model(
+            names[index],
+            labels[index],
+            topology_context=topology_context,
+        )
         coordinates.append(
             LargeAmplitudeCoordinate(
                 index=index + 1,
@@ -214,6 +286,10 @@ def large_amplitude_analysis_from_gf_matrices(
                 local_frequency_cm=local_frequency,
                 active=active,
                 status=status,
+                anharmonic_class=assignment.anharmonic_class,
+                zeroth_order_model=assignment.zeroth_order_model,
+                cross_coupling_policy=assignment.cross_coupling_policy,
+                anharmonic_reason=assignment.reason,
             )
         )
         by_family.setdefault(family, []).append(index)
@@ -337,6 +413,7 @@ def _large_amplitude_block(
     gf = solve_wilson_gf(f_sub, g_sub, scale_to_cm=True)
     f_coupling, f_relative = _coupling_to_rest(force_constants, indices)
     g_coupling, g_relative = _coupling_to_rest(g_matrix, indices)
+    assignment = _block_anharmonic_assignment(family)
     return LargeAmplitudeBlock(
         label=label,
         family=family,
@@ -346,6 +423,10 @@ def _large_amplitude_block(
         g_inverse_source=g_inverse_source,
         metric_role=DEFAULT_METRIC_ROLE,
         kinetic_operator_status=DEFAULT_KINETIC_OPERATOR_STATUS,
+        anharmonic_class=assignment.anharmonic_class,
+        zeroth_order_model=assignment.zeroth_order_model,
+        cross_coupling_policy=assignment.cross_coupling_policy,
+        anharmonic_reason=assignment.reason,
         max_f_coupling_to_rest=f_coupling,
         max_g_coupling_to_rest=g_coupling,
         relative_f_coupling_to_rest=f_relative,
@@ -531,6 +612,84 @@ def _torsion_terms(text: str) -> tuple[tuple[int, int, int, int], ...]:
         flags=re.IGNORECASE,
     )
     return tuple(tuple(int(value) for value in match) for match in matches)
+
+
+def _local_assignment(family: str, reason: str) -> AnharmonicModelAssignment:
+    return AnharmonicModelAssignment(
+        family=family,
+        anharmonic_class=ANHARMONIC_CLASS_LOCAL,
+        zeroth_order_model=ZEROTH_ORDER_LOCAL,
+        cross_coupling_policy=CROSS_COUPLING_LOCAL,
+        reason=reason,
+    )
+
+
+def _torsion_assignment(
+    text: str,
+    context: LargeAmplitudeTopologyContext | None,
+) -> AnharmonicModelAssignment:
+    torsions = _torsion_terms(text)
+    if not torsions:
+        return AnharmonicModelAssignment(
+            family="torsion",
+            anharmonic_class=ANHARMONIC_CLASS_PENDING,
+            zeroth_order_model=ZEROTH_ORDER_PENDING,
+            cross_coupling_policy=CROSS_COUPLING_PENDING,
+            reason="TORSION_PRIMITIVE_NOT_IDENTIFIED",
+        )
+    if context is None:
+        return AnharmonicModelAssignment(
+            family="torsion",
+            anharmonic_class=ANHARMONIC_CLASS_PENDING,
+            zeroth_order_model=ZEROTH_ORDER_PENDING,
+            cross_coupling_policy=CROSS_COUPLING_PENDING,
+            reason="TORSION_BOND_ORDER_REQUIRES_TOPOLOGY",
+        )
+    central_bonds = tuple(dict.fromkeys(_pair_key(term[1], term[2]) for term in torsions))
+    bond_orders = [context.bond_order(*bond) for bond in central_bonds]
+    if bond_orders and all(
+        order is not None and order < DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD
+        for order in bond_orders
+    ):
+        return _local_assignment("torsion", "SINGLE_BOND_TORSION")
+    if any(
+        order is not None and order >= DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD
+        for order in bond_orders
+    ):
+        return AnharmonicModelAssignment(
+            family="torsion",
+            anharmonic_class=ANHARMONIC_CLASS_NORMAL,
+            zeroth_order_model=ZEROTH_ORDER_NORMAL,
+            cross_coupling_policy=CROSS_COUPLING_NORMAL,
+            reason="HIGH_BOND_ORDER_TORSION",
+        )
+    return AnharmonicModelAssignment(
+        family="torsion",
+        anharmonic_class=ANHARMONIC_CLASS_PENDING,
+        zeroth_order_model=ZEROTH_ORDER_PENDING,
+        cross_coupling_policy=CROSS_COUPLING_PENDING,
+        reason="TORSION_BOND_ORDER_UNKNOWN",
+    )
+
+
+def _block_anharmonic_assignment(family: str) -> AnharmonicModelAssignment:
+    if family in {"torsion", "ring_puckering", "ring_bend", "butterfly", "oop", "special"}:
+        return _local_assignment(family, "CHEMICAL_LOCAL_COORDINATE_FAMILY")
+    if family == "mixed_large_amplitude":
+        return AnharmonicModelAssignment(
+            family=family,
+            anharmonic_class=ANHARMONIC_CLASS_PENDING,
+            zeroth_order_model=ZEROTH_ORDER_PENDING,
+            cross_coupling_policy=CROSS_COUPLING_LOCAL,
+            reason="MIXED_LARGE_AMPLITUDE_BLOCK",
+        )
+    return AnharmonicModelAssignment(
+        family=family,
+        anharmonic_class=ANHARMONIC_CLASS_NORMAL,
+        zeroth_order_model=ZEROTH_ORDER_NORMAL,
+        cross_coupling_policy=CROSS_COUPLING_NORMAL,
+        reason="DEFAULT_NORMAL_MODE",
+    )
 
 
 def _torsion_periodicity(

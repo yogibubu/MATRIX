@@ -33,6 +33,11 @@ class GFGICRow:
     label: str
     ped: tuple[float, ...] = ()
     scaling_factor: float | None = None
+    family: str = ""
+    anharmonic_class: str = "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+    zeroth_order_model: str = "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+    cross_coupling_policy: str = "REQUIRES_SUBSPACE_COUPLING_CHECK"
+    anharmonic_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -45,6 +50,10 @@ class GFLargeAmplitudeCoordinateRow:
     frequency_cm: float | None = None
     active: bool = True
     status: str = "ACTIVE"
+    anharmonic_class: str = "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+    zeroth_order_model: str = "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+    cross_coupling_policy: str = "REQUIRES_SUBSPACE_COUPLING_CHECK"
+    anharmonic_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -57,6 +66,10 @@ class GFLargeAmplitudeBlockRow:
     g_inverse_source: str = ""
     metric_role: str = "EQUILIBRIUM_REFERENCE_ONLY"
     kinetic_operator_status: str = "REQUIRES_PODOLSKY_GRID_METRIC"
+    anharmonic_class: str = "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+    zeroth_order_model: str = "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+    cross_coupling_policy: str = "REQUIRES_SUBSPACE_COUPLING_CHECK"
+    anharmonic_reason: str = ""
     max_f_coupling_to_rest: float = 0.0
     relative_f_coupling_to_rest: float = 0.0
     max_g_coupling_to_rest: float = 0.0
@@ -159,6 +172,11 @@ def gf_ped_section_from_report(
     gic_labels = tuple(getattr(result, "gic_labels", ()))
     gic_names = tuple(getattr(result, "gic_names", ()))
     gic_irreps = tuple(getattr(result, "gic_irreps", ()))
+    gic_families = tuple(getattr(result, "gic_families", ()))
+    gic_anharmonic_classes = tuple(getattr(result, "gic_anharmonic_classes", ()))
+    gic_zeroth_order_models = tuple(getattr(result, "gic_zeroth_order_models", ()))
+    gic_cross_coupling_policies = tuple(getattr(result, "gic_cross_coupling_policies", ()))
+    gic_anharmonic_reasons = tuple(getattr(result, "gic_anharmonic_reasons", ()))
     scaling = getattr(result, "scaling_factors", None)
     scaling_values = None if scaling is None else np.asarray(scaling, dtype=float).reshape(-1)
     gics: list[GFGICRow] = []
@@ -181,6 +199,27 @@ def gf_ped_section_from_report(
                 label=str(label),
                 ped=ped,
                 scaling_factor=scale,
+                family=gic_families[index] if index < len(gic_families) else "",
+                anharmonic_class=(
+                    gic_anharmonic_classes[index]
+                    if index < len(gic_anharmonic_classes)
+                    else "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+                ),
+                zeroth_order_model=(
+                    gic_zeroth_order_models[index]
+                    if index < len(gic_zeroth_order_models)
+                    else "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+                ),
+                cross_coupling_policy=(
+                    gic_cross_coupling_policies[index]
+                    if index < len(gic_cross_coupling_policies)
+                    else "REQUIRES_SUBSPACE_COUPLING_CHECK"
+                ),
+                anharmonic_reason=(
+                    gic_anharmonic_reasons[index]
+                    if index < len(gic_anharmonic_reasons)
+                    else ""
+                ),
             )
         )
 
@@ -200,6 +239,10 @@ def gf_ped_section_from_report(
                 frequency_cm=_section_float(coordinate.local_frequency_cm),
                 active=coordinate.active,
                 status=coordinate.status,
+                anharmonic_class=coordinate.anharmonic_class,
+                zeroth_order_model=coordinate.zeroth_order_model,
+                cross_coupling_policy=coordinate.cross_coupling_policy,
+                anharmonic_reason=coordinate.anharmonic_reason,
             )
             for coordinate in large.coordinates
         )
@@ -213,6 +256,10 @@ def gf_ped_section_from_report(
                 g_inverse_source=block.g_inverse_source,
                 metric_role=block.metric_role,
                 kinetic_operator_status=block.kinetic_operator_status,
+                anharmonic_class=block.anharmonic_class,
+                zeroth_order_model=block.zeroth_order_model,
+                cross_coupling_policy=block.cross_coupling_policy,
+                anharmonic_reason=block.anharmonic_reason,
                 max_f_coupling_to_rest=block.max_f_coupling_to_rest,
                 relative_f_coupling_to_rest=block.relative_f_coupling_to_rest,
                 max_g_coupling_to_rest=block.max_g_coupling_to_rest,
@@ -328,7 +375,12 @@ def gf_ped_section_lines(section: GFPEDSection) -> list[str]:
                 "" if gic.scaling_factor is None else f" SCALE={_format_float(gic.scaling_factor)}"
             )
             lines.append(
-                f"{gic.identifier} NAME={gic.name} IRREP={gic.irrep}{scale} LABEL={gic.label}"
+                f"{gic.identifier} NAME={gic.name} IRREP={gic.irrep} "
+                f"FAMILY={gic.family or 'NA'} "
+                f"ANHARMONIC_CLASS={gic.anharmonic_class or 'NA'} "
+                f"ZEROTH_ORDER_MODEL={gic.zeroth_order_model or 'NA'} "
+                f"CROSS_COUPLING_POLICY={gic.cross_coupling_policy or 'NA'} "
+                f"ANH_REASON={gic.anharmonic_reason or 'NA'}{scale} LABEL={gic.label}"
             )
     else:
         lines.append("NONE")
@@ -349,6 +401,10 @@ def gf_ped_section_lines(section: GFPEDSection) -> list[str]:
                 f"FAMILY={coordinate.family} "
                 f"FREQUENCY_CM-1={_format_optional_float(coordinate.frequency_cm)} "
                 f"ACTIVE={int(coordinate.active)} STATUS={coordinate.status} "
+                f"ANHARMONIC_CLASS={coordinate.anharmonic_class or 'NA'} "
+                f"ZEROTH_ORDER_MODEL={coordinate.zeroth_order_model or 'NA'} "
+                f"CROSS_COUPLING_POLICY={coordinate.cross_coupling_policy or 'NA'} "
+                f"ANH_REASON={coordinate.anharmonic_reason or 'NA'} "
                 f"LABEL={coordinate.label}"
             )
     else:
@@ -369,6 +425,10 @@ def gf_ped_section_lines(section: GFPEDSection) -> list[str]:
                 f"G_INV_SOURCE={block.g_inverse_source or 'NA'} "
                 f"METRIC_ROLE={block.metric_role or 'NA'} "
                 f"KINETIC_OPERATOR_STATUS={block.kinetic_operator_status or 'NA'} "
+                f"ANHARMONIC_CLASS={block.anharmonic_class or 'NA'} "
+                f"ZEROTH_ORDER_MODEL={block.zeroth_order_model or 'NA'} "
+                f"CROSS_COUPLING_POLICY={block.cross_coupling_policy or 'NA'} "
+                f"ANH_REASON={block.anharmonic_reason or 'NA'} "
                 f"G_INV_BLOCK={_format_matrix(block.g_inverse_block)}"
             )
     else:
@@ -566,6 +626,20 @@ def _parse_gic_line(line: str, *, ped_by_gic: Mapping[str, tuple[float, ...]]) -
         label=label,
         ped=ped_by_gic.get(identifier, ()),
         scaling_factor=_optional_float(fields.get("SCALE")),
+        family=_optional_text(fields.get("FAMILY")),
+        anharmonic_class=(
+            _optional_text(fields.get("ANHARMONIC_CLASS"))
+            or "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+        ),
+        zeroth_order_model=(
+            _optional_text(fields.get("ZEROTH_ORDER_MODEL"))
+            or "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+        ),
+        cross_coupling_policy=(
+            _optional_text(fields.get("CROSS_COUPLING_POLICY"))
+            or "REQUIRES_SUBSPACE_COUPLING_CHECK"
+        ),
+        anharmonic_reason=_optional_text(fields.get("ANH_REASON")),
     )
 
 
@@ -588,6 +662,19 @@ def _parse_large_amplitude_coordinate_line(line: str) -> GFLargeAmplitudeCoordin
         frequency_cm=_optional_float(fields.get("FREQUENCY_CM-1")),
         active=_bool_value(fields.get("ACTIVE"), default=True),
         status=fields.get("STATUS", "ACTIVE"),
+        anharmonic_class=(
+            _optional_text(fields.get("ANHARMONIC_CLASS"))
+            or "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+        ),
+        zeroth_order_model=(
+            _optional_text(fields.get("ZEROTH_ORDER_MODEL"))
+            or "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+        ),
+        cross_coupling_policy=(
+            _optional_text(fields.get("CROSS_COUPLING_POLICY"))
+            or "REQUIRES_SUBSPACE_COUPLING_CHECK"
+        ),
+        anharmonic_reason=_optional_text(fields.get("ANH_REASON")),
     )
 
 
@@ -606,6 +693,19 @@ def _parse_large_amplitude_block_line(line: str) -> GFLargeAmplitudeBlockRow:
         metric_role=_optional_text(fields.get("METRIC_ROLE")) or "EQUILIBRIUM_REFERENCE_ONLY",
         kinetic_operator_status=_optional_text(fields.get("KINETIC_OPERATOR_STATUS"))
         or "REQUIRES_PODOLSKY_GRID_METRIC",
+        anharmonic_class=(
+            _optional_text(fields.get("ANHARMONIC_CLASS"))
+            or "PENDING_TOPOLOGY_OR_ANHARMONIC_DATA"
+        ),
+        zeroth_order_model=(
+            _optional_text(fields.get("ZEROTH_ORDER_MODEL"))
+            or "REQUIRES_TOPOLOGY_OR_SCAN_OR_QFF"
+        ),
+        cross_coupling_policy=(
+            _optional_text(fields.get("CROSS_COUPLING_POLICY"))
+            or "REQUIRES_SUBSPACE_COUPLING_CHECK"
+        ),
+        anharmonic_reason=_optional_text(fields.get("ANH_REASON")),
         max_f_coupling_to_rest=_optional_float(fields.get("F_COUPLE_MAX")) or 0.0,
         relative_f_coupling_to_rest=_optional_float(fields.get("F_COUPLE_REL")) or 0.0,
         max_g_coupling_to_rest=_optional_float(fields.get("G_COUPLE_MAX")) or 0.0,

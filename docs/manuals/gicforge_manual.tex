@@ -223,6 +223,33 @@ coordination; torsions and ring coordinates define conformational and
 puckering directions; out-of-plane coordinates close the remaining local
 non-planarity directions.
 
+\subsection{Optional local X--H stretch policy}
+
+By default, X--H stretches are ordinary stretches and therefore enter the same
+symmetry-adaptation path as all other bonded stretches.  This is the conservative
+Merlino-compatible mode and is recorded as
+\texttt{XH\_STRETCH\_POLICY SYMMETRIZE} in the frozen \texttt{\#GIC} section.
+
+For local-mode anharmonic workflows, selected X--H stretches may instead be kept
+unsymmetrized.  NEO then tags them as a separate
+\texttt{LOCAL\_XH\_STRETCH} family.  The coordinates remain analytic
+\texttt{R(i,j)} stretches and participate in rank checking as stretch rows, but
+the symmetry projector does not combine them into SALCs.  This keeps the local
+oscillators available to GF, VSCF or DVR while leaving the rest of the GIC basis
+unchanged.
+
+The selection can be made globally with \texttt{--xh-stretch-policy local-all},
+by one-based bond selectors such as \texttt{--local-xh-bond 4-17}, or by local
+geminal class with \texttt{--local-xh-class XH}, \texttt{XH2} or
+\texttt{XH3}.  The class is assigned from the number of hydrogens bound to the
+same heavy atom.  \texttt{XH2} and \texttt{XH3} groups are useful when geminal
+couplings are expected to be stronger than couplings to the rest of the
+molecule.  If a bond or class selector is given without an explicit policy, the
+CLI uses \texttt{local-selected}.  The same fields are written to
+\texttt{\#GIC} as \texttt{LOCAL\_XH\_BONDS} and
+\texttt{LOCAL\_XH\_CLASSES}, so a later build can reproduce the choice without
+guessing from labels.
+
 \subsection{Local combinations before pruning}
 
 Several local coordination patterns are better represented by combinations than
@@ -407,6 +434,10 @@ Family & Policy \\
 \endhead
 Stretch & All bonded pairs are kept as primitive \texttt{R(i,j)} coordinates.
 Stretches are not reduced by the final pruning step. \\
+Local X--H stretch & Optional unsymmetrized \texttt{R(X,H)} rows selected by
+\texttt{--xh-stretch-policy}, \texttt{--local-xh-bond} or
+\texttt{--local-xh-class}.  They remain stretch coordinates but form their own
+symmetry block and are kept local for VSCF/DVR workflows. \\
 Exocyclic bend & Valence angles outside rings are generated around each center
 and reduced locally by rank. \\
 Linear bend & Linear-angle candidates are generated only when required by local

@@ -19,7 +19,11 @@ from matrix_neo import (
 )
 
 from .harmonic import solve_wilson_gf
-from .large_amplitude import GFLargeAmplitudeAnalysis, large_amplitude_analysis_from_gf_matrices
+from .large_amplitude import (
+    GFLargeAmplitudeAnalysis,
+    classify_gic_anharmonic_model,
+    large_amplitude_analysis_from_gf_matrices,
+)
 from .large_amplitude import large_amplitude_topology_context_from_arrays
 from .models import HessianInput
 
@@ -55,6 +59,11 @@ class InternalGFResult:
     gic_labels: tuple[str, ...]
     gic_names: tuple[str, ...] = ()
     gic_irreps: tuple[str, ...] = ()
+    gic_families: tuple[str, ...] = ()
+    gic_anharmonic_classes: tuple[str, ...] = ()
+    gic_zeroth_order_models: tuple[str, ...] = ()
+    gic_cross_coupling_policies: tuple[str, ...] = ()
+    gic_anharmonic_reasons: tuple[str, ...] = ()
     point_group: str = "UNKNOWN"
     symmetrized_gics: bool = False
     scaling_factors: np.ndarray | None = None
@@ -224,6 +233,18 @@ def gf_from_cartesian_hessian_and_gic_b_matrix(
     g_inv_half = (g_vec * (1.0 / np.sqrt(np.clip(g_eval, 1.0e-14, None)))) @ g_vec.T
     modes_internal = g_inv_half @ gf.normal_modes
     ped = _ped(force_constants, modes_internal, gf.eigenvalues)
+    assignment_names = tuple(
+        gic_names[idx] if idx < len(gic_names) else f"GIC{idx + 1:03d}"
+        for idx in range(len(gic_labels))
+    )
+    assignments = tuple(
+        classify_gic_anharmonic_model(
+            assignment_names[idx],
+            label,
+            topology_context=large_amplitude_topology_context,
+        )
+        for idx, label in enumerate(gic_labels)
+    )
     large_amplitude = large_amplitude_analysis_from_gf_matrices(
         force_constants=force_constants,
         g_matrix=g_matrix,
@@ -251,6 +272,11 @@ def gf_from_cartesian_hessian_and_gic_b_matrix(
         gic_labels=tuple(gic_labels),
         gic_names=tuple(gic_names),
         gic_irreps=tuple(gic_irreps),
+        gic_families=tuple(item.family for item in assignments),
+        gic_anharmonic_classes=tuple(item.anharmonic_class for item in assignments),
+        gic_zeroth_order_models=tuple(item.zeroth_order_model for item in assignments),
+        gic_cross_coupling_policies=tuple(item.cross_coupling_policy for item in assignments),
+        gic_anharmonic_reasons=tuple(item.reason for item in assignments),
         point_group=point_group,
         symmetrized_gics=bool(symmetrized_gics),
         scaling_factors=None
@@ -413,6 +439,11 @@ def gf_from_cartesian_hessian_and_matrix_gics(
         gic_labels=result.gic_labels,
         gic_names=result.gic_names,
         gic_irreps=result.gic_irreps,
+        gic_families=result.gic_families,
+        gic_anharmonic_classes=result.gic_anharmonic_classes,
+        gic_zeroth_order_models=result.gic_zeroth_order_models,
+        gic_cross_coupling_policies=result.gic_cross_coupling_policies,
+        gic_anharmonic_reasons=result.gic_anharmonic_reasons,
         point_group=result.point_group,
         symmetrized_gics=result.symmetrized_gics,
         scaling_factors=result.scaling_factors,

@@ -676,6 +676,93 @@ def test_gicforge_build_definition_uses_saved_topology(tmp_path):
     ]
 
 
+def test_xh_stretch_policy_defaults_to_ordinary_stretches(tmp_path):
+    source = tmp_path / "water.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "3",
+                "water",
+                "O 0.0 0.0 0.0",
+                "H 0.0 0.0 1.0",
+                "H 0.0 1.0 0.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "water.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin)
+    gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
+
+    assert "LOCAL_XH_STRETCH" not in {primitive.family for primitive in definition.primitives}
+    assert "XH_STRETCH_POLICY SYMMETRIZE" in gic
+
+
+def test_xh_stretch_policy_can_keep_xh2_class_local(tmp_path):
+    source = tmp_path / "water.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "3",
+                "water",
+                "O 0.0 0.0 0.0",
+                "H 0.0 0.0 1.0",
+                "H 0.0 1.0 0.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "water.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(
+        xyzin,
+        xh_stretch_policy="local-selected",
+        local_xh_classes=("XH2",),
+    )
+    gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
+    families = Counter(primitive.family for primitive in definition.primitives)
+
+    assert families["LOCAL_XH_STRETCH"] == 2
+    assert families["BEND"] == 1
+    assert "LOCAL_XH_CLASSES XH2" in gic
+
+
+def test_xh_stretch_policy_can_keep_xh3_class_local(tmp_path):
+    source = tmp_path / "ammonia.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "4",
+                "ammonia",
+                "N 0.00000000 0.00000000 0.00000000",
+                "H 0.94000000 0.00000000 0.00000000",
+                "H -0.31300000 0.88500000 0.00000000",
+                "H -0.31300000 -0.44200000 0.76600000",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "ammonia.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    definition = write_gicforge_build_sections(
+        xyzin,
+        xh_stretch_policy="local-selected",
+        local_xh_classes=("XH3",),
+    )
+
+    assert Counter(primitive.family for primitive in definition.primitives)["LOCAL_XH_STRETCH"] == 3
+
+
 def test_gicforge_build_gaussian_input_includes_readgic_block(tmp_path):
     source = tmp_path / "water.xyz"
     source.write_text(

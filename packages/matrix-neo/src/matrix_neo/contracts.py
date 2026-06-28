@@ -34,8 +34,22 @@ def gic_plan_section_lines(
     symmetrize: bool = False,
     improper_dihedrals: bool = False,
     fragment_mode: str = "SPECIAL_COORDINATES",
+    xh_stretch_policy: str = "SYMMETRIZE",
+    local_xh_bonds: tuple[tuple[int, int], ...] = (),
+    local_xh_classes: tuple[str, ...] = (),
 ) -> list[str]:
     mode = _normalized_fragment_mode(fragment_mode)
+    policy = str(xh_stretch_policy or "SYMMETRIZE").strip().replace("-", "_").upper()
+    bonds = (
+        ",".join(f"{int(left)}-{int(right)}" for left, right in local_xh_bonds)
+        if local_xh_bonds
+        else "NONE"
+    )
+    classes = (
+        ",".join(str(item).strip().upper() for item in local_xh_classes)
+        if local_xh_classes
+        else "NONE"
+    )
     return [
         f"SCHEMA {ORACLE_XYZ_GIC_SCHEMA}",
         "STATUS PLANNED",
@@ -46,6 +60,9 @@ def gic_plan_section_lines(
         f"SYMMETRIZE {_bool_text(symmetrize)}",
         f"OUT_OF_PLANE_MODE {'IMPROPER_DIHEDRAL' if improper_dihedrals else 'OUT_OF_PLANE'}",
         f"FRAGMENT_MODE {mode}",
+        f"XH_STRETCH_POLICY {policy}",
+        f"LOCAL_XH_BONDS {bonds}",
+        f"LOCAL_XH_CLASSES {classes}",
         "BACKEND UNASSIGNED",
         "[FROZEN_GICS]",
         "PENDING GICFORGE_IMPLEMENTATION",
@@ -70,6 +87,9 @@ def write_gicforge_plan_sections(
     sycart: bool = False,
     improper_dihedrals: bool = False,
     fragment_mode: str = "SPECIAL_COORDINATES",
+    xh_stretch_policy: str = "SYMMETRIZE",
+    local_xh_bonds: tuple[tuple[int, int], ...] = (),
+    local_xh_classes: tuple[str, ...] = (),
 ) -> None:
     target = Path(path)
     validate_gicforge_prerequisites(target)
@@ -80,6 +100,9 @@ def write_gicforge_plan_sections(
             symmetrize=symmetrize,
             improper_dihedrals=improper_dihedrals,
             fragment_mode=fragment_mode,
+            xh_stretch_policy=xh_stretch_policy,
+            local_xh_bonds=local_xh_bonds,
+            local_xh_classes=local_xh_classes,
         ),
     )
     if sycart:

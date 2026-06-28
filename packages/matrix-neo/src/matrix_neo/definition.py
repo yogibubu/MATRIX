@@ -37,6 +37,11 @@ from .policy import (
     SPECIAL_REDUCTION_CLASS,
     SYMMETRIZATION_POLICY,
     SYCART_BACKEND,
+    XH_STRETCH_CLASSES,
+    XH_STRETCH_POLICIES,
+    XH_STRETCH_POLICY_LOCAL_ALL,
+    XH_STRETCH_POLICY_LOCAL_SELECTED,
+    XH_STRETCH_POLICY_SYMMETRIZE,
     primitive_prefix,
     primitive_reduction_class,
     primitive_symmetry_block,
@@ -153,6 +158,9 @@ class GICDefinition:
     fragment_mode: str = FRAGMENT_MODE_NONE
     pseudo_bonds: tuple[tuple[int, int], ...] = ()
     pseudo_bond_kinds: tuple[str, ...] = ()
+    xh_stretch_policy: str = XH_STRETCH_POLICY_SYMMETRIZE
+    local_xh_bonds: tuple[tuple[int, int], ...] = ()
+    local_xh_classes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -179,6 +187,9 @@ def build_gic_definition_from_xyzin(
     symmetrize: bool = False,
     improper_dihedrals: bool | None = None,
     fragment_mode: str | None = None,
+    xh_stretch_policy: str | None = None,
+    local_xh_bonds: tuple[tuple[int, int], ...] | None = None,
+    local_xh_classes: tuple[str, ...] | None = None,
     rank_tolerance: float = RANK_TOLERANCE,
 ) -> GICDefinition:
     """Build a frozen ORACLE GIC definition from saved xyzin state."""
@@ -186,6 +197,9 @@ def build_gic_definition_from_xyzin(
         path,
         improper_dihedrals=improper_dihedrals,
         fragment_mode=fragment_mode,
+        xh_stretch_policy=xh_stretch_policy,
+        local_xh_bonds=local_xh_bonds,
+        local_xh_classes=local_xh_classes,
         rank_tolerance=rank_tolerance,
         retain_candidate_primitives=symmetrize,
     )
@@ -203,6 +217,9 @@ def construct_gic_definition_from_xyzin(
     *,
     improper_dihedrals: bool | None = None,
     fragment_mode: str | None = None,
+    xh_stretch_policy: str | None = None,
+    local_xh_bonds: tuple[tuple[int, int], ...] | None = None,
+    local_xh_classes: tuple[str, ...] | None = None,
     rank_tolerance: float = RANK_TOLERANCE,
     retain_candidate_primitives: bool = False,
 ) -> tuple[GICDefinition, tuple[str, ...], tuple[GICPointGroupOperation, ...]]:
@@ -217,6 +234,19 @@ def construct_gic_definition_from_xyzin(
     if improper_dihedrals is None:
         improper_dihedrals = _planned_improper_dihedrals(lines)
     mode = _planned_fragment_mode(lines) if fragment_mode is None else _fragment_mode(fragment_mode)
+    planned_xh_policy = _planned_xh_stretch_policy(lines)
+    explicit_local_xh_selection = local_xh_bonds is not None or local_xh_classes is not None
+    resolved_xh_policy = _xh_stretch_policy(
+        XH_STRETCH_POLICY_LOCAL_SELECTED
+        if xh_stretch_policy is None and explicit_local_xh_selection
+        else planned_xh_policy if xh_stretch_policy is None else xh_stretch_policy
+    )
+    resolved_local_xh_bonds = _normalize_pairs(
+        _planned_local_xh_bonds(lines) if local_xh_bonds is None else local_xh_bonds
+    )
+    resolved_local_xh_classes = _normalize_xh_classes(
+        _planned_local_xh_classes(lines) if local_xh_classes is None else local_xh_classes
+    )
     fragment_records = _fragment_records(target)
     interaction_centers = _interaction_center_definition(target)
 
@@ -226,6 +256,9 @@ def construct_gic_definition_from_xyzin(
             coords,
             point_group=point_group,
             improper_dihedrals=improper_dihedrals,
+            xh_stretch_policy=resolved_xh_policy,
+            local_xh_bonds=resolved_local_xh_bonds,
+            local_xh_classes=resolved_local_xh_classes,
         )
         return definition, tuple(geometry.atoms), symmetry_operations
 
@@ -252,6 +285,10 @@ def construct_gic_definition_from_xyzin(
         rings=rings,
         coords=coords,
         natoms=geometry.natoms,
+        atom_symbols=tuple(geometry.atoms),
+        xh_stretch_policy=resolved_xh_policy,
+        local_xh_bonds=resolved_local_xh_bonds,
+        local_xh_classes=resolved_local_xh_classes,
         improper_dihedrals=improper_dihedrals,
         fragment_records=candidate_fragment_records,
         interaction_centers=candidate_interaction_centers,
@@ -299,6 +336,9 @@ def construct_gic_definition_from_xyzin(
         fragment_mode=mode if fragment_records else FRAGMENT_MODE_NONE,
         pseudo_bonds=pseudo_bonds,
         pseudo_bond_kinds=pseudo_bond_kinds,
+        xh_stretch_policy=resolved_xh_policy,
+        local_xh_bonds=resolved_local_xh_bonds,
+        local_xh_classes=resolved_local_xh_classes,
     )
     return definition, tuple(geometry.atoms), symmetry_operations
 
@@ -318,6 +358,9 @@ def _construct_merlino_python_definition(
     *,
     point_group: str,
     improper_dihedrals: bool,
+    xh_stretch_policy: str,
+    local_xh_bonds: tuple[tuple[int, int], ...],
+    local_xh_classes: tuple[str, ...],
 ) -> GICDefinition:
     from matrix_neo.runtime.gicforge_python import build_gicforge_python_model
 
@@ -332,6 +375,7 @@ def _construct_merlino_python_definition(
     primitive_indices: dict[str, int] = {}
     primitives: list[GICPrimitive] = []
     gics: list[FrozenGIC] = []
+    xh_class_by_bond = _merlino_xh_class_by_bond(model.primitive_candidates, atom_symbols)
 
     def primitive_id(
         primitive: object,
@@ -357,6 +401,15 @@ def _construct_merlino_python_definition(
 
     for index, coordinate in enumerate(model.coordinates, start=1):
         family = _merlino_coordinate_family(coordinate.name, coordinate.block)
+        family = _merlino_local_xh_family(
+            coordinate,
+            family,
+            atom_symbols,
+            xh_stretch_policy=xh_stretch_policy,
+            local_xh_bonds=local_xh_bonds,
+            local_xh_classes=local_xh_classes,
+            xh_class_by_bond=xh_class_by_bond,
+        )
         refs = _merlino_coordinate_primitive_refs(coordinate, family)
         coefficients = tuple(
             (primitive_id(primitive, family, refs=refs), float(coefficient))
@@ -379,6 +432,15 @@ def _construct_merlino_python_definition(
 
     for candidate in model.primitive_candidates:
         family = _merlino_coordinate_family(candidate.name, candidate.block)
+        family = _merlino_local_xh_family(
+            candidate,
+            family,
+            atom_symbols,
+            xh_stretch_policy=xh_stretch_policy,
+            local_xh_bonds=local_xh_bonds,
+            local_xh_classes=local_xh_classes,
+            xh_class_by_bond=xh_class_by_bond,
+        )
         refs = _merlino_coordinate_primitive_refs(candidate, family)
         for _coefficient, primitive in candidate.terms:
             primitive_id(primitive, family, refs=refs)
@@ -408,6 +470,9 @@ def _construct_merlino_python_definition(
             ),
         ),
         symmetry_diagnostics=_empty_symmetry_diagnostics(point_group, requested=False),
+        xh_stretch_policy=xh_stretch_policy,
+        local_xh_bonds=local_xh_bonds,
+        local_xh_classes=local_xh_classes,
     )
 
 
@@ -444,6 +509,211 @@ def _merlino_coordinate_primitive_refs(
     if not ring:
         return ()
     return (_ring_ref_text(ring),)
+
+
+def _merlino_local_xh_family(
+    coordinate: object,
+    family: str,
+    atom_symbols: tuple[str, ...],
+    *,
+    xh_stretch_policy: str,
+    local_xh_bonds: tuple[tuple[int, int], ...],
+    local_xh_classes: tuple[str, ...],
+    xh_class_by_bond: dict[tuple[int, int], str],
+) -> str:
+    if family != "STRETCH":
+        return family
+    terms = tuple(getattr(coordinate, "terms", ()))
+    if not terms:
+        return family
+    for _coefficient, primitive in terms:
+        if str(getattr(primitive, "kind", "")) != "bond":
+            return family
+        atoms = tuple(int(atom) + 1 for atom in getattr(primitive, "atoms", ()))
+        if len(atoms) != 2 or not _use_local_xh_stretch(
+            atoms[0],
+            atoms[1],
+            atom_symbols,
+            xh_stretch_policy,
+            local_xh_bonds,
+            local_xh_classes,
+            xh_class_by_bond,
+        ):
+            return family
+    return "LOCAL_XH_STRETCH"
+
+
+def _use_local_xh_stretch(
+    left: int,
+    right: int,
+    atom_symbols: tuple[str, ...],
+    xh_stretch_policy: str,
+    local_xh_bonds: tuple[tuple[int, int], ...],
+    local_xh_classes: tuple[str, ...],
+    xh_class_by_bond: dict[tuple[int, int], str],
+) -> bool:
+    if not _is_xh_bond(left, right, atom_symbols):
+        return False
+    policy = _xh_stretch_policy(xh_stretch_policy)
+    if policy == XH_STRETCH_POLICY_SYMMETRIZE:
+        return False
+    if policy == XH_STRETCH_POLICY_LOCAL_ALL:
+        return True
+    pair = _pair_key(left, right)
+    if pair in set(local_xh_bonds):
+        return True
+    return xh_class_by_bond.get(pair, "") in set(local_xh_classes)
+
+
+def _is_xh_bond(left: int, right: int, atom_symbols: tuple[str, ...]) -> bool:
+    if left < 1 or right < 1 or left > len(atom_symbols) or right > len(atom_symbols):
+        return False
+    try:
+        left_z = atomic_number(str(atom_symbols[left - 1]))
+        right_z = atomic_number(str(atom_symbols[right - 1]))
+    except KeyError:
+        return False
+    return (left_z == 1) ^ (right_z == 1)
+
+
+def _merlino_xh_class_by_bond(
+    candidates: tuple[object, ...],
+    atom_symbols: tuple[str, ...],
+) -> dict[tuple[int, int], str]:
+    bonds: set[tuple[int, int]] = set()
+    for candidate in candidates:
+        for _coefficient, primitive in getattr(candidate, "terms", ()):
+            if str(getattr(primitive, "kind", "")) != "bond":
+                continue
+            atoms = tuple(int(atom) + 1 for atom in getattr(primitive, "atoms", ()))
+            if len(atoms) == 2:
+                bonds.add(_pair_key(atoms[0], atoms[1]))
+    return _xh_class_by_bond(tuple(sorted(bonds)), atom_symbols)
+
+
+def _xh_class_by_bond(
+    bonds: tuple[tuple[int, int], ...],
+    atom_symbols: tuple[str, ...],
+) -> dict[tuple[int, int], str]:
+    hydrogens_by_heavy: dict[int, set[int]] = {}
+    for left, right in bonds:
+        if not _is_xh_bond(left, right, atom_symbols):
+            continue
+        heavy, hydrogen = _xh_heavy_and_hydrogen(left, right, atom_symbols)
+        if heavy is None or hydrogen is None:
+            continue
+        hydrogens_by_heavy.setdefault(heavy, set()).add(hydrogen)
+    result: dict[tuple[int, int], str] = {}
+    for heavy, hydrogens in hydrogens_by_heavy.items():
+        count = len(hydrogens)
+        if count <= 1:
+            xh_class = "XH"
+        elif count == 2:
+            xh_class = "XH2"
+        else:
+            xh_class = "XH3"
+        for hydrogen in hydrogens:
+            result[_pair_key(heavy, hydrogen)] = xh_class
+    return result
+
+
+def _xh_heavy_and_hydrogen(
+    left: int,
+    right: int,
+    atom_symbols: tuple[str, ...],
+) -> tuple[int | None, int | None]:
+    if left < 1 or right < 1 or left > len(atom_symbols) or right > len(atom_symbols):
+        return None, None
+    try:
+        left_z = atomic_number(str(atom_symbols[left - 1]))
+        right_z = atomic_number(str(atom_symbols[right - 1]))
+    except KeyError:
+        return None, None
+    if left_z == 1 and right_z != 1:
+        return right, left
+    if right_z == 1 and left_z != 1:
+        return left, right
+    return None, None
+
+
+def _pair_key(left: int, right: int) -> tuple[int, int]:
+    return (int(left), int(right)) if int(left) <= int(right) else (int(right), int(left))
+
+
+def _xh_stretch_policy(value: str | None) -> str:
+    if value is None:
+        return XH_STRETCH_POLICY_SYMMETRIZE
+    text = str(value).strip().replace("-", "_").upper()
+    if not text:
+        return XH_STRETCH_POLICY_SYMMETRIZE
+    aliases = {
+        "YES": XH_STRETCH_POLICY_SYMMETRIZE,
+        "TRUE": XH_STRETCH_POLICY_SYMMETRIZE,
+        "ALL": XH_STRETCH_POLICY_LOCAL_ALL,
+        "LOCAL": XH_STRETCH_POLICY_LOCAL_ALL,
+        "LOCAL_ALL": XH_STRETCH_POLICY_LOCAL_ALL,
+        "SELECTED": XH_STRETCH_POLICY_LOCAL_SELECTED,
+        "LOCAL_SELECTED": XH_STRETCH_POLICY_LOCAL_SELECTED,
+        "NO": XH_STRETCH_POLICY_LOCAL_ALL,
+        "FALSE": XH_STRETCH_POLICY_LOCAL_ALL,
+    }
+    normalized = aliases.get(text, text)
+    if normalized not in XH_STRETCH_POLICIES:
+        raise GICForgeContractError(
+            "invalid X-H stretch policy: "
+            f"{value!r}; expected SYMMETRIZE, LOCAL_ALL or LOCAL_SELECTED"
+        )
+    return normalized
+
+
+def _normalize_pairs(raw_pairs: object | None) -> tuple[tuple[int, int], ...]:
+    if raw_pairs is None:
+        return ()
+    pairs: list[tuple[int, int]] = []
+    if isinstance(raw_pairs, str):
+        items: object = re.split(r"[,;]\s*", raw_pairs.strip()) if raw_pairs.strip() else ()
+    else:
+        items = raw_pairs
+    for item in items:
+        if item is None:
+            continue
+        if isinstance(item, str):
+            text = item.strip()
+            if not text or text.upper() in {"NA", "NONE"}:
+                continue
+            parts = re.split(r"[-:,/]", text)
+            if len(parts) != 2:
+                raise GICForgeContractError(f"invalid X-H bond selector: {item!r}")
+            left, right = int(parts[0]), int(parts[1])
+        else:
+            values = tuple(item)
+            if len(values) != 2:
+                raise GICForgeContractError(f"invalid X-H bond selector: {item!r}")
+            left, right = int(values[0]), int(values[1])
+        pairs.append(_pair_key(left, right))
+    return tuple(dict.fromkeys(pairs))
+
+
+def _normalize_xh_classes(raw_classes: object | None) -> tuple[str, ...]:
+    if raw_classes is None:
+        return ()
+    if isinstance(raw_classes, str):
+        items: object = re.split(r"[,;]\s*", raw_classes.strip()) if raw_classes.strip() else ()
+    else:
+        items = raw_classes
+    classes: list[str] = []
+    aliases = {"XH1": "XH", "H1": "XH", "H2": "XH2", "H3": "XH3"}
+    for item in items:
+        text = str(item).strip().upper().replace("-", "")
+        if not text or text in {"NA", "NONE"}:
+            continue
+        normalized = aliases.get(text, text)
+        if normalized not in XH_STRETCH_CLASSES:
+            raise GICForgeContractError(
+                f"invalid X-H stretch class: {item!r}; expected XH, XH2 or XH3"
+            )
+        classes.append(normalized)
+    return tuple(dict.fromkeys(classes))
 
 
 def _merlino_coordinate_ring_atoms(coordinate: object) -> tuple[int, ...]:
@@ -611,6 +881,9 @@ def gic_definition_section_lines(definition: GICDefinition) -> list[str]:
         f"SYMMETRY_MODE {_symmetry_mode(definition)}",
         f"OUT_OF_PLANE_MODE {_out_of_plane_mode(definition.primitives)}",
         f"FRAGMENT_MODE {definition.fragment_mode}",
+        f"XH_STRETCH_POLICY {definition.xh_stretch_policy}",
+        f"LOCAL_XH_BONDS {_pairs_text(definition.local_xh_bonds)}",
+        f"LOCAL_XH_CLASSES {_csv_or_none_from_strings(definition.local_xh_classes)}",
         f"PSEUDO_BOND_COUNT {len(definition.pseudo_bonds)}",
         f"TARGET_RANK {definition.target_rank}",
         f"RANK {definition.rank}",
@@ -697,6 +970,9 @@ def write_gicforge_build_sections(
     sycart: bool = False,
     improper_dihedrals: bool | None = None,
     fragment_mode: str | None = None,
+    xh_stretch_policy: str | None = None,
+    local_xh_bonds: tuple[tuple[int, int], ...] | None = None,
+    local_xh_classes: tuple[str, ...] | None = None,
 ) -> GICDefinition:
     target = Path(path)
     definition = build_gic_definition_from_xyzin(
@@ -704,6 +980,9 @@ def write_gicforge_build_sections(
         symmetrize=symmetrize,
         improper_dihedrals=improper_dihedrals,
         fragment_mode=fragment_mode,
+        xh_stretch_policy=xh_stretch_policy,
+        local_xh_bonds=local_xh_bonds,
+        local_xh_classes=local_xh_classes,
     )
     replace_section(target, "GIC", gic_definition_section_lines(definition))
     if sycart:
@@ -879,6 +1158,9 @@ def read_gic_definition_from_xyzin(path: Path) -> GICDefinition:
         fragment_mode=_fragment_mode(_section_value(section, "FRAGMENT_MODE")),
         pseudo_bonds=_parse_pseudo_bonds(section),
         pseudo_bond_kinds=_parse_pseudo_bond_kinds(section),
+        xh_stretch_policy=_xh_stretch_policy(_section_value(section, "XH_STRETCH_POLICY")),
+        local_xh_bonds=_normalize_pairs(_section_value(section, "LOCAL_XH_BONDS")),
+        local_xh_classes=_normalize_xh_classes(_section_value(section, "LOCAL_XH_CLASSES")),
     )
 
 
@@ -1103,6 +1385,10 @@ def _primitive_candidates(
     rings: tuple[tuple[int, tuple[int, ...]], ...] = (),
     coords: np.ndarray,
     natoms: int,
+    atom_symbols: tuple[str, ...] = (),
+    xh_stretch_policy: str = XH_STRETCH_POLICY_SYMMETRIZE,
+    local_xh_bonds: tuple[tuple[int, int], ...] = (),
+    local_xh_classes: tuple[str, ...] = (),
     improper_dihedrals: bool = False,
     fragment_records: tuple[object, ...] = (),
     interaction_centers: object | None = None,
@@ -1110,9 +1396,23 @@ def _primitive_candidates(
     adjacency = _adjacency(bonds, natoms=natoms)
     counters: dict[str, int] = {family: 0 for family in PRIMITIVE_FAMILY_ORDER}
     candidates: list[GICPrimitive] = []
+    xh_class_by_bond = _xh_class_by_bond(bonds, atom_symbols)
 
     for i, j in bonds:
-        candidates.append(_make_primitive("STRETCH", "R", (i, j), counters))
+        family = (
+            "LOCAL_XH_STRETCH"
+            if _use_local_xh_stretch(
+                i,
+                j,
+                atom_symbols,
+                xh_stretch_policy,
+                local_xh_bonds,
+                local_xh_classes,
+                xh_class_by_bond,
+            )
+            else "STRETCH"
+        )
+        candidates.append(_make_primitive(family, "R", (i, j), counters))
 
     candidates.extend(
         _fragment_primitive_candidates(fragment_records, coords=coords, counters=counters)
@@ -1814,7 +2114,8 @@ def _apply_point_group_projector(
         if reference_coordinates_angstrom is not None
         else None
     )
-    if group_key in {"D5H", "D5D"} and coords_for_global is not None:
+    has_local_xh = any(gic.family == "LOCAL_XH_STRETCH" for gic in gics)
+    if group_key in {"D5H", "D5D"} and coords_for_global is not None and not has_local_xh:
         projected = _apply_rank_revealing_global_projector(
             gics,
             primitives,
@@ -1855,6 +2156,22 @@ def _apply_point_group_projector(
             protect_special=use_global_b_selection,
         ),
     ):
+        if key[1] == "LOCAL_XH_STRETCH":
+            block_output = tuple(
+                _renumber_frozen_gic(gic, len(output) + offset)
+                for offset, gic in enumerate(block_gics, start=1)
+            )
+            output.extend(block_output)
+            diagnostics.append(
+                GICSymmetrizedGroup(
+                    block=key[0],
+                    family=key[1],
+                    signature="UNSYMMETRIZED_LOCAL_XH",
+                    source_gics=tuple(gic.name for gic in block_gics),
+                    output_gics=tuple(gic.name for gic in block_output),
+                )
+            )
+            continue
         ring_pucker_coords = (
             np.asarray(reference_coordinates_angstrom, dtype=float)
             if key[1] == "RING_PUCKER_COMPONENT" and reference_coordinates_angstrom is not None
@@ -3408,6 +3725,8 @@ def _prefix_symmetrized_singletons(
 
 
 def _prefix_symmetrized_gic(gic: FrozenGIC, *, point_group: str) -> FrozenGIC:
+    if gic.family == "LOCAL_XH_STRETCH":
+        return gic
     irrep = (
         gic.irrep if gic.irrep and gic.irrep != "UNASSIGNED" else total_symmetric_irrep(point_group)
     )
@@ -5008,6 +5327,18 @@ def _planned_fragment_mode(lines: list[str]) -> str:
     return _fragment_mode(mode)
 
 
+def _planned_xh_stretch_policy(lines: list[str]) -> str:
+    return _xh_stretch_policy(_section_value(section_content(lines, "GIC"), "XH_STRETCH_POLICY"))
+
+
+def _planned_local_xh_bonds(lines: list[str]) -> tuple[tuple[int, int], ...]:
+    return _normalize_pairs(_section_value(section_content(lines, "GIC"), "LOCAL_XH_BONDS"))
+
+
+def _planned_local_xh_classes(lines: list[str]) -> tuple[str, ...]:
+    return _normalize_xh_classes(_section_value(section_content(lines, "GIC"), "LOCAL_XH_CLASSES"))
+
+
 def _fragment_mode(value: str | None) -> str:
     text = (value or FRAGMENT_MODE_NONE).strip().upper().replace("-", "_")
     aliases = {
@@ -5030,6 +5361,14 @@ def _out_of_plane_mode(primitives: tuple[GICPrimitive, ...]) -> str:
     if any(primitive.function == "IMPD" for primitive in primitives):
         return "IMPROPER_DIHEDRAL"
     return "OUT_OF_PLANE"
+
+
+def _pairs_text(pairs: tuple[tuple[int, int], ...]) -> str:
+    return ",".join(f"{left}-{right}" for left, right in pairs) if pairs else "NONE"
+
+
+def _csv_or_none_from_strings(values: tuple[str, ...]) -> str:
+    return ",".join(values) if values else "NONE"
 
 
 def _parse_int(text: str | None) -> int:

@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 from pathlib import Path
 from typing import TypeVar
@@ -806,6 +807,7 @@ def build_parser(
         default="special-coordinates",
         help="How NEO should handle prebuilt molecular fragments",
     )
+    _add_xh_stretch_arguments(gic_plan, default_policy=None)
     gic_build = gicforge_sub.add_parser("build", help="Build frozen #GIC/#SYCART sections")
     gic_build.add_argument("xyzin", type=Path)
     gic_build.add_argument("--symmetrize", action="store_true")
@@ -816,6 +818,7 @@ def build_parser(
         choices=("special-coordinates", "pseudo-bonds", "none"),
         help="Override the planned fragment handling mode",
     )
+    _add_xh_stretch_arguments(gic_build, default_policy=None)
     bmatrix = gicforge_sub.add_parser("bmatrix", help="Evaluate the frozen GIC B matrix")
     bmatrix.add_argument("xyzin", type=Path)
     bmatrix.add_argument("output", type=Path, nargs="?")
@@ -2399,6 +2402,7 @@ def main(
         }
         if args.improper_dihedrals:
             plan_kwargs["improper_dihedrals"] = True
+        _add_xh_stretch_kwargs(args, plan_kwargs)
         write_gicforge_plan_sections(
             args.xyzin,
             **plan_kwargs,
@@ -2416,6 +2420,7 @@ def main(
             build_kwargs["improper_dihedrals"] = True
         if args.fragment_mode:
             build_kwargs["fragment_mode"] = args.fragment_mode
+        _add_xh_stretch_kwargs(args, build_kwargs)
         definition = write_gicforge_build_sections(
             args.xyzin,
             **build_kwargs,
@@ -2644,6 +2649,62 @@ def _add_preprocess_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--symmetry-distance", type=float, default=1.0e-3)
     parser.add_argument("--symmetry-inertia", type=float, default=1.0e-3)
     parser.add_argument("--max-rotation-order", type=int, default=6)
+
+
+def _add_xh_stretch_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    default_policy: str | None,
+) -> None:
+    parser.add_argument(
+        "--xh-stretch-policy",
+        choices=("symmetrize", "local-all", "local-selected"),
+        default=default_policy,
+        help="Control whether X-H stretches are symmetrized or kept as local modes",
+    )
+    parser.add_argument(
+        "--local-xh-bond",
+        action="append",
+        default=[],
+        metavar="I-J",
+        help="One-based X-H bond to keep local; repeatable",
+    )
+    parser.add_argument(
+        "--local-xh-class",
+        choices=("XH", "XH2", "XH3"),
+        action="append",
+        default=[],
+        help="Keep all X-H stretches of the selected local class unsymmetrized",
+    )
+
+
+def _add_xh_stretch_kwargs(args: argparse.Namespace, kwargs: dict[str, object]) -> None:
+    local_bonds = _parse_local_xh_bonds(getattr(args, "local_xh_bond", ()))
+    local_classes = tuple(getattr(args, "local_xh_class", ()) or ())
+    policy = getattr(args, "xh_stretch_policy", None)
+    if policy is None and (local_bonds or local_classes):
+        policy = "local-selected"
+    if policy is not None:
+        kwargs["xh_stretch_policy"] = policy
+    if local_bonds:
+        kwargs["local_xh_bonds"] = local_bonds
+    if local_classes:
+        kwargs["local_xh_classes"] = local_classes
+
+
+def _parse_local_xh_bonds(raw_bonds: list[str] | tuple[str, ...]) -> tuple[tuple[int, int], ...]:
+    pairs: list[tuple[int, int]] = []
+    for raw in raw_bonds or ():
+        for item in str(raw).replace(";", ",").split(","):
+            text = item.strip()
+            if not text:
+                continue
+            parts = re.split(r"[-:/]", text)
+            if len(parts) != 2:
+                raise SystemExit(f"invalid --local-xh-bond selector: {raw!r}")
+            left, right = int(parts[0]), int(parts[1])
+            pairs.append((left, right) if left <= right else (right, left))
+    return tuple(dict.fromkeys(pairs))
 
 
 def _is_link_command(args: argparse.Namespace) -> bool:
