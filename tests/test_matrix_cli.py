@@ -703,6 +703,7 @@ def test_gf_cli_can_use_hessian_from_xyzin_without_fchk(tmp_path, monkeypatch, c
         subtract_electrostatic=False,
         subtract_uff_vdw=False,
         nonbonded_14_scale=0.5,
+        large_amplitude_frequency_cutoff_cm=250.0,
     ):
         calls["xyzin"] = xyzin_path
         calls["local"] = local
@@ -1466,6 +1467,7 @@ def test_gf_cli_runs_xyzin_report_and_csv_export(tmp_path, monkeypatch, capsys):
         subtract_electrostatic=False,
         subtract_uff_vdw=False,
         nonbonded_14_scale=0.5,
+        large_amplitude_frequency_cutoff_cm=250.0,
     ):
         calls["run"] = (
             fchk_path,
@@ -1479,6 +1481,7 @@ def test_gf_cli_runs_xyzin_report_and_csv_export(tmp_path, monkeypatch, capsys):
             subtract_electrostatic,
             subtract_uff_vdw,
             nonbonded_14_scale,
+            large_amplitude_frequency_cutoff_cm,
         )
         return _fake_gf_report("gf report", fchk_path, xyzin=xyzin_path)
 
@@ -1508,6 +1511,8 @@ def test_gf_cli_runs_xyzin_report_and_csv_export(tmp_path, monkeypatch, capsys):
             "--symmetry-blocks",
             "--force-threshold",
             "1e-8",
+            "--large-amplitude-frequency-cutoff-cm",
+            "300",
             "--subtract-electrostatic",
             "--subtract-uff-vdw",
             "--nonbonded-14-scale",
@@ -1528,6 +1533,7 @@ def test_gf_cli_runs_xyzin_report_and_csv_export(tmp_path, monkeypatch, capsys):
         True,
         True,
         0.25,
+        300.0,
     )
     assert calls["csv"] == ("gf report", csv_dir, "gic_gf")
     assert out.read_text(encoding="utf-8") == "gf report\n"

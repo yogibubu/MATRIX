@@ -24,13 +24,19 @@ from .internal import (
     topology_bonds_from_xyzin,
 )
 from .large_amplitude import (
+    DEFAULT_LARGE_AMPLITUDE_FG_COUPLING_TOLERANCE,
     DEFAULT_LARGE_AMPLITUDE_FAMILIES,
+    DEFAULT_LARGE_AMPLITUDE_FREQUENCY_CUTOFF_CM,
+    DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD,
     GFLargeAmplitudeAnalysis,
     LargeAmplitudeBlock,
     LargeAmplitudeCoordinate,
+    LargeAmplitudeDVRCandidate,
     LargeAmplitudeModeContribution,
+    LargeAmplitudeTopologyContext,
     gic_coordinate_family,
     large_amplitude_analysis_from_gf_matrices,
+    large_amplitude_topology_context_from_arrays,
 )
 from .models import HessianInput
 from .nonbonded import (
@@ -41,6 +47,7 @@ from .sections import (
     GFGICRow,
     GFLargeAmplitudeBlockRow,
     GFLargeAmplitudeCoordinateRow,
+    GFLargeAmplitudeDVRPlanRow,
     GFLargeAmplitudeModeRow,
     GFModeRow,
     GFPEDSection,
@@ -83,13 +90,17 @@ def __getattr__(name: str):
 
 __all__ = [
     "BOHR_TO_ANGSTROM",
+    "DEFAULT_LARGE_AMPLITUDE_FG_COUPLING_TOLERANCE",
     "DEFAULT_LARGE_AMPLITUDE_FAMILIES",
+    "DEFAULT_LARGE_AMPLITUDE_FREQUENCY_CUTOFF_CM",
+    "DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD",
     "GFGICRow",
     "GFFrequencyComparison",
     "GFGeometryComparison",
     "GFLargeAmplitudeAnalysis",
     "GFLargeAmplitudeBlockRow",
     "GFLargeAmplitudeCoordinateRow",
+    "GFLargeAmplitudeDVRPlanRow",
     "GFLargeAmplitudeModeRow",
     "GFLocalOptions",
     "GFModeRow",
@@ -104,7 +115,9 @@ __all__ = [
     "InternalGFResult",
     "LargeAmplitudeBlock",
     "LargeAmplitudeCoordinate",
+    "LargeAmplitudeDVRCandidate",
     "LargeAmplitudeModeContribution",
+    "LargeAmplitudeTopologyContext",
     "ORACLE_XYZ_GF_PED_SCHEMA",
     "PEDTable",
     "format_gf_report",
@@ -125,6 +138,7 @@ __all__ = [
     "gic_labels_from_u",
     "gic_coordinate_family",
     "large_amplitude_analysis_from_gf_matrices",
+    "large_amplitude_topology_context_from_arrays",
     "local_force_constant_mask",
     "mass_weighted_cartesian_hessian",
     "nonbonded_cartesian_hessian_correction",

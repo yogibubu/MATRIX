@@ -770,6 +770,7 @@ def gf_command(
     local: bool = False,
     symmetry_blocks: bool = True,
     force_threshold: float | None = None,
+    large_amplitude_frequency_cutoff_cm: float | None = 250.0,
     subtract_electrostatic: bool = False,
     subtract_uff_vdw: bool = False,
     nonbonded_14_scale: float = 0.5,
@@ -794,6 +795,13 @@ def gf_command(
     _append_flag(argv, "--symmetry-blocks", symmetry_blocks)
     if force_threshold is not None:
         argv.extend(["--force-threshold", str(force_threshold)])
+    if large_amplitude_frequency_cutoff_cm is not None:
+        argv.extend(
+            [
+                "--large-amplitude-frequency-cutoff-cm",
+                str(large_amplitude_frequency_cutoff_cm),
+            ]
+        )
     _append_flag(argv, "--subtract-electrostatic", subtract_electrostatic)
     _append_flag(argv, "--subtract-uff-vdw", subtract_uff_vdw)
     if nonbonded_14_scale != 0.5:

@@ -162,6 +162,27 @@ is independent only when the relative off-subspace coupling is small in \(F\)
 and in \(G\).  MATRIX therefore reports the two values separately and also
 exports \(\max(F_{\mathrm{rel}},G_{\mathrm{rel}})\) as the combined
 \texttt{FG} diagnostic used by downstream rotor/DVR planning.
+Every torsional, ring-puckering, butterfly, out-of-plane, linear-bend and
+special coordinate is retained as a candidate.  The local one-coordinate GF
+frequency marks whether the candidate is active; by default the CLI uses
+\texttt{250 cm-1}, configurable with
+\texttt{--large-amplitude-frequency-cutoff-cm}.  Coordinates above the cutoff
+are written as excluded candidates rather than removed from the diagnostics.
+
+For ordinary torsions, GF/PED also prepares a DVR plan from the frozen topology
+and synthon information.  The central bond is taken from the torsional
+primitive, high-order central bonds are excluded from hindered-rotor treatment,
+and the periodicity is inferred from the equivalence classes of the
+substituents around the central bond.  If the coordinate is isolated according
+to the combined \(F/G\) coupling diagnostic, the local curvature gives the
+one-term Fourier estimate
+\[
+  V(\phi) = A\,[1-\cos(n(\phi-\phi_0))], \qquad
+  A = F_{\phi\phi}/n^2,
+\]
+with \(n\) the inferred periodicity and \(\phi_0\) the current minimum.  If the
+combined coupling is too large, MATRIX writes a coupled DVR recommendation
+instead of a one-dimensional barrier.
 
 \section{Input Contracts}
 
@@ -447,13 +468,18 @@ as modes. \\
 after optional scaling. \\
 \texttt{\detokenize{*_g_matrix.csv}} & Wilson G matrix in the same GIC order. \\
 \texttt{\detokenize{*_large_amplitude_coordinates.csv}} & Large-amplitude GIC
-selection with family labels. \\
+selection with family labels, local one-coordinate GF frequency and
+active/excluded status. \\
 \texttt{\detokenize{*_large_amplitude_blocks.csv}} & Mono- and
 poly-dimensional direct \(F/G\) subspace frequencies and coupling
 diagnostics, including the combined \(\max(F_{\mathrm{rel}},G_{\mathrm{rel}})\)
 criterion. \\
 \texttt{\detokenize{*_large_amplitude_mode_ped.csv}} & Total large-amplitude
 PED contribution for each GF mode. \\
+\texttt{\detokenize{*_large_amplitude_dvr_plan.csv}} & DVR-ready
+large-amplitude plan with status, \(F/G\) coupling diagnostic, torsional
+periodicity, minimum position and one-term Fourier estimate when a 1D
+treatment is justified. \\
 \bottomrule
 \end{longtable}
 

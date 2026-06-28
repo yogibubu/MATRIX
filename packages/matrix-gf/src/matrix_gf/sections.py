@@ -42,6 +42,9 @@ class GFLargeAmplitudeCoordinateRow:
     irrep: str
     family: str
     label: str
+    frequency_cm: float | None = None
+    active: bool = True
+    status: str = "ACTIVE"
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,24 @@ class GFLargeAmplitudeModeRow:
 
 
 @dataclass(frozen=True)
+class GFLargeAmplitudeDVRPlanRow:
+    identifier: str
+    name: str
+    irrep: str
+    family: str
+    status: str
+    frequency_cm: float | None = None
+    fg_coupling_to_rest: float = 0.0
+    central_bond: tuple[int, int] | None = None
+    periodicity: int | None = None
+    minimum_rad: float | None = None
+    force_constant_hartree: float | None = None
+    fourier_amplitude_cm: float | None = None
+    barrier_cm: float | None = None
+    reason: str = ""
+
+
+@dataclass(frozen=True)
 class GFPEDSection:
     source_kind: str = "xyzin"
     source_path: Path | None = None
@@ -86,6 +107,7 @@ class GFPEDSection:
     large_amplitude_coordinates: tuple[GFLargeAmplitudeCoordinateRow, ...] = ()
     large_amplitude_blocks: tuple[GFLargeAmplitudeBlockRow, ...] = ()
     large_amplitude_modes: tuple[GFLargeAmplitudeModeRow, ...] = ()
+    large_amplitude_dvr_plan: tuple[GFLargeAmplitudeDVRPlanRow, ...] = ()
     schema: str = ORACLE_XYZ_GF_PED_SCHEMA
 
     def __post_init__(self) -> None:
@@ -102,6 +124,7 @@ class GFPEDSection:
         )
         object.__setattr__(self, "large_amplitude_blocks", tuple(self.large_amplitude_blocks))
         object.__setattr__(self, "large_amplitude_modes", tuple(self.large_amplitude_modes))
+        object.__setattr__(self, "large_amplitude_dvr_plan", tuple(self.large_amplitude_dvr_plan))
 
 
 def gf_ped_section_from_report(
@@ -159,6 +182,7 @@ def gf_ped_section_from_report(
     large_coordinates = ()
     large_blocks = ()
     large_modes = ()
+    large_dvr_plan = ()
     if large is not None:
         large_coordinates = tuple(
             GFLargeAmplitudeCoordinateRow(
@@ -167,6 +191,9 @@ def gf_ped_section_from_report(
                 irrep=coordinate.irrep,
                 family=coordinate.family,
                 label=coordinate.label,
+                frequency_cm=_section_float(coordinate.local_frequency_cm),
+                active=coordinate.active,
+                status=coordinate.status,
             )
             for coordinate in large.coordinates
         )
@@ -191,6 +218,25 @@ def gf_ped_section_from_report(
             )
             for item in large.mode_contributions
         )
+        large_dvr_plan = tuple(
+            GFLargeAmplitudeDVRPlanRow(
+                identifier=f"GIC{item.index:03d}",
+                name=item.name,
+                irrep=item.irrep,
+                family=item.family,
+                status=item.status,
+                frequency_cm=_section_float(item.frequency_cm),
+                fg_coupling_to_rest=_section_float(item.fg_coupling_to_rest) or 0.0,
+                central_bond=item.central_bond,
+                periodicity=item.periodicity,
+                minimum_rad=_section_float(item.minimum_rad),
+                force_constant_hartree=_section_float(item.force_constant_hartree),
+                fourier_amplitude_cm=_section_float(item.fourier_amplitude_cm),
+                barrier_cm=_section_float(item.barrier_cm),
+                reason=item.reason,
+            )
+            for item in large.dvr_candidates
+        )
 
     resolved_source_path = Path(source_path) if source_path is not None else Path(report.fchk_path)
     resolved_source_kind = source_kind or _infer_source_kind(report, resolved_source_path)
@@ -212,6 +258,7 @@ def gf_ped_section_from_report(
         large_amplitude_coordinates=large_coordinates,
         large_amplitude_blocks=large_blocks,
         large_amplitude_modes=large_modes,
+        large_amplitude_dvr_plan=large_dvr_plan,
     )
 
 
@@ -287,7 +334,10 @@ def gf_ped_section_lines(section: GFPEDSection) -> list[str]:
         for coordinate in section.large_amplitude_coordinates:
             lines.append(
                 f"{coordinate.identifier} NAME={coordinate.name} IRREP={coordinate.irrep} "
-                f"FAMILY={coordinate.family} LABEL={coordinate.label}"
+                f"FAMILY={coordinate.family} "
+                f"FREQUENCY_CM-1={_format_optional_float(coordinate.frequency_cm)} "
+                f"ACTIVE={int(coordinate.active)} STATUS={coordinate.status} "
+                f"LABEL={coordinate.label}"
             )
     else:
         lines.append("NONE")
@@ -314,6 +364,24 @@ def gf_ped_section_lines(section: GFPEDSection) -> list[str]:
             lines.append(
                 f"{mode.index} FREQUENCY_CM-1={_format_float(mode.frequency_cm)} "
                 f"PED_PERCENT={_format_float(mode.ped_percent)}"
+            )
+    else:
+        lines.append("NONE")
+    lines.append("[LARGE_AMPLITUDE_DVR_PLAN]")
+    if section.large_amplitude_dvr_plan:
+        for row in section.large_amplitude_dvr_plan:
+            lines.append(
+                f"{row.identifier} NAME={row.name} IRREP={row.irrep} FAMILY={row.family} "
+                f"STATUS={row.status} "
+                f"FREQUENCY_CM-1={_format_optional_float(row.frequency_cm)} "
+                f"FG_COUPLE_REL={_format_float(row.fg_coupling_to_rest)} "
+                f"CENTRAL_BOND={_format_pair(row.central_bond)} "
+                f"PERIODICITY={row.periodicity if row.periodicity is not None else 'NA'} "
+                f"MINIMUM_RAD={_format_optional_float(row.minimum_rad)} "
+                f"F_HARTREE={_format_optional_float(row.force_constant_hartree)} "
+                f"FOURIER_AMPLITUDE_CM-1={_format_optional_float(row.fourier_amplitude_cm)} "
+                f"BARRIER_CM-1={_format_optional_float(row.barrier_cm)} "
+                f"REASON={row.reason or 'NA'}"
             )
     else:
         lines.append("NONE")
@@ -355,6 +423,11 @@ def parse_gf_ped_section(lines: Iterable[str]) -> GFPEDSection:
         for line in _subsection(raw_lines, "LARGE_AMPLITUDE_MODE_PED")
         if _data_line(line)
     )
+    large_dvr_plan = tuple(
+        _parse_large_amplitude_dvr_plan_line(line)
+        for line in _subsection(raw_lines, "LARGE_AMPLITUDE_DVR_PLAN")
+        if _data_line(line)
+    )
     return GFPEDSection(
         source_kind=values.get("SOURCE_KIND", "xyzin"),
         source_path=_optional_path(values.get("SOURCE_PATH")),
@@ -373,6 +446,7 @@ def parse_gf_ped_section(lines: Iterable[str]) -> GFPEDSection:
         large_amplitude_coordinates=large_coordinates,
         large_amplitude_blocks=large_blocks,
         large_amplitude_modes=large_modes,
+        large_amplitude_dvr_plan=large_dvr_plan,
         schema=schema,
     )
 
@@ -493,6 +567,9 @@ def _parse_large_amplitude_coordinate_line(line: str) -> GFLargeAmplitudeCoordin
         irrep=fields.get("IRREP", "UNK"),
         family=fields.get("FAMILY", ""),
         label=label,
+        frequency_cm=_optional_float(fields.get("FREQUENCY_CM-1")),
+        active=_bool_value(fields.get("ACTIVE"), default=True),
+        status=fields.get("STATUS", "ACTIVE"),
     )
 
 
@@ -522,6 +599,29 @@ def _parse_large_amplitude_mode_line(line: str) -> GFLargeAmplitudeModeRow:
         index=int(parts[0]),
         frequency_cm=float(fields["FREQUENCY_CM-1"]),
         ped_percent=float(fields["PED_PERCENT"]),
+    )
+
+
+def _parse_large_amplitude_dvr_plan_line(line: str) -> GFLargeAmplitudeDVRPlanRow:
+    parts = line.split()
+    if not parts:
+        raise ValueError("empty GF_PED large-amplitude DVR plan line")
+    fields = _key_values(parts[1:])
+    return GFLargeAmplitudeDVRPlanRow(
+        identifier=parts[0],
+        name=fields.get("NAME", parts[0]),
+        irrep=fields.get("IRREP", "UNK"),
+        family=fields.get("FAMILY", ""),
+        status=fields.get("STATUS", ""),
+        frequency_cm=_optional_float(fields.get("FREQUENCY_CM-1")),
+        fg_coupling_to_rest=_optional_float(fields.get("FG_COUPLE_REL")) or 0.0,
+        central_bond=_optional_pair(fields.get("CENTRAL_BOND")),
+        periodicity=_optional_int(fields.get("PERIODICITY")),
+        minimum_rad=_optional_float(fields.get("MINIMUM_RAD")),
+        force_constant_hartree=_optional_float(fields.get("F_HARTREE")),
+        fourier_amplitude_cm=_optional_float(fields.get("FOURIER_AMPLITUDE_CM-1")),
+        barrier_cm=_optional_float(fields.get("BARRIER_CM-1")),
+        reason=fields.get("REASON", ""),
     )
 
 
@@ -556,9 +656,22 @@ def _optional_path(raw: str | None) -> Path | None:
 
 
 def _optional_float(raw: str | None) -> float | None:
-    if raw is None or not str(raw).strip():
+    if raw is None or not str(raw).strip() or str(raw).strip().upper() == "NA":
         return None
     return float(str(raw).replace("D", "E").replace("d", "e"))
+
+
+def _optional_int(raw: str | None) -> int | None:
+    if raw is None or not str(raw).strip() or str(raw).strip().upper() == "NA":
+        return None
+    return int(raw)
+
+
+def _optional_pair(raw: str | None) -> tuple[int, int] | None:
+    if raw is None or not str(raw).strip() or str(raw).strip().upper() == "NA":
+        return None
+    left, right = str(raw).split(",", 1)
+    return int(left), int(right)
 
 
 def _bool_value(raw: str | None, *, default: bool) -> bool:
@@ -574,3 +687,17 @@ def _data_line(line: str) -> bool:
 
 def _format_float(value: float) -> str:
     return f"{float(value):.12g}"
+
+
+def _section_float(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return float(_format_float(value))
+
+
+def _format_optional_float(value: float | None) -> str:
+    return "NA" if value is None else _format_float(value)
+
+
+def _format_pair(value: tuple[int, int] | None) -> str:
+    return "NA" if value is None else f"{int(value[0])},{int(value[1])}"

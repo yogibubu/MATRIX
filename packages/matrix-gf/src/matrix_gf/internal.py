@@ -20,6 +20,7 @@ from matrix_neo import (
 
 from .harmonic import solve_wilson_gf
 from .large_amplitude import GFLargeAmplitudeAnalysis, large_amplitude_analysis_from_gf_matrices
+from .large_amplitude import large_amplitude_topology_context_from_arrays
 from .models import HessianInput
 
 
@@ -171,6 +172,8 @@ def gf_from_cartesian_hessian_and_gic_b_matrix(
     cartesian_hessian_correction: np.ndarray | None = None,
     cartesian_hessian_correction_label: str = "NONE",
     coordinate_source: str = "frozen-gic-definition",
+    large_amplitude_frequency_cutoff_cm: float | None = None,
+    large_amplitude_topology_context=None,
 ) -> InternalGFResult:
     """Run Wilson GF from a Cartesian Hessian and a fixed non-redundant B matrix."""
     hessian = np.asarray(cartesian_hessian, dtype=float)
@@ -229,6 +232,8 @@ def gf_from_cartesian_hessian_and_gic_b_matrix(
         gic_labels=tuple(gic_labels),
         gic_names=tuple(gic_names),
         gic_irreps=tuple(gic_irreps),
+        frequency_cutoff_cm=large_amplitude_frequency_cutoff_cm,
+        topology_context=large_amplitude_topology_context,
     )
     return InternalGFResult(
         frequencies_cm=gf.frequencies_cm,
@@ -272,6 +277,7 @@ def gf_from_hessian_input_and_gic_definition(
     block_by_irrep: bool = False,
     cartesian_hessian_correction: np.ndarray | None = None,
     cartesian_hessian_correction_label: str = "NONE",
+    large_amplitude_frequency_cutoff_cm: float | None = None,
 ) -> InternalGFResult:
     """Run GF/PED using a frozen GIC definition and canonical Hessian input."""
     input_data.validate()
@@ -286,6 +292,10 @@ def gf_from_hessian_input_and_gic_definition(
     local_mask = None
     if local_options is not None and local_options.enabled:
         local_mask = local_force_constant_mask(definition, topology_bonds)
+    large_context = large_amplitude_topology_context_from_arrays(
+        atomic_numbers=input_data.atomic_numbers,
+        coordinates_angstrom=coords_for_b,
+    )
     return gf_from_cartesian_hessian_and_gic_b_matrix(
         input_data.cartesian_hessian,
         np.asarray(b_matrix.rows, dtype=float),
@@ -303,6 +313,8 @@ def gf_from_hessian_input_and_gic_definition(
         cartesian_hessian_correction=cartesian_hessian_correction,
         cartesian_hessian_correction_label=cartesian_hessian_correction_label,
         coordinate_source=f"frozen-gic-definition:{definition.point_group}",
+        large_amplitude_frequency_cutoff_cm=large_amplitude_frequency_cutoff_cm,
+        large_amplitude_topology_context=large_context,
     )
 
 
@@ -316,14 +328,17 @@ def gf_from_hessian_input_and_xyzin(
     block_by_irrep: bool = False,
     cartesian_hessian_correction: np.ndarray | None = None,
     cartesian_hessian_correction_label: str = "NONE",
+    large_amplitude_frequency_cutoff_cm: float | None = None,
 ) -> InternalGFResult:
     """Run GF/PED using the frozen #GIC section stored in a MATRIX xyzin file."""
     input_data.validate()
     definition = read_gic_definition_from_xyzin(Path(xyzin_path))
+    coords_for_b = (
+        np.asarray(input_data.cartesian_coordinates_bohr, dtype=float) * BOHR_TO_ANGSTROM
+    )
     b_matrix = build_gic_b_matrix(
         definition,
-        coordinates_angstrom=np.asarray(input_data.cartesian_coordinates_bohr, dtype=float)
-        * BOHR_TO_ANGSTROM,
+        coordinates_angstrom=coords_for_b,
     )
     local_mask = None
     if local_options is not None and local_options.enabled:
@@ -331,6 +346,11 @@ def gf_from_hessian_input_and_xyzin(
             definition,
             topology_bonds_from_xyzin(Path(xyzin_path)),
         )
+    large_context = _large_amplitude_topology_context_from_xyzin(
+        Path(xyzin_path),
+        atomic_numbers=input_data.atomic_numbers,
+        coordinates_angstrom=coords_for_b,
+    )
     return gf_from_cartesian_hessian_and_gic_b_matrix(
         input_data.cartesian_hessian,
         np.asarray(b_matrix.rows, dtype=float),
@@ -348,6 +368,8 @@ def gf_from_hessian_input_and_xyzin(
         cartesian_hessian_correction=cartesian_hessian_correction,
         cartesian_hessian_correction_label=cartesian_hessian_correction_label,
         coordinate_source=f"xyzin-frozen-gic:{Path(xyzin_path)}",
+        large_amplitude_frequency_cutoff_cm=large_amplitude_frequency_cutoff_cm,
+        large_amplitude_topology_context=large_context,
     )
 
 
@@ -420,6 +442,31 @@ def gf_from_gaussian_fchk_with_matrix_gics(path: Path) -> InternalGFResult:
 gf_from_cartesian_hessian_and_oracle_gics = gf_from_cartesian_hessian_and_matrix_gics
 gf_from_hessian_input_with_oracle_gics = gf_from_hessian_input_with_matrix_gics
 gf_from_gaussian_fchk_with_oracle_gics = gf_from_gaussian_fchk_with_matrix_gics
+
+
+def _large_amplitude_topology_context_from_xyzin(
+    path: Path,
+    *,
+    atomic_numbers: np.ndarray,
+    coordinates_angstrom: np.ndarray,
+):
+    try:
+        from matrix_chem.link import gaussian_topology_overrides_from_xyzin
+
+        gaussian = gaussian_topology_overrides_from_xyzin(Path(path))
+    except Exception:
+        gaussian = {
+            "bond_orders": {},
+            "bond_order_source": "Topology Pauling continuous model",
+        }
+    return large_amplitude_topology_context_from_arrays(
+        atomic_numbers=atomic_numbers,
+        coordinates_angstrom=coordinates_angstrom,
+        bond_order_overrides=gaussian.get("bond_orders") or None,
+        bond_order_source=str(
+            gaussian.get("bond_order_source") or "Topology Pauling continuous model"
+        ),
+    )
 
 
 def topology_bonds_from_xyzin(path: Path) -> tuple[tuple[int, int], ...]:

@@ -13,6 +13,7 @@ from matrix_gf import (
     gf_scaling_preview_from_xyzin,
     gf_from_cartesian_hessian_and_gic_b_matrix,
     large_amplitude_analysis_from_gf_matrices,
+    LargeAmplitudeTopologyContext,
     nonbonded_cartesian_hessian_correction,
     pulay_scaling_factors,
     pulay_scaling_preview,
@@ -156,6 +157,88 @@ def test_large_amplitude_coupling_diagnostic_uses_both_f_and_g():
     assert g_block.relative_f_coupling_to_rest == pytest.approx(0.0)
     assert g_block.relative_g_coupling_to_rest == pytest.approx(0.25)
     assert g_block.relative_fg_coupling_to_rest == pytest.approx(0.25)
+
+
+def test_large_amplitude_dvr_plan_marks_active_torsion_periodicity_and_barrier():
+    context = LargeAmplitudeTopologyContext(
+        atomic_numbers=(6, 6, 1, 1, 1, 1, 1, 1),
+        bonds=((1, 2), (1, 3), (1, 4), (1, 5), (2, 6), (2, 7), (2, 8)),
+        bond_orders={(1, 2): 1.0},
+        synthon_signatures={
+            1: (6, False, 4, 4),
+            2: (6, False, 4, 4),
+            3: (1, False, 1, 1),
+            4: (1, False, 1, 1),
+            5: (1, False, 1, 1),
+            6: (1, False, 1, 1),
+            7: (1, False, 1, 1),
+            8: (1, False, 1, 1),
+        },
+        coordinates_angstrom=(
+            (0.0, 0.0, 0.0),
+            (1.5, 0.0, 0.0),
+            (-0.5, 1.0, 0.0),
+            (-0.5, -0.5, 0.866),
+            (-0.5, -0.5, -0.866),
+            (2.0, 1.0, 0.0),
+            (2.0, -0.5, 0.866),
+            (2.0, -0.5, -0.866),
+        ),
+    )
+    analysis = large_amplitude_analysis_from_gf_matrices(
+        force_constants=np.diag([0.009]),
+        g_matrix=np.eye(1),
+        frequencies_cm=np.asarray([100.0], dtype=float),
+        ped=np.asarray([[100.0]], dtype=float),
+        gic_labels=("GIC001 D(3,1,2,6)",),
+        gic_names=("A1Tors001",),
+        gic_irreps=("A1",),
+        frequency_cutoff_cm=1000.0,
+        topology_context=context,
+    )
+
+    assert analysis.coordinates[0].active is True
+    plan = analysis.dvr_candidates[0]
+    assert plan.status == "ACTIVE_TORSION_1D"
+    assert plan.central_bond == (1, 2)
+    assert plan.periodicity == 3
+    assert plan.force_constant_hartree == pytest.approx(0.009)
+    assert plan.fourier_amplitude_cm == pytest.approx(0.009 * 219474.6313705 / 9.0)
+    assert plan.barrier_cm == pytest.approx(2.0 * plan.fourier_amplitude_cm)
+
+
+def test_large_amplitude_dvr_plan_excludes_high_frequency_and_double_bond_torsions():
+    frequency_excluded = large_amplitude_analysis_from_gf_matrices(
+        force_constants=np.diag([1.0]),
+        g_matrix=np.eye(1),
+        frequencies_cm=np.asarray([1000.0], dtype=float),
+        ped=np.asarray([[100.0]], dtype=float),
+        gic_labels=("GIC001 D(3,1,2,4)",),
+        gic_names=("A1Tors001",),
+        gic_irreps=("A1",),
+        frequency_cutoff_cm=250.0,
+    )
+    assert frequency_excluded.coordinates[0].active is False
+    assert frequency_excluded.dvr_candidates[0].status == "EXCLUDED_FREQUENCY"
+
+    context = LargeAmplitudeTopologyContext(
+        atomic_numbers=(6, 6, 1, 1),
+        bonds=((1, 2), (1, 3), (2, 4)),
+        bond_orders={(1, 2): 1.8},
+        synthon_signatures={1: (6,), 2: (6,), 3: (1,), 4: (1,)},
+    )
+    double_bond = large_amplitude_analysis_from_gf_matrices(
+        force_constants=np.diag([0.001]),
+        g_matrix=np.eye(1),
+        frequencies_cm=np.asarray([100.0], dtype=float),
+        ped=np.asarray([[100.0]], dtype=float),
+        gic_labels=("GIC001 D(3,1,2,4)",),
+        gic_names=("A1Tors001",),
+        gic_irreps=("A1",),
+        frequency_cutoff_cm=1000.0,
+        topology_context=context,
+    )
+    assert double_bond.dvr_candidates[0].status == "EXCLUDED_HIGH_BOND_ORDER"
 
 
 def test_gf_rejects_cross_irrep_couplings_when_symmetry_blocks_requested():

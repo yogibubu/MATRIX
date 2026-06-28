@@ -532,6 +532,12 @@ def build_parser(
     gf.add_argument(
         "--force-threshold", type=float, help="Zero internal force constants below threshold"
     )
+    gf.add_argument(
+        "--large-amplitude-frequency-cutoff-cm",
+        type=float,
+        default=250.0,
+        help="Mark large-amplitude candidates active only below this local GF frequency",
+    )
     gf.add_argument("--no-write-section", action="store_true", help="Do not update #GF_PED")
     gf.add_argument(
         "--subtract-electrostatic",
@@ -1793,6 +1799,7 @@ def main(
                 subtract_electrostatic=args.subtract_electrostatic,
                 subtract_uff_vdw=args.subtract_uff_vdw,
                 nonbonded_14_scale=args.nonbonded_14_scale,
+                large_amplitude_frequency_cutoff_cm=args.large_amplitude_frequency_cutoff_cm,
             )
             prefix = "gic_gf"
             source_kind = "xyzin"
@@ -1810,6 +1817,7 @@ def main(
                 subtract_electrostatic=args.subtract_electrostatic,
                 subtract_uff_vdw=args.subtract_uff_vdw,
                 nonbonded_14_scale=args.nonbonded_14_scale,
+                large_amplitude_frequency_cutoff_cm=args.large_amplitude_frequency_cutoff_cm,
             )
             prefix = "gic_gf"
             source_kind = "fchk"

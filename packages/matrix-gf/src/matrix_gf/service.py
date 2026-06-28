@@ -142,6 +142,7 @@ def run_xyzin_gf_report_from_fchk(
     subtract_electrostatic: bool = False,
     subtract_uff_vdw: bool = False,
     nonbonded_14_scale: float = 0.5,
+    large_amplitude_frequency_cutoff_cm: float | None = 250.0,
 ) -> GFReport:
     """Run the frozen-xyzin GF branch from a Cartesian Hessian FCHK adapter."""
     path = Path(fchk_path)
@@ -160,6 +161,7 @@ def run_xyzin_gf_report_from_fchk(
         subtract_electrostatic=subtract_electrostatic,
         subtract_uff_vdw=subtract_uff_vdw,
         nonbonded_14_scale=nonbonded_14_scale,
+        large_amplitude_frequency_cutoff_cm=large_amplitude_frequency_cutoff_cm,
     )
 
 
@@ -175,6 +177,7 @@ def run_xyzin_gf_report_from_xyzin(
     subtract_electrostatic: bool = False,
     subtract_uff_vdw: bool = False,
     nonbonded_14_scale: float = 0.5,
+    large_amplitude_frequency_cutoff_cm: float | None = 250.0,
 ) -> GFReport:
     """Run GF from frozen #GIC and #CARTESIAN_HESSIAN sections in one xyzin."""
     xyzin = Path(xyzin_path)
@@ -193,6 +196,7 @@ def run_xyzin_gf_report_from_xyzin(
         subtract_electrostatic=subtract_electrostatic,
         subtract_uff_vdw=subtract_uff_vdw,
         nonbonded_14_scale=nonbonded_14_scale,
+        large_amplitude_frequency_cutoff_cm=large_amplitude_frequency_cutoff_cm,
     )
 
 
@@ -211,6 +215,7 @@ def _run_xyzin_gf_report_from_hessian_input(
     subtract_electrostatic: bool = False,
     subtract_uff_vdw: bool = False,
     nonbonded_14_scale: float = 0.5,
+    large_amplitude_frequency_cutoff_cm: float | None = 250.0,
 ) -> GFReport:
     xyzin = Path(xyzin)
     definition = read_gic_definition_from_xyzin(xyzin)
@@ -258,6 +263,7 @@ def _run_xyzin_gf_report_from_hessian_input(
         block_by_irrep=block_by_irrep,
         cartesian_hessian_correction=correction,
         cartesian_hessian_correction_label=correction_label,
+        large_amplitude_frequency_cutoff_cm=large_amplitude_frequency_cutoff_cm,
     )
     frequency_comparison = _frequency_comparison(
         result.frequencies_cm,
@@ -336,7 +342,8 @@ def format_gf_report(
         )
         lines.append(
             "Large-amplitude GIC subspace: "
-            f"coordinates={large.coordinate_count} families={family_counts}"
+            f"coordinates={large.coordinate_count} active={large.active_coordinate_count} "
+            f"frequency_cutoff_cm={large.frequency_cutoff_cm} families={family_counts}"
         )
         lines.append("Large-amplitude block GF frequencies (cm-1; no projection):")
         for block in large.blocks:
@@ -349,6 +356,26 @@ def format_gf_report(
                 f"Gcouple={block.max_g_coupling_to_rest:.6g} "
                 f"FGrel={block.relative_fg_coupling_to_rest:.6g}"
             )
+        dvr_ready = [
+            item
+            for item in large.dvr_candidates
+            if item.status in {"ACTIVE_TORSION_1D", "ACTIVE_COUPLED_DVR", "ACTIVE_BLOCK_DVR"}
+        ]
+        if dvr_ready:
+            lines.append("Large-amplitude DVR plan:")
+            for item in dvr_ready:
+                fields = [
+                    f"GIC{item.index:03d}",
+                    item.family,
+                    item.status,
+                    f"freq={item.frequency_cm:.3f}" if item.frequency_cm is not None else "freq=NA",
+                    f"FGrel={item.fg_coupling_to_rest:.6g}",
+                ]
+                if item.periodicity is not None:
+                    fields.append(f"period={item.periodicity}")
+                if item.barrier_cm is not None:
+                    fields.append(f"barrier={item.barrier_cm:.3f} cm-1")
+                lines.append("  " + " ".join(fields))
         dominant = [item for item in large.mode_contributions if item.ped_percent >= 50.0]
         if dominant:
             lines.append("Large-amplitude dominated GF modes (PED >= 50%):")
@@ -965,13 +992,18 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
     large = result.large_amplitude
     if large is None:
         return {}
-    coordinate_rows = [["gic", "name", "irrep", "family", "label"]]
+    coordinate_rows = [
+        ["gic", "name", "irrep", "family", "local_frequency_cm-1", "active", "status", "label"]
+    ]
     coordinate_rows.extend(
         [
             f"GIC{coordinate.index:03d}",
             coordinate.name,
             coordinate.irrep,
             coordinate.family,
+            "" if coordinate.local_frequency_cm is None else f"{coordinate.local_frequency_cm:.10g}",
+            int(coordinate.active),
+            coordinate.status,
             coordinate.label,
         ]
         for coordinate in large.coordinates
@@ -1010,8 +1042,46 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
         [item.mode, f"{item.frequency_cm:.10g}", f"{item.ped_percent:.10g}"]
         for item in large.mode_contributions
     )
+    dvr_rows = [
+        [
+            "gic",
+            "name",
+            "irrep",
+            "family",
+            "status",
+            "frequency_cm-1",
+            "fg_coupling_to_rest",
+            "central_bond",
+            "periodicity",
+            "minimum_rad",
+            "force_constant_hartree",
+            "fourier_amplitude_cm-1",
+            "barrier_cm-1",
+            "reason",
+        ]
+    ]
+    dvr_rows.extend(
+        [
+            f"GIC{item.index:03d}",
+            item.name,
+            item.irrep,
+            item.family,
+            item.status,
+            "" if item.frequency_cm is None else f"{item.frequency_cm:.10g}",
+            f"{item.fg_coupling_to_rest:.10g}",
+            "" if item.central_bond is None else f"{item.central_bond[0]}-{item.central_bond[1]}",
+            "" if item.periodicity is None else item.periodicity,
+            "" if item.minimum_rad is None else f"{item.minimum_rad:.10g}",
+            "" if item.force_constant_hartree is None else f"{item.force_constant_hartree:.10g}",
+            "" if item.fourier_amplitude_cm is None else f"{item.fourier_amplitude_cm:.10g}",
+            "" if item.barrier_cm is None else f"{item.barrier_cm:.10g}",
+            item.reason,
+        ]
+        for item in large.dvr_candidates
+    )
     return {
         "large_amplitude_coordinates.csv": _csv_text(coordinate_rows),
         "large_amplitude_blocks.csv": _csv_text(block_rows),
         "large_amplitude_mode_ped.csv": _csv_text(mode_rows),
+        "large_amplitude_dvr_plan.csv": _csv_text(dvr_rows),
     }
