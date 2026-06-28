@@ -375,6 +375,8 @@ def format_gf_report(
                     fields.append(f"period={item.periodicity}")
                 if item.barrier_cm is not None:
                     fields.append(f"barrier={item.barrier_cm:.3f} cm-1")
+                if item.g_inverse_diagonal is not None:
+                    fields.append(f"Ginvii={item.g_inverse_diagonal:.6g}")
                 lines.append("  " + " ".join(fields))
         dominant = [item for item in large.mode_contributions if item.ped_percent >= 50.0]
         if dominant:
@@ -551,6 +553,9 @@ def gf_csv_tables(report: GFReport) -> dict[str, str]:
         "g_matrix.csv": _csv_text(_square_gic_table(report.result.g_matrix, report.result)),
     }
     if report.result.large_amplitude is not None:
+        g_inverse = np.asarray(report.result.large_amplitude.g_inverse, dtype=float)
+        if g_inverse.shape == report.result.g_matrix.shape:
+            tables["g_inverse.csv"] = _csv_text(_square_gic_table(g_inverse, report.result))
         tables.update(_large_amplitude_csv_tables(report.result))
     if report.frequency_comparison is not None:
         tables["frequency_comparison.csv"] = _csv_text(
@@ -1057,6 +1062,8 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
             "force_constant_hartree",
             "fourier_amplitude_cm-1",
             "barrier_cm-1",
+            "g_inverse_diagonal",
+            "g_inverse_source",
             "reason",
         ]
     ]
@@ -1075,6 +1082,8 @@ def _large_amplitude_csv_tables(result: InternalGFResult) -> dict[str, str]:
             "" if item.force_constant_hartree is None else f"{item.force_constant_hartree:.10g}",
             "" if item.fourier_amplitude_cm is None else f"{item.fourier_amplitude_cm:.10g}",
             "" if item.barrier_cm is None else f"{item.barrier_cm:.10g}",
+            "" if item.g_inverse_diagonal is None else f"{item.g_inverse_diagonal:.10g}",
+            item.g_inverse_source,
             item.reason,
         ]
         for item in large.dvr_candidates

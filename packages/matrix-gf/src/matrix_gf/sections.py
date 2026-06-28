@@ -85,6 +85,8 @@ class GFLargeAmplitudeDVRPlanRow:
     force_constant_hartree: float | None = None
     fourier_amplitude_cm: float | None = None
     barrier_cm: float | None = None
+    g_inverse_diagonal: float | None = None
+    g_inverse_source: str = ""
     reason: str = ""
 
 
@@ -233,6 +235,8 @@ def gf_ped_section_from_report(
                 force_constant_hartree=_section_float(item.force_constant_hartree),
                 fourier_amplitude_cm=_section_float(item.fourier_amplitude_cm),
                 barrier_cm=_section_float(item.barrier_cm),
+                g_inverse_diagonal=_section_float(item.g_inverse_diagonal),
+                g_inverse_source=item.g_inverse_source,
                 reason=item.reason,
             )
             for item in large.dvr_candidates
@@ -381,6 +385,8 @@ def gf_ped_section_lines(section: GFPEDSection) -> list[str]:
                 f"F_HARTREE={_format_optional_float(row.force_constant_hartree)} "
                 f"FOURIER_AMPLITUDE_CM-1={_format_optional_float(row.fourier_amplitude_cm)} "
                 f"BARRIER_CM-1={_format_optional_float(row.barrier_cm)} "
+                f"G_INV_DIAG={_format_optional_float(row.g_inverse_diagonal)} "
+                f"G_INV_SOURCE={row.g_inverse_source or 'NA'} "
                 f"REASON={row.reason or 'NA'}"
             )
     else:
@@ -621,6 +627,8 @@ def _parse_large_amplitude_dvr_plan_line(line: str) -> GFLargeAmplitudeDVRPlanRo
         force_constant_hartree=_optional_float(fields.get("F_HARTREE")),
         fourier_amplitude_cm=_optional_float(fields.get("FOURIER_AMPLITUDE_CM-1")),
         barrier_cm=_optional_float(fields.get("BARRIER_CM-1")),
+        g_inverse_diagonal=_optional_float(fields.get("G_INV_DIAG")),
+        g_inverse_source="" if fields.get("G_INV_SOURCE", "NA") == "NA" else fields.get("G_INV_SOURCE", ""),
         reason=fields.get("REASON", ""),
     )
 

@@ -205,6 +205,39 @@ def test_large_amplitude_dvr_plan_marks_active_torsion_periodicity_and_barrier()
     assert plan.force_constant_hartree == pytest.approx(0.009)
     assert plan.fourier_amplitude_cm == pytest.approx(0.009 * 219474.6313705 / 9.0)
     assert plan.barrier_cm == pytest.approx(2.0 * plan.fourier_amplitude_cm)
+    assert plan.g_inverse_diagonal == pytest.approx(1.0)
+    assert plan.g_inverse_source == "G_INVERSE"
+    assert analysis.g_inverse == ((1.0,),)
+    assert analysis.g_inverse_source == "G_INVERSE"
+
+
+def test_large_amplitude_dvr_plan_uses_global_g_inverse_diagonal():
+    g_matrix = np.asarray(
+        [
+            [2.0, 0.5, 0.4],
+            [0.5, 1.5, 0.0],
+            [0.4, 0.0, 1.0],
+        ],
+        dtype=float,
+    )
+    analysis = large_amplitude_analysis_from_gf_matrices(
+        force_constants=np.diag([0.001, 0.002, 1.0]),
+        g_matrix=g_matrix,
+        frequencies_cm=np.asarray([80.0, 120.0, 1000.0], dtype=float),
+        ped=np.asarray([[100.0, 0.0, 0.0], [0.0, 100.0, 0.0], [0.0, 0.0, 100.0]]),
+        gic_labels=("GIC001 D(1,2,3,4)", "GIC002 D(5,2,3,6)", "GIC003 R(2,3)"),
+        gic_names=("A1Tors001", "A2Tors002", "A1Str001"),
+        gic_irreps=("A1", "A2", "A1"),
+        frequency_cutoff_cm=1000.0,
+    )
+
+    full_inverse = np.linalg.inv(g_matrix)
+    torsion_subblock_inverse = np.linalg.inv(g_matrix[:2, :2])
+    plan = analysis.dvr_candidates[0]
+
+    assert plan.g_inverse_diagonal == pytest.approx(full_inverse[0, 0])
+    assert plan.g_inverse_diagonal != pytest.approx(torsion_subblock_inverse[0, 0])
+    assert analysis.g_inverse[0][0] == pytest.approx(full_inverse[0, 0])
 
 
 def test_large_amplitude_dvr_plan_excludes_high_frequency_and_double_bond_torsions():

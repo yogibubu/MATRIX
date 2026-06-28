@@ -12,6 +12,7 @@ from .harmonic import CM_PER_HARTREE, solve_wilson_gf
 DEFAULT_LARGE_AMPLITUDE_FREQUENCY_CUTOFF_CM = 250.0
 DEFAULT_LARGE_AMPLITUDE_FG_COUPLING_TOLERANCE = 0.05
 DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD = 1.45
+DEFAULT_G_INVERSE_RCOND = 1.0e-12
 DEFAULT_LARGE_AMPLITUDE_FAMILIES = (
     "torsion",
     "ring_puckering",
@@ -104,6 +105,8 @@ class LargeAmplitudeDVRCandidate:
     force_constant_hartree: float | None = None
     fourier_amplitude_cm: float | None = None
     barrier_cm: float | None = None
+    g_inverse_diagonal: float | None = None
+    g_inverse_source: str = ""
     reason: str = ""
 
 
@@ -113,6 +116,8 @@ class GFLargeAmplitudeAnalysis:
     blocks: tuple[LargeAmplitudeBlock, ...]
     mode_contributions: tuple[LargeAmplitudeModeContribution, ...]
     dvr_candidates: tuple[LargeAmplitudeDVRCandidate, ...] = ()
+    g_inverse: tuple[tuple[float, ...], ...] = ()
+    g_inverse_source: str = ""
     families: tuple[str, ...] = DEFAULT_LARGE_AMPLITUDE_FAMILIES
     frequency_cutoff_cm: float | None = DEFAULT_LARGE_AMPLITUDE_FREQUENCY_CUTOFF_CM
     fg_coupling_tolerance: float = DEFAULT_LARGE_AMPLITUDE_FG_COUPLING_TOLERANCE
@@ -176,6 +181,7 @@ def large_amplitude_analysis_from_gf_matrices(
     if f_mat.shape != g_mat.shape or f_mat.ndim != 2 or f_mat.shape[0] != f_mat.shape[1]:
         raise ValueError("large-amplitude analysis needs square F/G matrices of the same shape")
     ncoord = f_mat.shape[0]
+    g_inverse, g_inverse_source = _invert_g_matrix(g_mat)
     names = _padded(gic_names, ncoord)
     irreps = _padded(gic_irreps, ncoord, fill="UNK")
     labels = _padded(gic_labels, ncoord)
@@ -246,6 +252,8 @@ def large_amplitude_analysis_from_gf_matrices(
             coordinate,
             force_constants=f_mat,
             g_matrix=g_mat,
+            g_inverse=g_inverse,
+            g_inverse_source=g_inverse_source,
             topology_context=topology_context,
             fg_coupling_tolerance=fg_coupling_tolerance,
         )
@@ -256,6 +264,8 @@ def large_amplitude_analysis_from_gf_matrices(
         blocks=tuple(blocks),
         mode_contributions=tuple(mode_contributions),
         dvr_candidates=dvr_candidates,
+        g_inverse=tuple(tuple(float(value) for value in row) for row in g_inverse),
+        g_inverse_source=g_inverse_source,
         families=selected_families,
         frequency_cutoff_cm=frequency_cutoff_cm,
         fg_coupling_tolerance=float(fg_coupling_tolerance),
@@ -331,6 +341,8 @@ def _dvr_candidate(
     *,
     force_constants: np.ndarray,
     g_matrix: np.ndarray,
+    g_inverse: np.ndarray,
+    g_inverse_source: str,
     topology_context: LargeAmplitudeTopologyContext | None,
     fg_coupling_tolerance: float,
 ) -> LargeAmplitudeDVRCandidate:
@@ -338,75 +350,55 @@ def _dvr_candidate(
     _f_coupling, f_relative = _coupling_to_rest(force_constants, (index0,))
     _g_coupling, g_relative = _coupling_to_rest(g_matrix, (index0,))
     fg_relative = max(f_relative, g_relative)
+    base = {
+        "index": coordinate.index,
+        "name": coordinate.name,
+        "irrep": coordinate.irrep,
+        "family": coordinate.family,
+        "frequency_cm": coordinate.local_frequency_cm,
+        "fg_coupling_to_rest": fg_relative,
+        "g_inverse_diagonal": _g_inverse_diagonal(g_inverse, index0),
+        "g_inverse_source": g_inverse_source,
+    }
     if not coordinate.active:
         return LargeAmplitudeDVRCandidate(
-            index=coordinate.index,
-            name=coordinate.name,
-            irrep=coordinate.irrep,
-            family=coordinate.family,
+            **base,
             status=coordinate.status,
-            frequency_cm=coordinate.local_frequency_cm,
-            fg_coupling_to_rest=fg_relative,
             reason=coordinate.status,
         )
     if coordinate.family != "torsion":
         return LargeAmplitudeDVRCandidate(
-            index=coordinate.index,
-            name=coordinate.name,
-            irrep=coordinate.irrep,
-            family=coordinate.family,
+            **base,
             status="ACTIVE_BLOCK_DVR",
-            frequency_cm=coordinate.local_frequency_cm,
-            fg_coupling_to_rest=fg_relative,
             reason="NON_TORSIONAL_LARGE_AMPLITUDE",
         )
     torsions = _torsion_terms(f"{coordinate.name} {coordinate.label}")
     if not torsions:
         return LargeAmplitudeDVRCandidate(
-            index=coordinate.index,
-            name=coordinate.name,
-            irrep=coordinate.irrep,
-            family=coordinate.family,
+            **base,
             status="ACTIVE_TORSION_NO_PRIMITIVE",
-            frequency_cm=coordinate.local_frequency_cm,
-            fg_coupling_to_rest=fg_relative,
             reason="NO_D_PRIMITIVE_LABEL",
         )
     central_bonds = tuple(dict.fromkeys(_pair_key(term[1], term[2]) for term in torsions))
     if len(central_bonds) != 1:
         return LargeAmplitudeDVRCandidate(
-            index=coordinate.index,
-            name=coordinate.name,
-            irrep=coordinate.irrep,
-            family=coordinate.family,
+            **base,
             status="ACTIVE_COUPLED_TORSIONS",
-            frequency_cm=coordinate.local_frequency_cm,
-            fg_coupling_to_rest=fg_relative,
             reason="MULTIPLE_CENTRAL_BONDS",
         )
     central_bond = central_bonds[0]
     if topology_context is None:
         return LargeAmplitudeDVRCandidate(
-            index=coordinate.index,
-            name=coordinate.name,
-            irrep=coordinate.irrep,
-            family=coordinate.family,
+            **base,
             status="PENDING_TOPOLOGY",
-            frequency_cm=coordinate.local_frequency_cm,
-            fg_coupling_to_rest=fg_relative,
             central_bond=central_bond,
             reason="NO_TOPOLOGY_CONTEXT",
         )
     bond_order = topology_context.bond_order(*central_bond)
     if bond_order is not None and bond_order >= DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD:
         return LargeAmplitudeDVRCandidate(
-            index=coordinate.index,
-            name=coordinate.name,
-            irrep=coordinate.irrep,
-            family=coordinate.family,
+            **base,
             status="EXCLUDED_HIGH_BOND_ORDER",
-            frequency_cm=coordinate.local_frequency_cm,
-            fg_coupling_to_rest=fg_relative,
             central_bond=central_bond,
             reason=f"BOND_ORDER_GE_{DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD:g}",
         )
@@ -414,13 +406,8 @@ def _dvr_candidate(
     minimum_rad = _torsion_minimum_rad(topology_context, torsions[0])
     if fg_relative > float(fg_coupling_tolerance):
         return LargeAmplitudeDVRCandidate(
-            index=coordinate.index,
-            name=coordinate.name,
-            irrep=coordinate.irrep,
-            family=coordinate.family,
+            **base,
             status="ACTIVE_COUPLED_DVR",
-            frequency_cm=coordinate.local_frequency_cm,
-            fg_coupling_to_rest=fg_relative,
             central_bond=central_bond,
             periodicity=periodicity,
             minimum_rad=minimum_rad,
@@ -429,13 +416,8 @@ def _dvr_candidate(
     force_constant = float(force_constants[index0, index0])
     if force_constant <= 0.0:
         return LargeAmplitudeDVRCandidate(
-            index=coordinate.index,
-            name=coordinate.name,
-            irrep=coordinate.irrep,
-            family=coordinate.family,
+            **base,
             status="ACTIVE_TORSION_UNSTABLE",
-            frequency_cm=coordinate.local_frequency_cm,
-            fg_coupling_to_rest=fg_relative,
             central_bond=central_bond,
             periodicity=periodicity,
             minimum_rad=minimum_rad,
@@ -444,13 +426,8 @@ def _dvr_candidate(
         )
     amplitude_cm = force_constant * CM_PER_HARTREE / float(periodicity * periodicity)
     return LargeAmplitudeDVRCandidate(
-        index=coordinate.index,
-        name=coordinate.name,
-        irrep=coordinate.irrep,
-        family=coordinate.family,
+        **base,
         status="ACTIVE_TORSION_1D",
-        frequency_cm=coordinate.local_frequency_cm,
-        fg_coupling_to_rest=fg_relative,
         central_bond=central_bond,
         periodicity=periodicity,
         minimum_rad=minimum_rad,
@@ -459,6 +436,29 @@ def _dvr_candidate(
         barrier_cm=2.0 * amplitude_cm,
         reason="ONE_TERM_FOURIER",
     )
+
+
+def _invert_g_matrix(g_matrix: np.ndarray) -> tuple[np.ndarray, str]:
+    values = np.asarray(g_matrix, dtype=float)
+    symmetric = 0.5 * (values + values.T)
+    try:
+        inverse = np.linalg.inv(symmetric)
+        source = "G_INVERSE"
+        if not np.all(np.isfinite(inverse)):
+            raise np.linalg.LinAlgError("non-finite inverse")
+    except np.linalg.LinAlgError:
+        inverse = np.linalg.pinv(symmetric, rcond=DEFAULT_G_INVERSE_RCOND)
+        source = "G_PSEUDOINVERSE"
+    return 0.5 * (inverse + inverse.T), source
+
+
+def _g_inverse_diagonal(g_inverse: np.ndarray, index: int) -> float | None:
+    if index < 0 or index >= g_inverse.shape[0]:
+        return None
+    value = float(g_inverse[index, index])
+    if not math.isfinite(value):
+        return None
+    return value
 
 
 def _local_coordinate_frequency_cm(
