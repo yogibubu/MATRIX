@@ -78,6 +78,7 @@ jobs:
               "matrix_vpt2_vci",
               "matrix_morpheus",
               "matrix_oracle",
+              "matrix_orca",
           )
           for module in modules:
               importlib.import_module(module)

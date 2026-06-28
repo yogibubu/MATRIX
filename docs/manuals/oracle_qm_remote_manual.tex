@@ -1,0 +1,332 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{cmap}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+
+\hypersetup{
+  hidelinks,
+  pdftitle={MATRIX Remote QM Execution on oracle},
+  pdfauthor={MATRIX Development Team}
+}
+
+\definecolor{MatrixBlue}{HTML}{245C73}
+\definecolor{MatrixSlate}{HTML}{4A5561}
+\definecolor{MatrixGold}{HTML}{C88A2D}
+\definecolor{MatrixBg}{HTML}{F7F8F6}
+\emergencystretch=2em
+
+\lstdefinestyle{matrix}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  rulecolor=\color{MatrixSlate!45},
+  backgroundcolor=\color{MatrixBg},
+  xleftmargin=0.5em,
+  xrightmargin=0.5em
+}
+
+\newcommand{\framework}{\texttt{MATRIX}}
+\newcommand{\host}{\texttt{oracle}}
+\newcommand{\xyzin}{\texttt{xyzin}}
+
+\title{\textbf{MATRIX Remote QM Execution on oracle}\\
+\large Running Gaussian, Molpro and ORCA jobs for MATRIX workflows}
+\author{MATRIX Development Notes}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This manual describes the operational contract for running external quantum
+chemistry programs on the private Linux host \host{} and bringing the completed
+results back into \framework{}.  The remote machine is used only for execution
+of heavy QM jobs.  \framework{} remains the owner of the molecular state,
+shared \xyzin{} sections, generated Gaussian GIC inputs and normalized
+post-processing through the single QM-adapter layer.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Scope}
+
+The \host{} machine is intended for long background calculations with Gaussian,
+Molpro and ORCA.  It is not a replacement for the local \framework{} source
+tree and it must not become a second set of parsers.  The normal workflow is:
+
+\begin{enumerate}
+  \item prepare or validate the molecule locally with \framework{};
+  \item generate the QM input locally when \framework{} owns the input format,
+        for example Gaussian ReadAllGIC files from frozen NEO/GICForge data;
+  \item copy the input file to \host{};
+  \item submit the job in the remote \texttt{\textasciitilde/matrix} work area;
+  \item copy completed logs, checkpoint-derived files or Molden files back;
+  \item promote the output through the corresponding \framework{} adapter into
+        shared \xyzin{} sections.
+\end{enumerate}
+
+Passwords, personal credentials and site-specific secrets must not be written
+in the repository, in job inputs or in shell scripts.  Use the interactive SSH
+prompt or a normal SSH key managed outside the repository.
+
+\section{Remote Directory Layout}
+
+The remote execution area is \texttt{\textasciitilde/matrix}.  The following
+subdirectories have fixed meanings:
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.25\linewidth}
+  >{\raggedright\arraybackslash}p{0.65\linewidth}}
+\toprule
+Directory & Purpose \\
+\midrule
+\texttt{\textasciitilde/matrix/bin} & MATRIX helper scripts on the remote host. \\
+\texttt{\textasciitilde/matrix/inputs} & Input files copied from the local workstation. \\
+\texttt{\textasciitilde/matrix/jobs} & Per-job working directories created by the submit helper. \\
+\texttt{\textasciitilde/matrix/logs} & Lightweight submit logs and redirected program output. \\
+\texttt{\textasciitilde/matrix/outputs} & Optional collection area for selected final products. \\
+\texttt{\textasciitilde/matrix/repo} & Optional clone or mirror of MATRIX when needed for tests. \\
+\texttt{\textasciitilde/matrix/scratch} & MATRIX-owned scratch area; large Gaussian scratch is controlled separately. \\
+\bottomrule
+\end{longtable}
+
+Gaussian scratch is configured through \texttt{GAUSS\_SCRDIR}.  The current
+policy is to keep large Gaussian scratch under the local scratch filesystem
+configured on \host{}, not inside the Git repository.
+
+\section{Environment}
+
+The login shell on \host{} sources \texttt{\textasciitilde/.matrix\_env.sh}
+from both \texttt{\textasciitilde/.bashrc} and, when available,
+\texttt{\textasciitilde/.zshrc}.  The environment file is intentionally narrow:
+it exposes only the production Gaussian choices and the supported module stack.
+
+\begin{lstlisting}[style=matrix]
+setgau gdv32
+setgau g16
+module load molpro/2025.3
+module load orca/6.1.1
+\end{lstlisting}
+
+Older GDV variants are disabled for MATRIX use.  Jobs must use only
+\texttt{gdv32} or \texttt{g16}.  Do not source historical external-code
+environments such as \texttt{elecext-env}, \texttt{External} or
+\texttt{RunGauExternal}; they are outside the MATRIX execution contract.
+
+Useful checks after login are:
+
+\begin{lstlisting}[style=matrix]
+command -v gdv
+command -v g16
+command -v molpro
+command -v orca
+module list
+echo "$GAUSS_SCRDIR"
+\end{lstlisting}
+
+The expected Molpro version for this machine is Molpro 2025.3.  If
+\texttt{module load molpro/2025.3} stops working, treat that as an environment
+configuration problem and do not silently fall back to an older Molpro module.
+
+\section{Direct Program Commands}
+
+The direct commands are useful for small checks and for debugging the
+environment.
+
+\subsection{Gaussian GDV32}
+
+\begin{lstlisting}[style=matrix]
+setgau gdv32
+gdv32run molecule.gjf
+\end{lstlisting}
+
+Use GDV32 for Gaussian jobs that need the current group-specific Gaussian
+features.  For MATRIX-generated ReadAllGIC optimizations, the Gaussian route
+must use \texttt{Opt=ReadAllGIC}; for single-point jobs with a GIC geometry
+read, use the corresponding \texttt{Geom} form.  MATRIX symmetrizes the GICs
+itself, so Gaussian-side automatic GIC symmetrization should not be requested.
+
+\subsection{Gaussian G16}
+
+\begin{lstlisting}[style=matrix]
+setgau g16
+g16run molecule.gjf
+\end{lstlisting}
+
+Use G16 when the job does not need GDV32-specific behavior.  The same MATRIX
+adapter policy applies: logs, FCHK files and QFF data are copied back and then
+promoted through \texttt{matrix gaussian ...} commands.
+
+\subsection{Molpro}
+
+\begin{lstlisting}[style=matrix]
+module load molpro/2025.3
+molpro molecule.com
+\end{lstlisting}
+
+Molpro outputs enter MATRIX through the Molpro adapter.  Downstream tools
+should consume the promoted \xyzin{} sections and must not parse Molpro text
+privately.
+
+\subsection{ORCA}
+
+\begin{lstlisting}[style=matrix]
+module load orca/6.1.1
+orca molecule.inp > molecule.out
+\end{lstlisting}
+
+ORCA calculations can be launched on \host{} for electronic-structure data and
+future MATRIX adapters.  Until a given ORCA output quantity is normalized into
+a shared \xyzin{} section, scientific MATRIX tools should not depend on
+tool-local ORCA parsing.
+
+\section{Background Submission}
+
+For production use, prefer the lightweight MATRIX submit helpers installed in
+\texttt{\textasciitilde/matrix/bin}.  The source version of the submit helper
+is stored in the MATRIX repository as
+\path{scripts/remote/oracle/matrix-submit}.  It creates one working
+directory per job, records the native program output, exposes a stable log
+link in \texttt{\textasciitilde/matrix/logs} and keeps a small metadata file
+with the command and process id.
+
+\begin{lstlisting}[style=matrix]
+matrix-submit gdv32 ~/matrix/inputs/molecule.gjf
+matrix-submit g16 ~/matrix/inputs/molecule.gjf
+matrix-submit molpro ~/matrix/inputs/molecule.com
+matrix-submit orca ~/matrix/inputs/molecule.inp
+\end{lstlisting}
+
+Monitor jobs with:
+
+\begin{lstlisting}[style=matrix]
+matrix-status
+matrix-tail 20260628-101010-gdv32-molecule
+matrix-tail ~/matrix/logs/20260628-101010-gdv32-molecule.log
+\end{lstlisting}
+
+\texttt{matrix-submit} is a background wrapper based on ordinary Unix process
+management.  It is not a queueing system.  It is appropriate for this private
+machine, but it does not implement resource accounting, priorities or node
+scheduling.  Each job writes \texttt{metadata.txt}; the fields
+\texttt{log}, \texttt{native\_output} and \texttt{stdout} distinguish the
+stable log link, the scientific program output in the work directory and any
+launcher stdout/stderr stream.
+
+\section{Copying Files}
+
+Copy inputs from the local workstation to the remote input directory:
+
+\begin{lstlisting}[style=matrix]
+scp molecule.gjf enzo@oracle:~/matrix/inputs/
+scp molecule.com enzo@oracle:~/matrix/inputs/
+scp molecule.inp enzo@oracle:~/matrix/inputs/
+\end{lstlisting}
+
+Submit remotely:
+
+\begin{lstlisting}[style=matrix]
+ssh enzo@oracle 'matrix-submit gdv32 ~/matrix/inputs/molecule.gjf'
+ssh enzo@oracle 'matrix-submit molpro ~/matrix/inputs/molecule.com'
+\end{lstlisting}
+
+After the run, copy back the files needed by MATRIX adapters.  The safest
+target is the \texttt{native\_output} path recorded in
+\texttt{metadata.txt}; for Gaussian this is normally a \texttt{.log}, for
+Molpro a \texttt{.out} and for ORCA a \texttt{.out}.
+
+\begin{lstlisting}[style=matrix]
+scp enzo@oracle:~/matrix/jobs/JOB_NAME/molecule.log .
+scp enzo@oracle:~/matrix/jobs/JOB_NAME/molecule.fchk .
+scp enzo@oracle:~/matrix/jobs/JOB_NAME/molecule.out .
+\end{lstlisting}
+
+Use the actual job directory name printed by \texttt{matrix-submit} or listed
+by \texttt{matrix-status}.  Keep large scratch files remote unless they are
+needed for a specific adapter or viewer.
+
+\section{Returning Results To MATRIX}
+
+The completed QM output must be normalized before GF/PED, MORPHEUS,
+VPT2/VCI, DVR, spectroscopy or GUI tools consume it.  Typical local commands
+after copying files back are:
+
+\begin{lstlisting}[style=matrix]
+matrix gaussian promote-fchk molecule.fchk molecule.xyzin
+matrix gaussian promote-log-hessian molecule.log molecule.xyzin
+matrix gaussian promote-rovib molecule.log molecule.xyzin
+matrix gaussian promote-electronic molecule.log molecule.xyzin
+matrix molpro promote-output molecule.out molecule.xyzin
+\end{lstlisting}
+
+For Gaussian ReadAllGIC optimization checks, keep the coordinate definition and
+the completed Gaussian result separate:
+
+\begin{itemize}
+  \item the frozen MATRIX \texttt{\#GIC} section is the authoritative
+        coordinate source;
+  \item the Gaussian input is only an external representation of those GICs;
+  \item the Gaussian log supplies the final optimized geometry, Hessian and
+        normal modes;
+  \item GF/PED must rebuild B rows from the frozen MATRIX GIC definition on
+        the final log geometry.
+\end{itemize}
+
+This avoids accidentally trusting a hand-edited or Gaussian-modified input
+block as the scientific coordinate definition.
+
+\section{Troubleshooting}
+
+\begin{longtable}{
+  >{\raggedright\arraybackslash}p{0.33\linewidth}
+  >{\raggedright\arraybackslash}p{0.57\linewidth}}
+\toprule
+Problem & Checks \\
+\midrule
+Gaussian command not found &
+Run \texttt{setgau gdv32}, then \texttt{command -v gdv}.  For standard Gaussian
+run \texttt{setgau g16}, then \texttt{command -v g16}. \\
+Wrong Gaussian executable &
+Use only \texttt{gdv32} or \texttt{g16}.  Do not use older GDV aliases. \\
+Molpro unavailable &
+Run \texttt{module load molpro/2025.3} and \texttt{molpro --version}. \\
+ORCA unavailable &
+Run \texttt{module load orca/6.1.1} and \texttt{command -v orca}. \\
+No live output &
+Use \texttt{matrix-tail JOB\_NAME} or inspect the log in
+\texttt{\textasciitilde/matrix/logs}. \\
+Possible scratch/disk issue &
+Check \texttt{df -h \textasciitilde{} /local/scratch} and the program log. \\
+MATRIX tool cannot use a result &
+Promote the QM output first and verify that the required \xyzin{} section is
+present with \texttt{matrix validate} or the GUI readiness panel. \\
+\bottomrule
+\end{longtable}
+
+\section{Operational Policy}
+
+\begin{itemize}
+  \item Keep \host{} as an execution backend, not a parallel MATRIX
+        development tree.
+  \item Keep one adapter per external format.  Gaussian, Molpro and ORCA
+        outputs must be normalized before scientific tools consume them.
+  \item Use \texttt{gdv32} or \texttt{g16}; do not revive older GDV variants.
+  \item Use Molpro 2025.3 through \texttt{module load molpro/2025.3}.
+  \item Use ORCA through the configured ORCA module.
+  \item Keep credentials outside the repository and outside documentation.
+  \item Keep job provenance: input file, MATRIX version, remote command,
+        program version, log path and promoted \xyzin{} sections.
+\end{itemize}
+
+\end{document}

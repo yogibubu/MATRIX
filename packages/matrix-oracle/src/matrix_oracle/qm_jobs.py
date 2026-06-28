@@ -14,9 +14,13 @@ from .commands import (
     gaussian_summary_command,
     gicforge_gaussian_input_command,
     molpro_promote_command,
+    molpro_run_command,
     molpro_summary_command,
+    molpro_status_command,
     mrcc_promote_command,
     mrcc_summary_command,
+    orca_run_command,
+    orca_status_command,
 )
 
 
@@ -139,10 +143,70 @@ class OracleQMJobsController:
     def molpro_summary_command(self, output: Path | str) -> OracleGuiCommand:
         return molpro_summary_command(output)
 
+    def molpro_status_command(
+        self,
+        workdir: Path | str,
+        *,
+        input_path: Path | str | None = None,
+        output_path: Path | str | None = None,
+    ) -> OracleGuiCommand:
+        return molpro_status_command(workdir, input_path=input_path, output_path=output_path)
+
+    def molpro_run_command(
+        self,
+        workdir: Path | str,
+        *,
+        executable: str | None = None,
+        input_path: Path | str | None = None,
+        output_path: Path | str | None = None,
+        background: bool = False,
+        timeout: float | None = None,
+        extra_args: tuple[str, ...] = (),
+    ) -> OracleGuiCommand:
+        return molpro_run_command(
+            workdir,
+            executable=executable,
+            input_path=input_path,
+            output_path=output_path,
+            background=background,
+            timeout=timeout,
+            extra_args=extra_args,
+        )
+
     def molpro_promote_command(self, output: Path | str) -> OracleGuiCommand:
         if self.xyzin is None:
             raise ValueError("no MATRIX xyzin project is loaded")
         return molpro_promote_command(output, self.xyzin)
+
+    def orca_status_command(
+        self,
+        workdir: Path | str,
+        *,
+        input_path: Path | str | None = None,
+        output_path: Path | str | None = None,
+    ) -> OracleGuiCommand:
+        return orca_status_command(workdir, input_path=input_path, output_path=output_path)
+
+    def orca_run_command(
+        self,
+        workdir: Path | str,
+        *,
+        executable: str | None = None,
+        input_path: Path | str | None = None,
+        output_path: Path | str | None = None,
+        background: bool = False,
+        timeout: float | None = None,
+        extra_args: tuple[str, ...] = (),
+    ) -> OracleGuiCommand:
+        return orca_run_command(
+            workdir,
+            executable=executable,
+            input_path=input_path,
+            output_path=output_path,
+            background=background,
+            timeout=timeout,
+            extra_args=extra_args,
+        )
 
     def mrcc_summary_command(self, output: Path | str) -> OracleGuiCommand:
         return mrcc_summary_command(output)

@@ -172,6 +172,27 @@ The main promoted sections are \sectionname{CARTESIAN\_HESSIAN},
 \sectionname{ORBITALS}.  Orbital files are passed to Molden, Avogadro or
 MOrbVis-compatible viewers through the GUI command layer.
 
+\subsection{Remote QM Execution}
+
+Heavy QM jobs can be launched on the private Linux host \texttt{oracle} and
+then copied back for adapter promotion.  The operational details are in
+\texttt{oracle\_qm\_remote\_manual.pdf}.  The current remote contract is:
+
+\begin{itemize}
+  \item use only \texttt{gdv32} or \texttt{g16} for Gaussian jobs;
+  \item load Molpro as \texttt{module load molpro/2025.3};
+  \item load ORCA through the configured ORCA module;
+  \item submit long jobs through \texttt{matrix-submit} when possible;
+  \item copy completed logs, FCHK files and outputs back to the local MATRIX
+        workspace;
+  \item promote those files through \texttt{matrix gaussian ...},
+        \texttt{matrix molpro ...} or the corresponding QM adapter before any
+        scientific tool consumes the data.
+\end{itemize}
+
+The remote machine is an execution backend, not a second parser stack.  The
+single-adapter-per-format rule is unchanged.
+
 \section{NEO / GICForge}
 
 The implemented GIC tool is still exposed as \texttt{gicforge} in the command

@@ -25,8 +25,10 @@ manifest contracts.
   QFF/anharmonic force fields.
 - `matrix-gaussian`: Gaussian input/output adapters, job status/run helpers,
   FCHK/QFF promotion and Gaussian log rovibrational promotion.
-- `matrix-molpro`: Molpro output adapters returning shared MATRIX geometry and
-  enriched XYZ state.
+- `matrix-molpro`: Molpro launch helpers and output adapters returning shared
+  MATRIX geometry and enriched XYZ state.
+- `matrix-orca`: ORCA launch/status helpers. ORCA output parsing will be added
+  only through explicit shared MATRIX adapters.
 - `matrix-mrcc`: MRCC output adapters returning shared MATRIX geometry and
   enriched XYZ state.
 - `matrix-link`: LINK preprocessing/import
@@ -110,7 +112,11 @@ python -m matrix gaussian formchk gicforge.chk gicforge.fchk
 python -m matrix gaussian fchk-summary gicforge.fchk
 python -m matrix gaussian promote-fchk gaussian.fchk molecule.xyzin
 python -m matrix gaussian promote-rovib gauin.log molecule.xyzin
+python -m matrix molpro status molpro_workdir
+python -m matrix molpro run molpro_workdir --input molecule.com
 python -m matrix molpro promote molpro.out molecule.xyzin
+python -m matrix orca status orca_workdir
+python -m matrix orca run orca_workdir --input molecule.inp
 python -m matrix mrcc promote mrcc.out molecule.xyzin
 ```
 

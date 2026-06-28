@@ -425,6 +425,45 @@ def molpro_summary_command(output: Path | str) -> OracleGuiCommand:
     )
 
 
+def molpro_status_command(
+    workdir: Path | str,
+    *,
+    input_path: Path | str | None = None,
+    output_path: Path | str | None = None,
+) -> OracleGuiCommand:
+    argv = [*_matrix_cli(), "molpro", "status", str(Path(workdir))]
+    if input_path is not None:
+        argv.extend(["--input", str(Path(input_path))])
+    if output_path is not None:
+        argv.extend(["--output", str(Path(output_path))])
+    return OracleGuiCommand("Inspect Molpro job", tuple(argv))
+
+
+def molpro_run_command(
+    workdir: Path | str,
+    *,
+    executable: str | None = None,
+    input_path: Path | str | None = None,
+    output_path: Path | str | None = None,
+    background: bool = False,
+    timeout: float | None = None,
+    extra_args: Sequence[str] = (),
+) -> OracleGuiCommand:
+    argv = [*_matrix_cli(), "molpro", "run", str(Path(workdir))]
+    if executable:
+        argv.extend(["--executable", executable])
+    if input_path is not None:
+        argv.extend(["--input", str(Path(input_path))])
+    if output_path is not None:
+        argv.extend(["--output", str(Path(output_path))])
+    _append_flag(argv, "--background", background)
+    if timeout is not None:
+        argv.extend(["--timeout", str(timeout)])
+    for arg in extra_args:
+        argv.extend(["--extra-arg", str(arg)])
+    return OracleGuiCommand("Run Molpro job", tuple(argv))
+
+
 def molpro_promote_command(
     output: Path | str,
     xyzin: Path | str,
@@ -451,6 +490,45 @@ def molpro_promote_command(
         tuple(argv),
         produced_sections=("SOURCE", "BASIC", "SYMMETRY", "TOPOLOGY", "SYNTHONS"),
     )
+
+
+def orca_status_command(
+    workdir: Path | str,
+    *,
+    input_path: Path | str | None = None,
+    output_path: Path | str | None = None,
+) -> OracleGuiCommand:
+    argv = [*_matrix_cli(), "orca", "status", str(Path(workdir))]
+    if input_path is not None:
+        argv.extend(["--input", str(Path(input_path))])
+    if output_path is not None:
+        argv.extend(["--output", str(Path(output_path))])
+    return OracleGuiCommand("Inspect ORCA job", tuple(argv))
+
+
+def orca_run_command(
+    workdir: Path | str,
+    *,
+    executable: str | None = None,
+    input_path: Path | str | None = None,
+    output_path: Path | str | None = None,
+    background: bool = False,
+    timeout: float | None = None,
+    extra_args: Sequence[str] = (),
+) -> OracleGuiCommand:
+    argv = [*_matrix_cli(), "orca", "run", str(Path(workdir))]
+    if executable:
+        argv.extend(["--executable", executable])
+    if input_path is not None:
+        argv.extend(["--input", str(Path(input_path))])
+    if output_path is not None:
+        argv.extend(["--output", str(Path(output_path))])
+    _append_flag(argv, "--background", background)
+    if timeout is not None:
+        argv.extend(["--timeout", str(timeout)])
+    for arg in extra_args:
+        argv.extend(["--extra-arg", str(arg)])
+    return OracleGuiCommand("Run ORCA job", tuple(argv))
 
 
 def mrcc_summary_command(output: Path | str) -> OracleGuiCommand:

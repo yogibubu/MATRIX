@@ -164,6 +164,18 @@ def build_parser(
 
     molpro = sub.add_parser("molpro", help="Molpro output adapter utilities")
     molpro_sub = molpro.add_subparsers(dest="molpro_command")
+    molpro_status = molpro_sub.add_parser("status", help="Inspect Molpro job state")
+    molpro_status.add_argument("workdir", type=Path)
+    molpro_status.add_argument("--input", type=Path)
+    molpro_status.add_argument("--output", type=Path)
+    molpro_run = molpro_sub.add_parser("run", help="Run Molpro from a work directory")
+    molpro_run.add_argument("workdir", type=Path)
+    molpro_run.add_argument("--executable")
+    molpro_run.add_argument("--input", type=Path)
+    molpro_run.add_argument("--output", type=Path)
+    molpro_run.add_argument("--background", action="store_true")
+    molpro_run.add_argument("--timeout", type=float)
+    molpro_run.add_argument("--extra-arg", action="append", default=[])
     molpro_summary = molpro_sub.add_parser("summary", help="Summarize a Molpro output")
     molpro_summary.add_argument("output", type=Path)
     molpro_promote = molpro_sub.add_parser(
@@ -175,6 +187,21 @@ def build_parser(
     molpro_promote.add_argument("--symmetry-distance", type=float, default=1.0e-3)
     molpro_promote.add_argument("--symmetry-inertia", type=float, default=1.0e-3)
     molpro_promote.add_argument("--max-rotation-order", type=int, default=6)
+
+    orca = sub.add_parser("orca", help="ORCA job utilities")
+    orca_sub = orca.add_subparsers(dest="orca_command")
+    orca_status = orca_sub.add_parser("status", help="Inspect ORCA job state")
+    orca_status.add_argument("workdir", type=Path)
+    orca_status.add_argument("--input", type=Path)
+    orca_status.add_argument("--output", type=Path)
+    orca_run = orca_sub.add_parser("run", help="Run ORCA from a work directory")
+    orca_run.add_argument("workdir", type=Path)
+    orca_run.add_argument("--executable")
+    orca_run.add_argument("--input", type=Path)
+    orca_run.add_argument("--output", type=Path)
+    orca_run.add_argument("--background", action="store_true")
+    orca_run.add_argument("--timeout", type=float)
+    orca_run.add_argument("--extra-arg", action="append", default=[])
 
     mrcc = sub.add_parser("mrcc", help="MRCC output adapter utilities")
     mrcc_sub = mrcc.add_subparsers(dest="mrcc_command")
@@ -1010,6 +1037,30 @@ def main(
         print(f"wrote_rotational: {int(result.wrote_rotational)}")
         print(f"wrote_deltabvib: {int(result.wrote_deltabvib)}")
         return 0
+    if args.command == "molpro" and args.molpro_command == "status":
+        from matrix_molpro import molpro_job_status
+
+        status = molpro_job_status(
+            args.workdir,
+            input_path=args.input,
+            output_path=args.output,
+        )
+        _print_external_qm_status(status)
+        return 0
+    if args.command == "molpro" and args.molpro_command == "run":
+        from matrix_molpro import run_molpro_job
+
+        result = run_molpro_job(
+            args.workdir,
+            executable=args.executable,
+            input_path=args.input,
+            output_path=args.output,
+            background=args.background,
+            timeout=args.timeout,
+            extra_args=tuple(args.extra_arg),
+        )
+        _print_external_qm_run_result(result)
+        return 0
     if args.command == "molpro" and args.molpro_command == "summary":
         from matrix_molpro import summarize_molpro_output
 
@@ -1036,6 +1087,30 @@ def main(
             f"PG={result.point_group}, bonds={result.topology_bond_count}, "
             f"rings={result.ring_count})"
         )
+        return 0
+    if args.command == "orca" and args.orca_command == "status":
+        from matrix_orca import orca_job_status
+
+        status = orca_job_status(
+            args.workdir,
+            input_path=args.input,
+            output_path=args.output,
+        )
+        _print_external_qm_status(status)
+        return 0
+    if args.command == "orca" and args.orca_command == "run":
+        from matrix_orca import run_orca_job
+
+        result = run_orca_job(
+            args.workdir,
+            executable=args.executable,
+            input_path=args.input,
+            output_path=args.output,
+            background=args.background,
+            timeout=args.timeout,
+            extra_args=tuple(args.extra_arg),
+        )
+        _print_external_qm_run_result(result)
         return 0
     if args.command == "mrcc" and args.mrcc_command == "summary":
         from matrix_mrcc import summarize_mrcc_output
@@ -2157,6 +2232,36 @@ def main(
         return 0
     parser.print_help()
     return 0
+
+
+def _print_external_qm_status(status) -> None:
+    print(f"program: {status.program}")
+    print(f"status: {status.status}")
+    print(f"workdir: {status.workdir}")
+    print(f"output: {status.output_path}")
+    if status.input_path is not None:
+        print(f"input: {status.input_path}")
+    if status.pid is not None:
+        print(f"pid: {status.pid}")
+    if status.exit_code is not None:
+        print(f"exit_code: {status.exit_code}")
+    print(f"normal_termination: {int(status.normal_termination)}")
+    print(f"error_termination: {int(status.error_termination)}")
+    print(f"message: {status.message}")
+
+
+def _print_external_qm_run_result(result) -> None:
+    print(f"program: {result.program}")
+    print(f"input: {result.input_path}")
+    print(f"output: {result.output_path}")
+    print(f"executable: {result.executable}")
+    if result.pid is not None:
+        print(f"pid: {result.pid}")
+    if result.exit_code is not None:
+        print(f"exit_code: {result.exit_code}")
+    if result.success is not None:
+        print(f"success: {int(result.success)}")
+    print(f"message: {result.message}")
 
 
 def matrix_main(argv: list[str] | None = None) -> int:

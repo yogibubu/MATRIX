@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "Usage: matrix-submit {gdv32|g16|orca|molpro} input-file [extra arguments...]" >&2
+}
+
+if [ "$#" -lt 2 ]; then
+  usage
+  exit 2
+fi
+
+engine="$1"
+input="$2"
+shift 2
+
+source "$HOME/.matrix_env.sh"
+
+if [ ! -f "$input" ]; then
+  echo "Input file not found: $input" >&2
+  exit 1
+fi
+
+case "$engine" in
+  gdv32|g16|orca|molpro) ;;
+  gdv|gdv21|gdv26|gdv28)
+    echo "Use gdv32 explicitly. Other GDV profiles are disabled." >&2
+    exit 2
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac
+
+mkdir -p "$MATRIX_REMOTE_ROOT"/{jobs,logs,outputs,scratch}
+
+input_name="$(basename "$input")"
+stem="${input_name%.*}"
+stamp="$(date +%Y%m%d-%H%M%S)"
+job="$stamp-$engine-$stem"
+workdir="$MATRIX_REMOTE_ROOT/jobs/$job"
+mkdir -p "$workdir"
+cp -p "$input" "$workdir/"
+cd "$workdir"
+
+infile="$(basename "$input")"
+global_log="$MATRIX_REMOTE_ROOT/logs/$job.log"
+launcher_stdout="$MATRIX_REMOTE_ROOT/logs/$job.stdout"
+
+case "$engine" in
+  gdv32)
+    setgdv32
+    cmd=(gdv "$infile" "$@")
+    native_output="$workdir/$stem.log"
+    ;;
+  g16)
+    setg16
+    cmd=(g16 "$infile" "$@")
+    native_output="$workdir/$stem.log"
+    ;;
+  orca)
+    cmd=(orca "$infile" "$@")
+    native_output="$workdir/$stem.out"
+    launcher_stdout="$native_output"
+    ;;
+  molpro)
+    cmd=(molpro "$infile" "$@")
+    native_output="$workdir/$stem.out"
+    ;;
+esac
+
+ln -sfn "$native_output" "$global_log"
+
+printf '%q ' "${cmd[@]}" > command.sh
+printf '\n' >> command.sh
+chmod +x command.sh
+
+nohup "${cmd[@]}" > "$launcher_stdout" 2>&1 &
+pid="$!"
+echo "$pid" > pid
+{
+  echo "job=$job"
+  echo "engine=$engine"
+  echo "pid=$pid"
+  echo "workdir=$workdir"
+  echo "log=$global_log"
+  echo "native_output=$native_output"
+  echo "stdout=$launcher_stdout"
+  echo "input=$workdir/$infile"
+} > metadata.txt
+
+echo "Submitted $job"
+echo "PID: $pid"
+echo "Workdir: $workdir"
+echo "Log: $global_log"
+echo "Native output: $native_output"

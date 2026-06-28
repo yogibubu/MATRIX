@@ -274,13 +274,14 @@ These tools are optional but used by specific MATRIX workflow and ORACLE GUIs:
 | --- | --- | --- |
 | Gaussian executable (`g16`, `gdv`, or site wrapper) | QM jobs, Hessians, FCHK, rovibrational logs | Configure in the QM Jobs GUI or CLI `--executable` |
 | `formchk` | Convert Gaussian checkpoint files to FCHK | Used by `matrix gaussian formchk` |
-| Molpro | External QM output source | Parsed only by `matrix-molpro` adapters |
+| Molpro | External QM job launcher and output source | Launched by `matrix molpro run`; parsed only by `matrix-molpro` adapters |
+| ORCA | External QM job launcher | Launched by `matrix orca run`; output adapters are added only when normalized `xyzin` sections are defined |
 | MRCC | External QM output source | Parsed only by `matrix-mrcc` adapters |
 | Browser | Opens MOrbVis and future HTML reports | Prefer Chrome/Edge/Safari versions with WebGPU support |
 
 All QM output parsing must go through the single adapter for that external
 format. Scientific tools consume normalized `xyzin` sections and must not parse
-Gaussian, Molpro or MRCC output privately.
+Gaussian, Molpro, ORCA or MRCC output privately.
 
 ## Post-install Checks
 
