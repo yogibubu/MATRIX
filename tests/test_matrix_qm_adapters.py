@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -34,6 +35,18 @@ from matrix_gf import read_gf_ped_section, run_xyzin_gf_report_from_xyzin, write
 from matrix_neo import write_gicforge_build_sections
 from matrix_qm import EFG_AU_TO_NQCC_MHZ_PER_BARN, read_cartesian_hessian_section, read_properties_section
 from tools import matrix_run
+
+
+ROOT = Path(__file__).resolve().parents[1]
+NH3_QUADRUPOLE_FIXTURE = (
+    ROOT / "tests" / "fixtures" / "qm_properties" / "nh3_hf_ccpvtz_quadrupole"
+)
+
+
+def _single_nqcc_record(records):
+    matches = [record for record in records if record.name == "NUCLEAR_QUADRUPOLE_COUPLING"]
+    assert len(matches) == 1
+    return matches[0]
 
 
 def _molpro_output() -> str:
@@ -374,6 +387,28 @@ def test_orca_quadrupole_adapter_reads_eprnmr_vtot_block(tmp_path):
     assert converted[0].axes == "ORCA_EFG_PAS:Vxx,Vyy,Vzz"
     assert np.isclose(converted[0].value[2], -4.769937, atol=5.0e-5)
     assert "convention=Pickett/ORCA-EFG" in converted[0].conversion
+
+
+def test_nh3_hf_ccpvtz_quadrupole_golden_matches_across_qm_codes():
+    gaussian = _single_nqcc_record(
+        parse_gaussian_quadrupole_properties(NH3_QUADRUPOLE_FIXTURE / "gaussian_pickett.log")
+    )
+    molpro = _single_nqcc_record(
+        parse_molpro_quadrupole_properties(NH3_QUADRUPOLE_FIXTURE / "molpro.out")
+    )
+    orca = _single_nqcc_record(
+        parse_orca_quadrupole_properties(NH3_QUADRUPOLE_FIXTURE / "orca.out")
+    )
+
+    assert np.allclose(gaussian.value[:3], (2.3869, 2.3828, -4.7697), atol=5.0e-5)
+    assert np.allclose(molpro.value[:3], (2.3868979, 2.3827673, -4.7696652), atol=5.0e-5)
+    assert np.allclose(orca.value[:3], (2.3828998, 2.3870306, -4.7699304), atol=5.0e-5)
+    assert np.allclose(gaussian.value[:3], molpro.value[:3], atol=5.0e-5)
+    assert np.allclose(
+        (*sorted(gaussian.value[:2]), gaussian.value[2]),
+        (*sorted(orca.value[:2]), orca.value[2]),
+        atol=3.0e-4,
+    )
 
 
 def test_mrcc_output_adapter_returns_shared_geometry(tmp_path):

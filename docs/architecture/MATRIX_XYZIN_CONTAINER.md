@@ -205,6 +205,12 @@ The isotope moment used in a conversion is recorded in the `CONVERSION` field.
 For Molpro outputs that do not identify the EFG nucleus unambiguously, the
 adapter requires an explicit atom index or isotope override.
 
+Use `matrix properties compare reference.xyzin candidate.xyzin --name NAME` for
+cross-code and cross-level regressions.  The command compares normalized
+`#PROPERTIES` records only, reports max/RMS deltas and exits non-zero if the
+requested absolute/relative tolerances are exceeded.  This is the intended
+gate for NH3 quadrupole and later electric/magnetic property golden tests.
+
 `matrix gf --xyzin molecule.xyzin` updates `#GF_PED` by default. The section
 uses schema `oracle.xyz.gf_ped.v1` and stores the Hessian source, coordinate
 source, point group, matrix model, nonbonded correction label, frequencies,

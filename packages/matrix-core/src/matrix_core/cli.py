@@ -94,6 +94,33 @@ def build_parser(
         default="text",
         help="Output format",
     )
+    properties_compare = properties_sub.add_parser(
+        "compare",
+        help="Compare one normalized property across xyzin files",
+    )
+    properties_compare.add_argument("reference", type=Path)
+    properties_compare.add_argument("candidates", nargs="+", type=Path)
+    properties_compare.add_argument("--name", required=True, help="Normalized property name")
+    properties_compare.add_argument("--atom", type=int, help="Filter by one-based atom index")
+    properties_compare.add_argument(
+        "--index",
+        type=int,
+        default=0,
+        help="Zero-based index after filtering when multiple records match",
+    )
+    properties_compare.add_argument(
+        "--atol",
+        type=float,
+        default=0.0,
+        help="Absolute tolerance in the property unit",
+    )
+    properties_compare.add_argument("--rtol", type=float, default=0.0, help="Relative tolerance")
+    properties_compare.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format",
+    )
 
     qm = sub.add_parser("qm", help="Remote QM job orchestration")
     qm_sub = qm.add_subparsers(dest="qm_command")
@@ -1004,6 +1031,73 @@ def main(
                 )
             )
         return 0
+    if args.command == "properties" and args.properties_command == "compare":
+        from matrix_qm import (
+            compare_property_records,
+            filtered_property_records,
+            property_comparison_lines,
+            property_comparison_to_dict,
+            read_properties_section,
+        )
+
+        reference_section = read_properties_section(args.reference)
+        reference_records = filtered_property_records(
+            reference_section,
+            name=args.name,
+            atom=args.atom,
+        )
+        if args.index < 0 or args.index >= len(reference_records):
+            print(
+                f"No reference property at index {args.index} "
+                f"after filtering {args.reference}",
+                file=sys.stderr,
+            )
+            return 2
+        reference = reference_records[args.index]
+        comparisons = []
+        for candidate_path in args.candidates:
+            candidate_section = read_properties_section(candidate_path)
+            candidate_records = filtered_property_records(
+                candidate_section,
+                name=args.name,
+                atom=args.atom,
+            )
+            if args.index < 0 or args.index >= len(candidate_records):
+                print(
+                    f"No candidate property at index {args.index} "
+                    f"after filtering {candidate_path}",
+                    file=sys.stderr,
+                )
+                return 2
+            comparisons.append(
+                compare_property_records(
+                    reference,
+                    candidate_records[args.index],
+                    reference_label=str(args.reference),
+                    candidate_label=str(candidate_path),
+                    atol=args.atol,
+                    rtol=args.rtol,
+                )
+            )
+        comparison_tuple = tuple(comparisons)
+        if args.format == "json":
+            print(
+                json.dumps(
+                    {
+                        "reference": str(args.reference),
+                        "count": len(comparison_tuple),
+                        "comparisons": [
+                            property_comparison_to_dict(comparison)
+                            for comparison in comparison_tuple
+                        ],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            print("\n".join(property_comparison_lines(comparison_tuple)))
+        return 0 if all(comparison.compatible for comparison in comparison_tuple) else 1
     if args.command == "qm" and args.qm_command == "remote-submit":
         from matrix_engines import remote_qm_submit
 

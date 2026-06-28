@@ -197,7 +197,15 @@ matrix molpro promote-quadrupole molpro.out molecule.xyzin --atom 1 --isotope 14
 matrix gaussian promote-quadrupole gaussian.log molecule.xyzin
 matrix orca promote-quadrupole orca.out molecule.xyzin
 matrix properties summary molecule.xyzin --name NUCLEAR_QUADRUPOLE_COUPLING
+matrix properties compare gaussian.xyzin molpro.xyzin orca.xyzin \
+  --name NUCLEAR_QUADRUPOLE_COUPLING --atom 1 --atol 0.0005
 \end{lstlisting}
+
+The \texttt{properties compare} command is the regression utility for
+program-independent checks: it compares already-normalized rows in
+\sectionname{PROPERTIES} and therefore remains valid for future electric,
+magnetic and hyperfine properties without duplicating parsers in scientific
+tools.
 
 \subsection{Remote QM Execution}
 

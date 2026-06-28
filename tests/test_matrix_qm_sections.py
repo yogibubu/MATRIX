@@ -25,13 +25,15 @@ from matrix_qm import (
     efg_asymmetry_parameter,
     efg_to_nqcc_mhz,
     electronic_section_lines,
-    merge_properties_section,
+    compare_property_records,
     hessian_input_from_xyzin,
+    merge_properties_section,
     orbital_file_record_from_path,
     parse_electronic_section,
     parse_orbitals_section,
     parse_properties_section,
     parse_transitions_section,
+    property_comparison_lines,
     properties_section_lines,
     property_records_by_name,
     property_records_for_atom,
@@ -216,6 +218,60 @@ def test_properties_merge_and_cli_summary(tmp_path, capsys):
     assert rc == 0
     assert "properties: 1" in out
     assert "EFG_TENSOR" in out
+
+
+def test_properties_compare_cli_reports_numeric_deltas(tmp_path, capsys):
+    reference = tmp_path / "reference.xyzin"
+    candidate = tmp_path / "candidate.xyzin"
+    reference.write_text("1\nnqcc\nN 0 0 0\n", encoding="utf-8")
+    candidate.write_text("1\nnqcc\nN 0 0 0\n", encoding="utf-8")
+    reference_record = PropertyRecord(
+        name="NUCLEAR_QUADRUPOLE_COUPLING",
+        target="ATOM",
+        atom=1,
+        isotope="14N",
+        value=(2.3869, 2.3828, -4.7697),
+        unit="MHz",
+        axes="PICKETT",
+        program="Gaussian",
+    )
+    candidate_record = PropertyRecord(
+        name="NUCLEAR_QUADRUPOLE_COUPLING",
+        target="ATOM",
+        atom=1,
+        isotope="14N",
+        value=(2.3868, 2.3827, -4.7696),
+        unit="MHz",
+        axes="PICKETT",
+        program="Molpro",
+    )
+    merge_properties_section(reference, (reference_record,))
+    merge_properties_section(candidate, (candidate_record,))
+
+    comparison = compare_property_records(reference_record, candidate_record, atol=2.0e-4)
+    assert comparison.compatible is True
+    assert np.isclose(comparison.max_abs_delta, 1.0e-4)
+    assert "status=ok" in property_comparison_lines((comparison,))[1]
+
+    rc = matrix_run.main(
+        [
+            "properties",
+            "compare",
+            str(reference),
+            str(candidate),
+            "--name",
+            "NUCLEAR_QUADRUPOLE_COUPLING",
+            "--atom",
+            "1",
+            "--atol",
+            "0.0002",
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "comparisons: 1" in out
+    assert "status=ok" in out
 
 
 def test_quadrupole_conversion_uses_isotope_moment_in_barn():

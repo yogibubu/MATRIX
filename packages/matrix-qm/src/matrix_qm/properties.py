@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import Path
 import shlex
 
@@ -82,6 +83,18 @@ class PropertiesSection:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "records", tuple(self.records))
+
+
+@dataclass(frozen=True)
+class PropertyComparison:
+    reference_label: str
+    candidate_label: str
+    reference: PropertyRecord
+    candidate: PropertyRecord
+    delta: tuple[float, ...]
+    max_abs_delta: float
+    rms_delta: float
+    compatible: bool
 
 
 def properties_section_lines(section: PropertiesSection) -> list[str]:
@@ -230,6 +243,81 @@ def property_record_to_dict(record: PropertyRecord) -> dict[str, object]:
         "uncertainty": record.uncertainty,
         "comment": record.comment,
     }
+
+
+def compare_property_records(
+    reference: PropertyRecord,
+    candidate: PropertyRecord,
+    *,
+    reference_label: str = "reference",
+    candidate_label: str = "candidate",
+    atol: float = 0.0,
+    rtol: float = 0.0,
+) -> PropertyComparison:
+    if reference.name.upper() != candidate.name.upper():
+        raise ValueError(
+            f"cannot compare different properties: {reference.name} vs {candidate.name}"
+        )
+    if reference.unit != candidate.unit:
+        raise ValueError(f"cannot compare different units: {reference.unit} vs {candidate.unit}")
+    if len(reference.value) != len(candidate.value):
+        raise ValueError(
+            f"cannot compare values with different lengths: "
+            f"{len(reference.value)} vs {len(candidate.value)}"
+        )
+    delta = tuple(
+        candidate_value - reference_value
+        for reference_value, candidate_value in zip(reference.value, candidate.value)
+    )
+    max_abs_delta = max((abs(value) for value in delta), default=0.0)
+    rms_delta = math.sqrt(sum(value * value for value in delta) / len(delta)) if delta else 0.0
+    compatible = all(
+        abs(candidate_value - reference_value) <= float(atol) + float(rtol) * abs(reference_value)
+        for reference_value, candidate_value in zip(reference.value, candidate.value)
+    )
+    return PropertyComparison(
+        reference_label=reference_label,
+        candidate_label=candidate_label,
+        reference=reference,
+        candidate=candidate,
+        delta=delta,
+        max_abs_delta=max_abs_delta,
+        rms_delta=rms_delta,
+        compatible=compatible,
+    )
+
+
+def property_comparison_to_dict(comparison: PropertyComparison) -> dict[str, object]:
+    return {
+        "reference": comparison.reference_label,
+        "candidate": comparison.candidate_label,
+        "property": comparison.reference.name,
+        "unit": comparison.reference.unit,
+        "target": comparison.reference.target,
+        "target_id": comparison.reference.target_id,
+        "atom": comparison.reference.atom,
+        "isotope": comparison.reference.isotope,
+        "reference_value": comparison.reference.value,
+        "candidate_value": comparison.candidate.value,
+        "delta": comparison.delta,
+        "max_abs_delta": comparison.max_abs_delta,
+        "rms_delta": comparison.rms_delta,
+        "compatible": comparison.compatible,
+    }
+
+
+def property_comparison_lines(comparisons: tuple[PropertyComparison, ...]) -> list[str]:
+    lines = [f"comparisons: {len(comparisons)}"]
+    for comparison in comparisons:
+        status = "ok" if comparison.compatible else "failed"
+        lines.append(
+            f"- {comparison.candidate_label} vs {comparison.reference_label}: "
+            f"{comparison.reference.name} atom={comparison.reference.atom or '-'} "
+            f"max_abs_delta={_format_float(comparison.max_abs_delta)} "
+            f"rms_delta={_format_float(comparison.rms_delta)} "
+            f"unit={comparison.reference.unit} status={status}"
+        )
+    return lines
 
 
 def properties_summary_lines(
