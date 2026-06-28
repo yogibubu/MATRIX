@@ -190,12 +190,16 @@ The first implemented property utility is nuclear quadrupole coupling:
 - Molpro `expec,fg` output is parsed for `FGXX`, `FGYY`, `FGZZ` and optional
   off-diagonal EFG components. MATRIX stores the raw EFG tensor in atomic units
   and converts it to `NUCLEAR_QUADRUPOLE_COUPLING` in MHz with
-  `234.9647 * Q(barn) * V(a.u.)`.
+  `sign * 234.9647 * Q(barn) * V(a.u.)`. The converted constants use the
+  spectroscopic/Pickett convention; Molpro and Gaussian printed EFG tensors
+  therefore carry `sign=-1` in the `CONVERSION` metadata.
 - Gaussian quadrupole coupling constants are promoted directly because
-  Gaussian reports the constants in MHz.
+  Gaussian `output=pickett` reports the constants in MHz. If a legacy Gaussian
+  log lacks the Pickett block, MATRIX falls back to the standard EFG tensor and
+  records the same Pickett convention in the conversion metadata.
 - ORCA quadrupole coupling constants are promoted directly when present; if
   ORCA output contains only an EFG tensor, MATRIX uses the same conversion path
-  as Molpro.
+  with the ORCA EFG sign convention recorded explicitly.
 
 The isotope moment used in a conversion is recorded in the `CONVERSION` field.
 For Molpro outputs that do not identify the EFG nucleus unambiguously, the

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 from pathlib import Path
 
 import numpy as np
@@ -14,7 +15,11 @@ from matrix_chem import (
     write_validation_section,
 )
 from matrix_fragments import write_fragment_build_section, write_interaction_center_section
-from matrix_gaussian import GaussianWriteError, read_gaussian_cartesian_input
+from matrix_gaussian import (
+    GaussianWriteError,
+    ensure_gaussian_output_pickett,
+    read_gaussian_cartesian_input,
+)
 from matrix_neo import (
     FrozenGIC,
     GICForgeContractError,
@@ -497,10 +502,50 @@ def test_gicforge_writes_gaussian_input_after_gic_plan(tmp_path):
 
     text = gjf.read_text(encoding="utf-8")
     geometry = read_gaussian_cartesian_input(gjf)
-    assert "#p b3lyp/sto-3g opt=readallgic" in text
+    assert "#p b3lyp/sto-3g opt=readallgic output=pickett" in text
     assert "! ORACLE_SCHEMA" not in text
     assert geometry.atoms == ("O", "H", "H")
     assert geometry.comment == "water from ORACLE"
+
+
+def test_gaussian_route_normalization_enforces_pickett_output():
+    assert ensure_gaussian_output_pickett("#p hf/sto-3g") == "#p hf/sto-3g output=pickett"
+    assert (
+        ensure_gaussian_output_pickett("#p hf/sto-3g output=wfn")
+        == "#p hf/sto-3g output=pickett"
+    )
+
+
+def test_fragment_delta_gaussian_inputs_enforce_pickett_output(tmp_path):
+    from matrix_neo.survibfit.fragment_delta_correction import prepare_low_level_gaussian_inputs
+
+    xyz = tmp_path / "fragment.xyz"
+    xyz.write_text("1\nfragment\nN 0.0 0.0 0.0\n", encoding="utf-8")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "entries": [
+                    {
+                        "query_fragment_id": "frag1",
+                        "suggested_low_level_input_xyz": str(xyz),
+                    }
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = prepare_low_level_gaussian_inputs(
+        manifest,
+        route="#p hf/cc-pVTZ output=wfn",
+        nproc=1,
+    )
+
+    assert result["generated_inputs"] == 1
+    gjf = Path(result["inputs"][0])
+    assert "#p hf/cc-pVTZ output=pickett" in gjf.read_text(encoding="utf-8")
 
 
 def test_gicforge_build_writes_frozen_gics_and_sycart(tmp_path):
@@ -660,13 +705,13 @@ def test_gicforge_build_gaussian_input_includes_readgic_block(tmp_path):
         "GIC002 = R(1,3)",
         "GIC003 = A(2,1,3)",
     ]
-    assert "#p hf/sto-3g geom=readallgic" in text
+    assert "#p hf/sto-3g geom=readallgic output=pickett" in text
     assert "GIC001 = R(1,2)" in text
     assert "GIC003 = A(2,1,3)" in text
 
     write_gicforge_gaussian_input(xyzin, gjf, route="#p hf/sto-3g opt")
     text = gjf.read_text(encoding="utf-8")
-    assert "#p hf/sto-3g opt=readallgic" in text
+    assert "#p hf/sto-3g opt=readallgic output=pickett" in text
 
     write_gicforge_gaussian_input(
         xyzin,
@@ -674,7 +719,7 @@ def test_gicforge_build_gaussian_input_includes_readgic_block(tmp_path):
         route="#p hf/sto-3g opt=(MaxCycle=1) geom=readallgic",
     )
     text = gjf.read_text(encoding="utf-8")
-    assert "#p hf/sto-3g opt=(readallgic,MaxCycle=1)" in text
+    assert "#p hf/sto-3g opt=(readallgic,MaxCycle=1) output=pickett" in text
     assert "geom=readallgic" not in text.lower()
 
     with pytest.raises(GaussianWriteError):
@@ -744,7 +789,7 @@ def test_gicforge_gaussian_input_smoke_for_symmetrized_nontrivial_cases(
     assert definition.rank == expected_rank
     assert definition.symmetry_diagnostics is not None
     assert definition.symmetry_diagnostics.status == "APPLIED"
-    assert "#p hf/sto-3g opt=(readallgic,MaxCycle=1) scf=tight" in text
+    assert "#p hf/sto-3g opt=(readallgic,MaxCycle=1) scf=tight output=pickett" in text
     assert "geom=readallgic" not in text.lower()
     assert "! ORACLE_SCHEMA" not in text
     assert len(definition_lines) >= len(definition.gics)
@@ -2020,6 +2065,7 @@ def test_gicforge_pyrrole_c2v_projector_keeps_ring_coordinates(tmp_path):
 
     write_gicforge_gaussian_input(xyzin, gjf, route="#p hf/sto-3g opt=readallgic")
     text = gjf.read_text(encoding="utf-8")
+    assert "#p hf/sto-3g opt=readallgic output=pickett" in text
     assert "A1Str001 = R(1,2)" in text
     assert "A1CyBe001 = " in text
     assert "A2RPck001(Frozen) = " in text

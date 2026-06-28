@@ -14,12 +14,18 @@ class GaussianQuadrupolePromotion:
 
 
 def parse_gaussian_quadrupole_properties(path: Path | str) -> tuple:
-    from matrix_qm import atomic_number_from_isotope_or_atom, quadrupole_property_records_from_nqcc
+    from matrix_qm import (
+        atomic_number_from_isotope_or_atom,
+        quadrupole_moment,
+        quadrupole_property_records_from_efg,
+        quadrupole_property_records_from_nqcc,
+    )
 
     target = Path(path)
     lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
     records = []
-    for row in _quadrupole_rows(lines):
+    direct_rows = [*_pickett_quadrupole_rows(lines), *_quadrupole_rows(lines)]
+    for row in direct_rows:
         number = atomic_number_from_isotope_or_atom(
             isotope=row["isotope"],
             atom_symbol=row["atom_symbol"],
@@ -37,6 +43,29 @@ def parse_gaussian_quadrupole_properties(path: Path | str) -> tuple:
                 axes=row["axes"],
                 status="raw",
                 comment=row["comment"],
+            )
+        )
+    if records:
+        return tuple(records)
+    for row in _efg_rows(target, lines):
+        number = row["atomic_number"]
+        if quadrupole_moment(number) is None:
+            continue
+        records.extend(
+            quadrupole_property_records_from_efg(
+                atom=row["atom"],
+                atomic_number_value=number,
+                efg_au=row["values"],
+                program="Gaussian",
+                source=target,
+                method=_parse_route_method(lines),
+                level="",
+                axes="GAUSSIAN_EFG_TENSOR:3xx-rr,3yy-rr,3zz-rr,xy,xz,yz",
+                status="raw",
+                comment="Gaussian electric-field gradient converted by MATRIX; "
+                "nqcc_convention=Pickett",
+                nqcc_sign=-1.0,
+                nqcc_convention="Pickett/Gaussian-EFG",
             )
         )
     return tuple(records)
@@ -81,6 +110,132 @@ def _quadrupole_rows(lines: list[str]) -> list[dict[str, object]]:
         if row is not None:
             rows.append(row)
     return rows
+
+
+def _pickett_quadrupole_rows(lines: list[str]) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    idx = 0
+    while idx < len(lines):
+        upper = lines[idx].upper()
+        if "NUCLEAR QUADRUPOLE COUPLING CONSTANTS" not in upper or "CHI" not in upper:
+            idx += 1
+            continue
+        idx += 1
+        while idx < len(lines):
+            text = lines[idx].strip()
+            upper = text.upper()
+            if not text:
+                idx += 1
+                continue
+            if upper.startswith(("DIPOLE", "ATOMS WITH", "----")):
+                break
+            header = re.match(r"^(?P<atom>\d+)\s+(?P<symbol>[A-Za-z]{1,2})\((?P<mass>\d+)\)", text)
+            if header is None:
+                idx += 1
+                continue
+            components: dict[str, float] = {}
+            for raw_component in lines[idx + 1 : idx + 4]:
+                for key, value in re.findall(
+                    r"\b([abc][abc])\s*=\s*([-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[DEde][-+]?\d+)?)",
+                    raw_component,
+                ):
+                    components[key.lower()] = _float(value)
+            if {"aa", "bb", "cc"}.issubset(components):
+                symbol = header.group("symbol").capitalize()
+                rows.append(
+                    {
+                        "atom": int(header.group("atom")),
+                        "isotope": f"{int(header.group('mass'))}{symbol}",
+                        "atom_symbol": symbol,
+                        "values": (
+                            components["aa"],
+                            components["bb"],
+                            components["cc"],
+                            components.get("ab", components.get("ba", 0.0)),
+                            components.get("ac", components.get("ca", 0.0)),
+                            components.get("bc", components.get("cb", 0.0)),
+                        ),
+                        "axes": "PICKETT:chi_aa,chi_bb,chi_cc,chi_ab,chi_ac,chi_bc",
+                        "comment": "Gaussian output=pickett nuclear quadrupole coupling constants in MHz",
+                    }
+                )
+            idx += 4
+        idx += 1
+    return rows
+
+
+def _efg_rows(path: Path, lines: list[str]) -> list[dict[str, object]]:
+    from matrix_chem.geometry_io import GeometryParseError
+    from matrix_chem.topology.elements import atomic_number
+
+    from .parsers import read_gaussian_log_geometry
+
+    try:
+        atoms = read_gaussian_log_geometry(path).atoms
+    except GeometryParseError:
+        atoms = ()
+    offdiag: dict[int, tuple[float, float, float]] = {}
+    diag: dict[int, tuple[float, float, float]] = {}
+    idx = 0
+    while idx < len(lines):
+        upper = lines[idx].upper()
+        if "XY" in upper and "XZ" in upper and "YZ" in upper:
+            idx = _collect_gaussian_tensor_rows(lines, idx + 1, offdiag)
+            continue
+        if "3XX-RR" in upper and "3YY-RR" in upper and "3ZZ-RR" in upper:
+            idx = _collect_gaussian_tensor_rows(lines, idx + 1, diag)
+            continue
+        idx += 1
+    rows = []
+    for atom, diagonal in sorted(diag.items()):
+        atom_symbol = atoms[atom - 1] if 0 < atom <= len(atoms) else ""
+        number = atomic_number(atom_symbol) if atom_symbol else None
+        if number is None:
+            continue
+        xy, xz, yz = offdiag.get(atom, (0.0, 0.0, 0.0))
+        rows.append(
+            {
+                "atom": atom,
+                "atomic_number": int(number),
+                "values": (*diagonal, xy, xz, yz),
+            }
+        )
+    return rows
+
+
+def _collect_gaussian_tensor_rows(
+    lines: list[str],
+    start: int,
+    out: dict[int, tuple[float, float, float]],
+) -> int:
+    idx = start
+    dash_seen = False
+    while idx < len(lines):
+        text = lines[idx].strip()
+        if set(text) == {"-"}:
+            if dash_seen and out:
+                return idx + 1
+            dash_seen = True
+            idx += 1
+            continue
+        row = _parse_gaussian_atom_tensor_row(text)
+        if row is not None:
+            atom, values = row
+            out[atom] = values
+        elif out and text:
+            return idx
+        idx += 1
+    return idx
+
+
+def _parse_gaussian_atom_tensor_row(text: str) -> tuple[int, tuple[float, float, float]] | None:
+    parts = text.split()
+    if len(parts) < 5 or not parts[0].isdigit() or parts[1].upper() != "ATOM":
+        return None
+    values = _first_floats(parts[2:], count=3)
+    if len(values) != 3:
+        return None
+    return int(parts[0]), (values[0], values[1], values[2])
 
 
 def _parse_direct_nqcc_row(text: str) -> dict[str, object] | None:
@@ -137,6 +292,10 @@ def _first_floats(parts: list[str], *, count: int) -> list[float]:
         if len(values) == count:
             break
     return values
+
+
+def _float(token: str) -> float:
+    return float(token.replace("D", "E").replace("d", "e"))
 
 
 def _looks_isotope(text: str) -> bool:

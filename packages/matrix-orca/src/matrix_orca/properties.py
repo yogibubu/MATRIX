@@ -19,6 +19,9 @@ def parse_orca_quadrupole_properties(path: Path | str) -> tuple:
     direct = _direct_nqcc_records(target, lines)
     if direct:
         return direct
+    hyperfine = _hyperfine_efg_records(target, lines)
+    if hyperfine:
+        return hyperfine
     return _efg_records(target, lines)
 
 
@@ -82,6 +85,56 @@ def _direct_nqcc_records(path: Path, lines: list[str]) -> tuple:
     return tuple(records)
 
 
+def _hyperfine_efg_records(path: Path, lines: list[str]) -> tuple:
+    from matrix_qm import atomic_number_from_isotope_or_atom, quadrupole_property_records_from_efg
+
+    records = []
+    current: dict[str, object] | None = None
+    nucleus_re = re.compile(
+        r"Nucleus\s+(?P<zero>\d+)(?P<symbol>[A-Za-z]{1,2})\b.*?"
+        r"Isotope=\s*(?P<mass>\d+)",
+        re.I,
+    )
+    for raw in lines:
+        text = raw.strip()
+        match = nucleus_re.search(text)
+        if match is not None:
+            symbol = match.group("symbol").capitalize()
+            current = {
+                "atom": int(match.group("zero")) + 1,
+                "atom_symbol": symbol,
+                "isotope": f"{int(match.group('mass'))}{symbol}",
+            }
+            continue
+        if current is None or not text.startswith("V(Tot)"):
+            continue
+        values = _first_floats(text.split()[1:], count=3)
+        if len(values) != 3:
+            continue
+        number = atomic_number_from_isotope_or_atom(
+            isotope=str(current["isotope"]),
+            atom_symbol=str(current["atom_symbol"]),
+        )
+        records.extend(
+            quadrupole_property_records_from_efg(
+                atom=int(current["atom"]),
+                atomic_number_value=number,
+                efg_au=tuple(values),
+                program="ORCA",
+                source=path,
+                isotope=str(current["isotope"]),
+                axes="ORCA_EFG_PAS:Vxx,Vyy,Vzz",
+                status="raw",
+                comment="ORCA EPRNMR V(Tot) electric-field gradient converted by MATRIX; "
+                "nqcc_convention=Pickett",
+                nqcc_sign=1.0,
+                nqcc_convention="Pickett/ORCA-EFG",
+            )
+        )
+        current = None
+    return tuple(records)
+
+
 def _efg_records(path: Path, lines: list[str]) -> tuple:
     from matrix_qm import atomic_number_from_isotope_or_atom, quadrupole_property_records_from_efg
 
@@ -117,7 +170,10 @@ def _efg_records(path: Path, lines: list[str]) -> tuple:
                 isotope=row["isotope"],
                 axes="ORCA_EFG:xx,yy,zz,xy,xz,yz",
                 status="raw",
-                comment="ORCA electric-field gradient converted by MATRIX",
+                comment="ORCA electric-field gradient converted by MATRIX; "
+                "nqcc_convention=Pickett",
+                nqcc_sign=1.0,
+                nqcc_convention="Pickett/ORCA-EFG",
             )
         )
     return tuple(records)

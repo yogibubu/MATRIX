@@ -6,12 +6,14 @@ from pathlib import Path
 
 import numpy as np
 
+from matrix_gaussian import ensure_gaussian_output_pickett
+
 from .modify_geom import read_xyz
 
 DEFAULT_GAUSSIAN_ROUTE = (
     "#p b3lyp/def2tzvp empiricaldispersion=gd3bj "
     "opt=(addgic,calcfc,noeigentest,maxcycles=200) "
-    "int=ultrafine scf=(xqc,tight) nosymm"
+    "int=ultrafine scf=(xqc,tight) nosymm output=pickett"
 )
 
 
@@ -466,6 +468,7 @@ def build_gjf_links(
 
     lines: list[str] = []
     manifest: list[dict[str, float]] = []
+    gaussian_route = ensure_gaussian_output_pickett(route)
     for i, phi in enumerate(phis):
         if constraint_mode == "functional-targets":
             gic_lines, step_deg = ring_functional_target_gic(
@@ -484,7 +487,7 @@ def build_gjf_links(
                 f"%chk={chk_prefix}_{int(round(phi)):03d}.chk",
                 f"%mem={mem}",
                 f"%nprocshared={nproc}",
-                route,
+                gaussian_route,
                 "",
                 f"{title}: absolute phi={phi:.3f} deg",
                 "",

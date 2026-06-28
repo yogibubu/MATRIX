@@ -87,6 +87,54 @@ def _gaussian_quadrupole_output() -> str:
     )
 
 
+def _gaussian_pickett_quadrupole_output() -> str:
+    return "\n".join(
+        [
+            "#p hf/cc-pVTZ scf=tight prop=efg output=pickett nosymm",
+            "",
+            "Nuclear quadrupole coupling constants [Chi] (MHz):",
+            " 1  N(14) ",
+            "  aa=     2.3869   ba=    -0.0000   ca=    -0.0000",
+            "  ab=    -0.0000   bb=     2.3828   cb=     0.0008",
+            "  ac=    -0.0000   bc=     0.0008   cc=    -4.7697",
+            "Dipole moment (Debye):",
+            "",
+            "Normal termination of Gaussian DV",
+        ]
+    )
+
+
+def _gaussian_efg_quadrupole_output() -> str:
+    return "\n".join(
+        [
+            "#p hf/cc-pVTZ scf=tight prop=efg nosymm",
+            "",
+            "Input orientation:",
+            " ---------------------------------------------------------------------",
+            " Center     Atomic      Atomic             Coordinates (Angstroms)",
+            " Number     Number       Type             X           Y           Z",
+            " ---------------------------------------------------------------------",
+            "      1          7           0        0.000000    0.000000    0.000000",
+            " ---------------------------------------------------------------------",
+            " -----------------------------------------------------",
+            "    Center         ---- Electric Field Gradient ----",
+            "                     XY            XZ            YZ",
+            " -----------------------------------------------------",
+            "    1 Atom        0.000000      0.000000     -0.000174",
+            " -----------------------------------------------------",
+            " -----------------------------------------------------",
+            "    Center         ---- Electric Field Gradient ----",
+            "                       ( tensor representation )",
+            "                   3XX-RR        3YY-RR        3ZZ-RR",
+            " -----------------------------------------------------",
+            "    1 Atom       -0.496965     -0.496105      0.993070",
+            " -----------------------------------------------------",
+            "",
+            "Normal termination of Gaussian",
+        ]
+    )
+
+
 def _orca_quadrupole_output(*, direct: bool) -> str:
     rows = (
         [
@@ -102,6 +150,28 @@ def _orca_quadrupole_output(*, direct: bool) -> str:
         ]
     )
     return "\n".join(["Program ORCA", *rows, "****ORCA TERMINATED NORMALLY****"])
+
+
+def _orca_eprnmr_quadrupole_output() -> str:
+    return "\n".join(
+        [
+            "Program ORCA",
+            "Nucleus   0N : A  : Isotope=   14 I=  1.0 P= 38.5677 MHz/au**3",
+            "               Q  : Isotope=   14 I=  1.0 Q=  0.0204 barn",
+            "Raw EFG matrix (all values in a.u.**-3):",
+            " ------------------------------------------------------",
+            "             0.4970207      -0.0000000       0.0000000",
+            "            -0.0000000       0.4961606       0.0001744",
+            "             0.0000000       0.0001744      -0.9931813",
+            "",
+            "V(Tot)       0.4961606       0.4970207      -0.9931813",
+            "",
+            "Quadrupole tensor eigenvalues (in MHz;Q= 0.0204 I=  1.0)",
+            " e**2qQ            =    -4.769937 MHz",
+            " eta               =     0.000866",
+            "****ORCA TERMINATED NORMALLY****",
+        ]
+    )
 
 
 def _mrcc_output() -> str:
@@ -187,7 +257,7 @@ def test_molpro_quadrupole_adapter_converts_efg_to_properties(tmp_path):
     section = read_properties_section(xyzin)
 
     nqcc = [record for record in records if record.name == "NUCLEAR_QUADRUPOLE_COUPLING"][0]
-    expected = EFG_AU_TO_NQCC_MHZ_PER_BARN * 0.02044 * -9.091670249869
+    expected = -EFG_AU_TO_NQCC_MHZ_PER_BARN * 0.02044 * -9.091670249869
     assert result.wrote_properties is True
     assert result.property_count == 3
     assert len(section.records) == len(records)
@@ -248,6 +318,32 @@ def test_gaussian_quadrupole_adapter_promotes_direct_constants(tmp_path):
     assert records[0].value == (-4.1, 2.05, 2.05, 0.01, 0.02, 0.03)
 
 
+def test_gaussian_quadrupole_adapter_prefers_pickett_constants(tmp_path):
+    output = tmp_path / "gaussian_pickett.log"
+    output.write_text(_gaussian_pickett_quadrupole_output(), encoding="utf-8")
+
+    records = parse_gaussian_quadrupole_properties(output)
+
+    assert len(records) == 1
+    assert records[0].program == "Gaussian"
+    assert records[0].axes == "PICKETT:chi_aa,chi_bb,chi_cc,chi_ab,chi_ac,chi_bc"
+    assert records[0].isotope == "14N"
+    assert np.allclose(records[0].value, (2.3869, 2.3828, -4.7697, -0.0, -0.0, 0.0008))
+
+
+def test_gaussian_quadrupole_adapter_converts_standard_efg_to_pickett(tmp_path):
+    output = tmp_path / "gaussian_efg.log"
+    output.write_text(_gaussian_efg_quadrupole_output(), encoding="utf-8")
+
+    records = parse_gaussian_quadrupole_properties(output)
+    converted = [record for record in records if record.name == "NUCLEAR_QUADRUPOLE_COUPLING"]
+
+    assert len(records) == 3
+    assert len(converted) == 1
+    assert np.isclose(converted[0].value[2], -EFG_AU_TO_NQCC_MHZ_PER_BARN * 0.02044 * 0.993070)
+    assert "convention=Pickett/Gaussian-EFG" in converted[0].conversion
+
+
 def test_orca_quadrupole_adapter_promotes_direct_or_converted_constants(tmp_path):
     direct = tmp_path / "orca_direct.out"
     efg = tmp_path / "orca_efg.out"
@@ -264,6 +360,20 @@ def test_orca_quadrupole_adapter_promotes_direct_or_converted_constants(tmp_path
     assert len(converted) == 1
     assert converted[0].status == "converted"
     assert np.isclose(converted[0].value[0], EFG_AU_TO_NQCC_MHZ_PER_BARN * 0.02044 * -9.091670249869)
+
+
+def test_orca_quadrupole_adapter_reads_eprnmr_vtot_block(tmp_path):
+    output = tmp_path / "orca_eprnmr.out"
+    output.write_text(_orca_eprnmr_quadrupole_output(), encoding="utf-8")
+
+    records = parse_orca_quadrupole_properties(output)
+    converted = [record for record in records if record.name == "NUCLEAR_QUADRUPOLE_COUPLING"]
+
+    assert len(records) == 3
+    assert len(converted) == 1
+    assert converted[0].axes == "ORCA_EFG_PAS:Vxx,Vyy,Vzz"
+    assert np.isclose(converted[0].value[2], -4.769937, atol=5.0e-5)
+    assert "convention=Pickett/ORCA-EFG" in converted[0].conversion
 
 
 def test_mrcc_output_adapter_returns_shared_geometry(tmp_path):

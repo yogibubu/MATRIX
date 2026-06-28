@@ -100,8 +100,10 @@ def quadrupole_moment_from_label(label: str) -> QuadrupoleMoment | None:
 def efg_to_nqcc_mhz(
     efg_au: tuple[float, ...],
     moment: QuadrupoleMoment,
+    *,
+    sign: float = 1.0,
 ) -> tuple[float, ...]:
-    factor = EFG_AU_TO_NQCC_MHZ_PER_BARN * moment.quadrupole_barn
+    factor = float(sign) * EFG_AU_TO_NQCC_MHZ_PER_BARN * moment.quadrupole_barn
     return tuple(factor * float(value) for value in efg_au)
 
 
@@ -126,6 +128,8 @@ def quadrupole_property_records_from_efg(
     axes: str = "MOLECULAR:xx,yy,zz,xy,xz,yz",
     status: str = "raw",
     comment: str = "",
+    nqcc_sign: float = 1.0,
+    nqcc_convention: str = "program",
 ) -> tuple[PropertyRecord, ...]:
     moment = (
         quadrupole_moment_from_label(isotope)
@@ -161,7 +165,7 @@ def quadrupole_property_records_from_efg(
                 target_id=target_id,
                 atom=atom,
                 isotope=moment.isotope,
-                value=efg_to_nqcc_mhz(efg_tensor.values, moment),
+                value=efg_to_nqcc_mhz(efg_tensor.values, moment, sign=nqcc_sign),
                 unit="MHz",
                 axes=efg_tensor.axes,
                 program=program,
@@ -171,7 +175,8 @@ def quadrupole_property_records_from_efg(
                 status="converted",
                 conversion=(
                     f"EFG_AU_TO_MHZ;factor={EFG_AU_TO_NQCC_MHZ_PER_BARN:.7g};"
-                    f"Q_barn={moment.quadrupole_barn:.12g};source={moment.source}"
+                    f"sign={float(nqcc_sign):.12g};Q_barn={moment.quadrupole_barn:.12g};"
+                    f"source={moment.source};convention={nqcc_convention}"
                 ),
                 comment=comment,
             )

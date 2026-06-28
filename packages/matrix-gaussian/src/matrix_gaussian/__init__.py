@@ -24,6 +24,7 @@ from .topology import (
 )
 from .writers import (
     GaussianWriteError,
+    ensure_gaussian_output_pickett,
     write_gicforge_gaussian_input,
 )
 from .fchk import (
@@ -94,6 +95,7 @@ __all__ = [
     "check_gaussian_readallgic_log",
     "compute_deltavib_from_alpha",
     "ensure_gjf_input",
+    "ensure_gaussian_output_pickett",
     "formchk_checkpoint",
     "gaussian_completed_normally",
     "gaussian_completion_message",

@@ -256,9 +256,12 @@ def prepare_low_level_gaussian_inputs(
     nproc: int = 8,
     mem: str = "8GB",
 ):
+    from matrix_gaussian import ensure_gaussian_output_pickett
+
     manifest = json.loads(delta_manifest_json.read_text(encoding="utf-8"))
     entries = manifest.get("entries", [])
     written = []
+    gaussian_route = ensure_gaussian_output_pickett(route)
 
     for idx, e in enumerate(entries, start=1):
         xyz_path = Path(e.get("suggested_low_level_input_xyz", ""))
@@ -271,7 +274,7 @@ def prepare_low_level_gaussian_inputs(
             f"%chk={chk_name}",
             f"%nprocshared={int(max(1, nproc))}",
             f"%mem={mem}",
-            route.strip(),
+            gaussian_route,
             "",
             f"Low-level fragment {e.get('query_fragment_id', idx)}",
             "",
@@ -286,7 +289,7 @@ def prepare_low_level_gaussian_inputs(
         written.append(str(gjf_path))
 
     manifest["low_level_gaussian"] = {
-        "route": route.strip(),
+        "route": gaussian_route,
         "charge": int(charge),
         "multiplicity": int(multiplicity),
         "nproc": int(max(1, nproc)),
@@ -307,9 +310,12 @@ def prepare_high_level_curation_jobs(
     nproc: int = 8,
     mem: str = "16GB",
 ):
+    from matrix_gaussian import ensure_gaussian_output_pickett
+
     manifest = json.loads(delta_manifest_json.read_text(encoding="utf-8"))
     entries = manifest.get("entries", [])
     out_dir.mkdir(parents=True, exist_ok=True)
+    gaussian_route = ensure_gaussian_output_pickett(route)
 
     queue = []
     for idx, e in enumerate(entries, start=1):
@@ -330,7 +336,7 @@ def prepare_high_level_curation_jobs(
             f"%chk={qid}.chk",
             f"%nprocshared={int(max(1, nproc))}",
             f"%mem={mem}",
-            route.strip(),
+            gaussian_route,
             "",
             f"High-level curation fragment {e.get('query_fragment_id', idx)}",
             "",

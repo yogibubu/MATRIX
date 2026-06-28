@@ -15,6 +15,10 @@ _GEOM_VALUE_RE = re.compile(
     r"\bgeom\s*=\s*(?P<value>[A-Za-z][A-Za-z0-9_-]*)",
     flags=re.IGNORECASE,
 )
+_OUTPUT_RE = re.compile(
+    r"\boutput\s*=\s*(?:\([^)]*\)|[A-Za-z][A-Za-z0-9_-]*)",
+    flags=re.IGNORECASE,
+)
 _OPT_PAREN_RE = re.compile(r"\bopt\s*=\s*\((?P<body>[^)]*)\)", flags=re.IGNORECASE)
 _OPT_VALUE_RE = re.compile(r"\bopt\s*=\s*(?P<value>[A-Za-z][A-Za-z0-9_-]*)", flags=re.IGNORECASE)
 _OPT_BARE_RE = re.compile(r"\bopt\b(?!\s*=)", flags=re.IGNORECASE)
@@ -24,6 +28,20 @@ _GICALLSYM_RE = re.compile(r"\bgic(?:all)?symm?\b", flags=re.IGNORECASE)
 
 class GaussianWriteError(ValueError):
     """Raised when ORACLE state cannot be exported to Gaussian input."""
+
+
+def ensure_gaussian_output_pickett(route: str) -> str:
+    """Return a Gaussian route that explicitly asks for Pickett output."""
+    text = route.strip()
+    if not text:
+        raise GaussianWriteError("Gaussian route cannot be empty")
+    if not text.startswith("#"):
+        text = f"# {text}"
+    if _OUTPUT_RE.search(text):
+        text = _OUTPUT_RE.sub("output=pickett", text, count=1)
+    else:
+        text = f"{text} output=pickett"
+    return _collapse_route(text)
 
 
 def write_gicforge_gaussian_input(
@@ -101,8 +119,8 @@ def _normalize_route(route: str) -> str:
         )
     if _route_has_opt(text):
         text = _strip_readallgic_geom(text)
-        return _collapse_route(_ensure_readallgic_opt(text))
-    return _collapse_route(_ensure_readallgic_geom(text))
+        return ensure_gaussian_output_pickett(_ensure_readallgic_opt(text))
+    return ensure_gaussian_output_pickett(_ensure_readallgic_geom(text))
 
 
 def _route_has_opt(route: str) -> bool:

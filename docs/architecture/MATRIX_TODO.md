@@ -62,6 +62,16 @@
 - Add run manifests for every multi-step workflow so each publication figure or
   table can be traced back to input sections, command-line options, external
   executables and MATRIX version.
+- Import or redesign the validated one-mode Gaussian rovibrational probe from
+  `/Users/vincenzobarone/merlino_fit/scripts/gaussian_one_mode_probe.py` as a
+  MATRIX diagnostic workflow.  It should reuse the shared Gaussian/QFF adapters,
+  normal-mode contracts and diagonalizer, and should keep the validated
+  `dI/dQ`, `I(Q)` and `1/I(Q)` checks.
+- Before deleting `/Users/vincenzobarone/newmerlin`, extract the remaining
+  useful historical material listed in
+  `docs/architecture/MATRIX_LEGACY_REPO_AUDIT_2026-06-28.md`: `vci1d.f`,
+  `allvib.f`, `rates.f`, `source/newrot/newkra.f`, `der12.F`, old notes and
+  the `.inp` fixtures not yet in the MATRIX corpus.
 - Add a release-quality benchmark corpus for end-to-end workflows, including
   small fast fixtures for CI and larger demanding molecules for periodic
   numerical audits.

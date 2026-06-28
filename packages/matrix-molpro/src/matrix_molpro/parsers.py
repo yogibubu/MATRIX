@@ -141,7 +141,9 @@ def parse_molpro_quadrupole_properties(
         level=level,
         axes="MOLPRO_EFG:xx,yy,zz,xy,xz,yz",
         status="raw",
-        comment=f"relaxation={relaxation}",
+        comment=f"relaxation={relaxation}; nqcc_convention=Pickett",
+        nqcc_sign=-1.0,
+        nqcc_convention="Pickett/Molpro-EFG",
     )
 
 
