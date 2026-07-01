@@ -141,6 +141,11 @@ the final primitive values to be identical; they force their corrections from th
 reference structure to share one amplitude.  Classes are useful when the data support a
 family correction but not each member separately.  Examples are CC stretches, CO
 stretches, chemically related valence angles, or terminal CH$_2$ stretches.
+In the automatic mode these families are generated from continuous MATRIX synthons
+rather than from rigid element labels alone.  The synthon thresholds control how
+finely covalency, delocalization, strain, and bond order are resolved.  MORPHEUS
+tests coarse, medium, and fine partitions and selects the simplest candidate that
+passes rank and propagated-uncertainty checks.
 
 \subsection{Predicates}
 Predicates are weighted structural observations, not exact constraints.  They are the
@@ -150,6 +155,19 @@ an angle predicate with $\sigma=0.3^\circ$ mean that deviations are allowed but 
 according to the stated uncertainty.  The covariance matrix includes the predicate
 weights, so final structural uncertainties are propagated rather than estimated by
 Monte Carlo sampling.
+
+The distance-predicate and advisor thresholds are intentionally class dependent.  A
+bond between two non-hydrogen atoms is denoted here as an XY bond.  An X--H bond is
+not treated as a single universal class: C--H bonds are separated from all other X--H
+bonds.  Non-CH X--H bonds are scored with the same propagated-uncertainty threshold
+as XY bonds, because they may be directly constrained by isotopic substitution,
+Kraitchman information, or reliable local chemistry.  C--H distances, in contrast,
+often lack deuterated isotopologues in practical datasets and are weakly determined
+by heavy-atom substitutions.  MORPHEUS therefore uses a broader acceptance threshold
+for C--H distances in the automatic model selector.  This distinction prevents the
+selector from rejecting an otherwise well-conditioned chemically meaningful model
+only because unsupported C--H directions have larger propagated errors, while still
+requiring non-CH X--H and XY distances to meet the tighter structural criterion.
 
 \subsection{Kraitchman-derived predicates}
 Single-substitution Kraitchman coordinates provide an independent experimental
@@ -166,14 +184,18 @@ correction dependencies.
 
 \subsection{Automatic advisor}
 The advisor now builds disjoint suggestions from dominant primitive contributions to
-each GIC.  A GIC is assigned to a chemical class only when one primitive family is
-dominant; classes are never allowed to mix stretches, bends, torsions, or other
-coordinate types.  Suggested class names are chemically explicit, for example
-\texttt{CC\_stretches}, \texttt{CO\_stretches}, \texttt{CCO\_bends}, or
-\texttt{HO\_stretches}.  When hydrogen substitutions are absent, dominant X--H angle
-directions may be proposed as fixed directions.  The advisor is deliberately a model
-builder, not a black-box guarantee: its output is validated by rank, condition number,
-residuals, propagated uncertainties, and warning diagnostics.
+each GIC.  A GIC is assigned to a synthon-derived class only when one primitive family
+is dominant; classes are never allowed to mix stretches, bends, torsions, or other
+coordinate types.  The refinement can be set to coarse, medium, fine, or automatic;
+the automatic choice is made from candidate fits using propagated uncertainties for
+XY bonds, non-CH X--H bonds, C--H bonds, and heavy-atom angles.  The default
+acceptance thresholds are deliberately not identical: XY and non-CH X--H distances
+share the tighter criterion, C--H distances have a wider criterion, and heavy-atom
+valence angles are checked separately.  When hydrogen
+substitutions are absent, dominant X--H angle directions may be proposed as fixed
+directions.  The advisor is deliberately a model builder, not a black-box guarantee:
+its output is validated by rank, condition number, residuals, propagated
+uncertainties, and warning diagnostics.
 
 \section{Current numerical checks}
 The following tests use the fructose and deoxy-D-ribose datasets already converted to
@@ -240,14 +262,5 @@ Cremer--Pople-like \(Q\) and \(\phi\) coordinates rather than by listing all
 intracyclic torsions.
 
 \input{generated_geometry_tables.tex}
-
-\section{Open developments}
-The next improvements should make the advisor more chemically aware without making it
-opaque.  Useful extensions are automatic predicate-width selection from reference level,
-synthon-aware class splitting, explicit data-budget optimization, and reporting of why
-each suggested class was accepted or rejected.  The final paper should also include
-examples where the advisor chooses different models as isotopic coverage is increased,
-because that directly demonstrates that MORPHEUS formalizes model construction rather
-than merely automating a fit.
 
 \end{document}

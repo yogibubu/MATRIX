@@ -140,14 +140,14 @@
       "effective_parameters": 18,
       "rank": 18,
       "primitive_constraints": 30,
-      "accepted_steps": 8,
-      "rejected_steps": 0,
-      "condition_number": 3700.2816684721843,
-      "rotational_rms_MHz": 0.07099233691760591,
-      "rotational_max_MHz": 0.209142098706,
-      "minimum_hessian_eigenvalue": 0.175456863111,
+      "accepted_steps": 12,
+      "rejected_steps": 7,
+      "condition_number": 5199.222374936271,
+      "rotational_rms_MHz": 0.0941012545908,
+      "rotational_max_MHz": 0.262854416558,
+      "minimum_hessian_eigenvalue": 412124.021324,
       "stationary_point": "minimum",
-      "run_dir": "working/semiexp/norcamphor/run_msr_rd_explicit"
+      "run_dir": "working/semiexp/norcamphor_from_pdf/predicates_kraitchman_fix_h"
     },
     "glycine_I": {
       "point_group": "Cs",

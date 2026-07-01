@@ -4,7 +4,7 @@ set -eu
 BASE='packages/matrix-morpheus/examples/semiexp/testosterone'
 OUT='working/semiexp/testosterone_predicates'
 BASIS="$OUT/basis"
-SIGMA="${MATRIX_TESTOSTERONE_PREDICATE_SIGMA:-0.05}"
+XY_SIGMA="${MATRIX_TESTOSTERONE_XY_PREDICATE_SIGMA:-0.005}"
 
 python -m matrix semiexp \
   --xyz "$BASE/testosterone_DPCS3.xyz" \
@@ -95,7 +95,7 @@ set -- python -m matrix semiexp \
 while IFS= read -r predicate; do
   set -- "$@" --qm-predicate "$predicate"
 done <<PREDICATES
-$(python - "$BASE/testosterone_DPCS3.xyz" "$SIGMA" <<'PY'
+$(python - "$BASE/testosterone_DPCS3.xyz" "$XY_SIGMA" <<'PY'
 from __future__ import annotations
 
 import math

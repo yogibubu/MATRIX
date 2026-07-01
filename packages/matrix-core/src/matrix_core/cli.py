@@ -2190,12 +2190,14 @@ def main(
             ParameterClassConstraint,
             QMParameterPredicate,
             SemiexperimentalFitRequest,
+            SYNTHON_CLASS_LEVELS,
             derive_primitive_class_plan,
             fit_semiexperimental_geometry,
             initial_geometry_predicates,
             is_msr_legacy_file,
             kraitchman_seed_predicates,
             parse_primitive_class_spec,
+            primitive_class_decision_lines,
             prepare_semiexperimental_xyzin,
             preview_semiexperimental_gics,
             read_geometry_input,
@@ -2203,6 +2205,7 @@ def main(
             read_observations,
             read_semiexperimental_job,
             semiexperimental_latex_tables,
+            synthon_primitive_class_specs,
             write_morpheus_section_from_result,
             write_semiexperimental_html_report,
         )
@@ -2319,6 +2322,164 @@ def main(
         primitive_classes = tuple(
             parse_primitive_class_spec(item) for item in getattr(args, "primitive_class", ())
         )
+        if xyzin_config is not None:
+            primitive_classes = _merge_unique(primitive_classes, xyzin_config.primitive_classes)
+            synthon_spec = xyzin_config.synthon_primitive_classes
+            if synthon_spec.enabled:
+                synthon_budget = _primitive_class_budget(
+                    xyzin_config.primitive_class_budget or args.primitive_class_budget,
+                    observations=observations,
+                    rotational_components=rotational_components,
+                )
+                geometry_input_for_classes = read_geometry_input(Path(geometry_path))
+                if synthon_spec.level == "auto":
+                    preview_for_auto = preview_semiexperimental_gics(
+                        Path(geometry_path),
+                        observations,
+                    )
+                    primitive_class_min_for_auto = (
+                        xyzin_config.primitive_class_min
+                        if xyzin_config.primitive_class_min is not None
+                        else args.primitive_class_min
+                    )
+                    primitive_class_cross_for_auto = (
+                        xyzin_config.primitive_class_cross_max
+                        if xyzin_config.primitive_class_cross_max is not None
+                        else args.primitive_class_cross_max
+                    )
+                    candidate_records = []
+                    for candidate_level in ("coarse", "medium", "fine"):
+                        candidate_generated = synthon_primitive_class_specs(
+                            tuple(geometry_input_for_classes.atoms),
+                            geometry_input_for_classes.coordinates_angstrom,
+                            level=candidate_level,
+                            include_bonds=synthon_spec.include_bonds,
+                            include_angles=synthon_spec.include_angles,
+                            min_group_size=synthon_spec.min_group_size,
+                            bond_order_bins=synthon_spec.bond_order_bins,
+                        )
+                        candidate_classes = _merge_unique(
+                            primitive_classes,
+                            candidate_generated,
+                        )
+                        candidate_plan = derive_primitive_class_plan(
+                            preview_for_auto.gic_labels,
+                            candidate_classes,
+                            min_fraction=primitive_class_min_for_auto,
+                            cross_fraction_max=primitive_class_cross_for_auto,
+                            max_classes=synthon_budget,
+                        )
+                        candidate_fixed = _merge_unique(fixed, candidate_plan.fixed_patterns)
+                        candidate_parameter_classes = _merge_unique(
+                            parameter_classes,
+                            candidate_plan.parameter_classes,
+                        )
+                        candidate_request = SemiexperimentalFitRequest(
+                            initial_geometry=geometry_path,
+                            observations=observations,
+                            fixed_parameters=candidate_fixed,
+                            observable=observable,
+                            rotational_components=rotational_components,
+                            qm_predicates=qm_predicates,
+                            parameter_classes=candidate_parameter_classes,
+                            coordinate_model=coordinate_model,
+                            robust_loss=(
+                                job.robust_loss
+                                if job and args.robust_loss == DEFAULT_SEMIEXP_ROBUST_LOSS
+                                else args.robust_loss
+                            ),
+                            robust_scale=args.robust_scale,
+                            leave_one_out=False,
+                        )
+                        candidate_outdir = (
+                            args.outdir / "_synthon_auto_candidates" / candidate_level
+                        )
+                        candidate_result = fit_semiexperimental_geometry(
+                            candidate_request,
+                            max_iter=(
+                                args.max_iter
+                                if args.max_iter is not None
+                                else (job.max_iter if job else None)
+                            ),
+                            step=(
+                                args.step
+                                if args.step != 1.0e-4
+                                else (job.step if job and job.step is not None else 1.0e-4)
+                            ),
+                            damping=(
+                                args.damping
+                                if args.damping != 1.0e-8
+                                else (job.damping if job and job.damping is not None else 1.0e-8)
+                            ),
+                            max_step=(
+                                args.max_step
+                                if args.max_step != 0.25
+                                else (job.max_step if job and job.max_step is not None else 0.25)
+                            ),
+                            prune_condition=(
+                                args.prune_condition
+                                if args.prune_condition != 0.0
+                                else (
+                                    job.prune_condition
+                                    if job and job.prune_condition is not None
+                                    else 0.0
+                                )
+                            ),
+                            outdir=candidate_outdir,
+                        )
+                        score = _semiexp_synthon_auto_score(candidate_result)
+                        candidate_records.append(
+                            (
+                                score,
+                                candidate_level,
+                                candidate_generated,
+                                candidate_plan,
+                                candidate_result,
+                            )
+                        )
+                        print(
+                            "synthon_auto_candidate: "
+                            f"level={candidate_level} "
+                            f"classes={len(candidate_plan.parameter_classes)} "
+                            f"active={candidate_result.diagnostics.n_optimized_parameters} "
+                            f"rank={candidate_result.diagnostics.rank} "
+                            f"cond={candidate_result.diagnostics.condition_number:.6g} "
+                            f"max_sigma_XY={score[3]:.6g} "
+                            f"max_sigma_XH={score[4]:.6g} "
+                            f"max_sigma_CH={score[5]:.6g} "
+                            f"max_sigma_A={score[6]:.6g} "
+                            f"violations={score[0]}"
+                        )
+                    selected = min(candidate_records, key=lambda item: item[0])
+                    synthon_level = selected[1]
+                    generated_classes = selected[2]
+                    print(
+                        "synthon_auto_selected: "
+                        f"level={synthon_level} "
+                        f"classes={len(selected[3].parameter_classes)} "
+                        f"score={selected[0]}"
+                    )
+                else:
+                    synthon_level = synthon_spec.level
+                    if synthon_level not in SYNTHON_CLASS_LEVELS:
+                        raise ValueError(f"Unknown SYNTHON_LEVEL: {synthon_level}")
+                    generated_classes = synthon_primitive_class_specs(
+                        tuple(geometry_input_for_classes.atoms),
+                        geometry_input_for_classes.coordinates_angstrom,
+                        level=synthon_level,
+                        include_bonds=synthon_spec.include_bonds,
+                        include_angles=synthon_spec.include_angles,
+                        min_group_size=synthon_spec.min_group_size,
+                        bond_order_bins=synthon_spec.bond_order_bins,
+                    )
+                primitive_classes = _merge_unique(primitive_classes, generated_classes)
+                print(
+                    "xyzin_synthon_primitive_classes: "
+                    f"count={len(generated_classes)} "
+                    f"level={synthon_level} "
+                    f"include_bonds={synthon_spec.include_bonds} "
+                    f"include_angles={synthon_spec.include_angles}"
+                )
         backend = _job_default(args.backend, "python", job.backend if job else None)
         max_iter = args.max_iter if args.max_iter is not None else (job.max_iter if job else None)
         step = _job_default(args.step, 1.0e-4, job.step if job else None)
@@ -2343,8 +2504,29 @@ def main(
         if primitive_classes:
             if coordinate_model != "gic":
                 raise ValueError("--primitive-class is only supported with --coordinate-model gic")
+            primitive_class_budget_raw = args.primitive_class_budget
+            if (
+                xyzin_config is not None
+                and xyzin_config.primitive_class_budget is not None
+                and args.primitive_class_budget == "auto"
+            ):
+                primitive_class_budget_raw = xyzin_config.primitive_class_budget
+            primitive_class_min = (
+                xyzin_config.primitive_class_min
+                if xyzin_config is not None
+                and xyzin_config.primitive_class_min is not None
+                and args.primitive_class_min == 0.70
+                else args.primitive_class_min
+            )
+            primitive_class_cross_max = (
+                xyzin_config.primitive_class_cross_max
+                if xyzin_config is not None
+                and xyzin_config.primitive_class_cross_max is not None
+                and args.primitive_class_cross_max == 0.20
+                else args.primitive_class_cross_max
+            )
             class_budget = _primitive_class_budget(
-                args.primitive_class_budget,
+                primitive_class_budget_raw,
                 observations=observations,
                 rotational_components=rotational_components,
             )
@@ -2352,8 +2534,8 @@ def main(
             class_plan = derive_primitive_class_plan(
                 preview.gic_labels,
                 primitive_classes,
-                min_fraction=args.primitive_class_min,
-                cross_fraction_max=args.primitive_class_cross_max,
+                min_fraction=primitive_class_min,
+                cross_fraction_max=primitive_class_cross_max,
                 max_classes=class_budget,
             )
             fixed = _merge_unique(fixed, class_plan.fixed_patterns)
@@ -2369,6 +2551,8 @@ def main(
                     f"primitive_class: {item.name} "
                     f"gics={len(item.patterns)} patterns={'|'.join(item.patterns)}"
                 )
+            for line in primitive_class_decision_lines(class_plan):
+                print(line)
         if (
             coordinate_model == "gic"
             and not args.no_auto_stabilize
@@ -3071,6 +3255,67 @@ def _semiexp_components_for_budget(rotational_components: str) -> tuple[str, ...
     if text in {"AB", "AC", "BC"}:
         return tuple(text)
     return ("A", "B", "C")
+
+
+def _semiexp_synthon_auto_score(
+    result,
+) -> tuple[float, float, float, float, float, float, float, float, int]:
+    xy_sigma_limit = 2.0e-3
+    ch_sigma_limit = 5.0e-3
+    heavy_angle_sigma_limit = 0.2
+    max_xy_bond_sigma = 0.0
+    max_xh_bond_sigma = 0.0
+    max_ch_bond_sigma = 0.0
+    max_heavy_angle_sigma = 0.0
+    bond_violations = 0
+    angle_violations = 0
+    for parameter in result.geometry_parameters:
+        symbols = tuple(getattr(parameter, "atom_symbols", ()) or ())
+        if parameter.kind == "bond":
+            sigma = float(parameter.sigma_angstrom or 0.0)
+            if "H" not in symbols:
+                max_xy_bond_sigma = max(max_xy_bond_sigma, sigma)
+                if sigma > xy_sigma_limit:
+                    bond_violations += 1
+            elif "H" in symbols:
+                if set(symbols) == {"C", "H"}:
+                    limit = ch_sigma_limit
+                    max_ch_bond_sigma = max(max_ch_bond_sigma, sigma)
+                else:
+                    limit = xy_sigma_limit
+                    max_xh_bond_sigma = max(max_xh_bond_sigma, sigma)
+                if sigma > limit:
+                    bond_violations += 1
+        elif parameter.kind == "angle":
+            sigma = float(parameter.sigma_degree or 0.0)
+            if "H" not in symbols:
+                max_heavy_angle_sigma = max(max_heavy_angle_sigma, sigma)
+                if sigma > heavy_angle_sigma_limit:
+                    angle_violations += 1
+    diagnostics = result.diagnostics
+    rank_defect = max(0, int(diagnostics.n_optimized_parameters) - int(diagnostics.rank))
+    condition = float(diagnostics.condition_number)
+    if not math.isfinite(condition):
+        condition = 1.0e99
+    threshold_penalty = (
+        max(0.0, max_xy_bond_sigma - xy_sigma_limit) / xy_sigma_limit
+        + max(0.0, max_xh_bond_sigma - xy_sigma_limit) / xy_sigma_limit
+        + max(0.0, max_ch_bond_sigma - ch_sigma_limit) / ch_sigma_limit
+        + max(0.0, max_heavy_angle_sigma - heavy_angle_sigma_limit)
+        / heavy_angle_sigma_limit
+    )
+    violations = bond_violations + angle_violations
+    return (
+        float(violations),
+        float(rank_defect),
+        float(threshold_penalty),
+        float(max_xy_bond_sigma),
+        float(max_xh_bond_sigma),
+        float(max_ch_bond_sigma),
+        float(max_heavy_angle_sigma),
+        float(condition),
+        -int(diagnostics.n_optimized_parameters),
+    )
 
 
 def _merge_unique(left: tuple[_T, ...], right: tuple[_T, ...]) -> tuple[_T, ...]:

@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 
 def test_matrix_morpheus_imports_and_data_library():
@@ -265,6 +266,50 @@ def test_primitive_class_advisor_supports_nonbond_primitives():
     assert plan.fixed_patterns == ("GIC003",)
 
 
+def test_synthon_advisor_builds_topology_classes_for_equivalent_bonds():
+    from matrix_morpheus import synthon_primitive_class_specs
+
+    atoms = ("O", "H", "H")
+    coords = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.9572],
+            [0.9266, 0.0, -0.2396],
+        ]
+    )
+
+    specs = synthon_primitive_class_specs(atoms, coords, include_angles=False)
+    patterns = {pattern for spec in specs for pattern in spec.patterns}
+
+    assert {"R(1,2)", "R(1,3)"} <= patterns
+
+
+def test_synthon_advisor_refinement_level_changes_class_granularity():
+    from matrix_morpheus import synthon_level_for_budget, synthon_primitive_class_specs
+
+    atoms = ("C", "C", "O", "H", "H", "H", "H", "H")
+    coords = np.array(
+        [
+            [0.000, 0.000, 0.000],
+            [1.520, 0.000, 0.000],
+            [2.900, 0.000, 0.000],
+            [-0.540, 0.930, 0.000],
+            [-0.540, -0.930, 0.000],
+            [1.520, 1.030, 0.000],
+            [1.520, -1.030, 0.000],
+            [3.240, 0.900, 0.000],
+        ]
+    )
+
+    coarse = synthon_primitive_class_specs(atoms, coords, level="coarse")
+    fine = synthon_primitive_class_specs(atoms, coords, level="fine")
+
+    assert len(coarse) <= len(fine)
+    assert synthon_level_for_budget(4) == "coarse"
+    assert synthon_level_for_budget(8) == "medium"
+    assert synthon_level_for_budget(20) == "fine"
+
+
 def test_semiexp_advisor_suggests_disjoint_dominant_gic_classes():
     from matrix_morpheus import suggest_parameter_classes
 
@@ -293,6 +338,65 @@ def test_semiexp_advisor_suggests_disjoint_dominant_gic_classes():
         ("GIC005",),
         "fixed",
     ) in [(item.name, item.patterns, item.mode) for item in classes]
+
+
+def test_morpheus_xyzin_config_reads_auto_predicates_and_synthon_advisor():
+    from matrix_morpheus import parse_morpheus_input_config
+
+    xyzin = """#MORPHEUS
+COORDINATE_MODEL = gic
+OBSERVABLE = moments
+COMPONENTS = Ia,Ib,Ic
+PREDICATES = INITIAL_GEOMETRY REFERENCE_LEVEL=high DISTANCE_SIGMA=AUTO ANGLE_SIGMA=AUTO
+PREDICATE_SCOPE = xy_bonds,xh_bonds
+PRIMITIVE_CLASS_ADVISOR = AUTO_SYNTHON INCLUDE=bonds MIN_GROUP_SIZE=2
+SYNTHON_LEVEL = fine
+PRIMITIVE_CLASS_BUDGET = auto
+"""
+
+    config = parse_morpheus_input_config(xyzin.splitlines()[1:])
+
+    assert config.initial_geometry_predicates.distance_sigma_angstrom == pytest.approx(0.0015)
+    assert config.initial_geometry_predicates.angle_sigma_degree == pytest.approx(0.15)
+    assert config.synthon_primitive_classes.enabled
+    assert config.synthon_primitive_classes.level == "fine"
+    assert config.synthon_primitive_classes.include_bonds
+    assert not config.synthon_primitive_classes.include_angles
+    assert config.primitive_class_budget == "auto"
+
+
+def test_initial_geometry_predicates_separate_xy_and_xh_bonds():
+    from matrix_morpheus import initial_geometry_predicates
+
+    atoms = ("C", "O", "H", "H")
+    coords = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.4, 0.0, 0.0],
+            [-0.7, 0.9, 0.0],
+            [1.8, 0.9, 0.0],
+        ]
+    )
+
+    xy = initial_geometry_predicates(
+        atoms,
+        coords,
+        distance_sigma_angstrom=0.003,
+        angle_sigma_degree=0.3,
+        dihedral_sigma_degree=0.5,
+        scope=("xy_bonds",),
+    )
+    xh = initial_geometry_predicates(
+        atoms,
+        coords,
+        distance_sigma_angstrom=0.003,
+        angle_sigma_degree=0.3,
+        dihedral_sigma_degree=0.5,
+        scope=("xh_bonds",),
+    )
+
+    assert {item.label_pattern for item in xy} == {"R(1,2)"}
+    assert {item.label_pattern for item in xh} == {"R(1,3)", "R(2,4)"}
 
 
 def test_kraitchman_seed_predicates_can_use_partial_seed_atoms():
@@ -407,7 +511,7 @@ OBSERVABLE = moments
 COMPONENTS = Ia,Ib
 FIT_COORDINATES = cartesian_symmetry
 PREDICATES = INITIAL_GEOMETRY DISTANCE_SIGMA=0.003 ANGLE_SIGMA=0.3 DIHEDRAL_SIGMA=0.5
-PREDICATE_SCOPE = oh_bonds
+PREDICATE_SCOPE = xh_bonds
 """,
         encoding="utf-8",
     )

@@ -45,7 +45,9 @@ from .kraitchman import (
 )
 from .predicates import (
     DEFAULT_INITIAL_GEOMETRY_PREDICATE_SCOPE,
+    REFERENCE_LEVEL_PREDICATE_SIGMAS,
     initial_geometry_predicates,
+    predicate_sigmas_for_reference_level,
 )
 from .cartesian_coordinates import CartesianCoordinateModel, cartesian_symmetry_coordinate_model
 from .geometry_input import (
@@ -133,8 +135,14 @@ from .constraints import (
 from .class_advisor import (
     DerivedPrimitiveClassPlan,
     PrimitiveClassSpec,
+    SYNTHON_CLASS_LEVELS,
+    SynthonClassThresholds,
+    SynthonPrimitiveClassSpec,
     derive_primitive_class_plan,
     parse_primitive_class_spec,
+    primitive_class_decision_lines,
+    synthon_level_for_budget,
+    synthon_primitive_class_specs,
 )
 from .diagnostics import iteration_trace_csv_rows, svd_diagnostics_csv, uncertainty_diagnostics_csv
 from .performance import mass_vector_for_isotopes, mass_vector_for_observation
@@ -209,6 +217,10 @@ __all__ = [
     "ParameterClassConstraint",
     "PAPER_BENCHMARK_SCHEMA",
     "PrimitiveClassSpec",
+    "SYNTHON_CLASS_LEVELS",
+    "SynthonClassThresholds",
+    "SynthonPrimitiveClassSpec",
+    "REFERENCE_LEVEL_PREDICATE_SIGMAS",
     "ORACLE_XYZ_MORPHEUS_SCHEMA",
     "CartesianCoordinateModel",
     "MorpheusSection",
@@ -252,6 +264,7 @@ __all__ = [
     "fit_ensemble_class_corrections",
     "format_substitutions",
     "initial_geometry_predicates",
+    "predicate_sigmas_for_reference_level",
     "generate_paper_benchmark_artifacts",
     "observations_from_mapping",
     "combined_constraint_b_matrix",
@@ -277,6 +290,7 @@ __all__ = [
     "parse_gaussian_style_constraints",
     "prepare_semiexperimental_xyzin",
     "parse_primitive_class_spec",
+    "primitive_class_decision_lines",
     "preview_semiexperimental_gics",
     "preview_semiexperimental_conditioning",
     "read_observations",
@@ -301,6 +315,8 @@ __all__ = [
     "semiexperimental_text_report",
     "search_reference_library",
     "suggest_parameter_classes",
+    "synthon_level_for_budget",
+    "synthon_primitive_class_specs",
     "svd_diagnostics_csv",
     "uncertainty_diagnostics_csv",
     "validate_semiexperimental_request",

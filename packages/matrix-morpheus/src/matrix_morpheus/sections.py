@@ -12,6 +12,9 @@ from matrix_core import (
     section_content,
 )
 
+from .class_advisor import PrimitiveClassSpec, SynthonPrimitiveClassSpec, parse_primitive_class_spec
+from .predicates import predicate_sigmas_for_reference_level
+
 
 ORACLE_XYZ_MORPHEUS_SCHEMA = "oracle.xyz.morpheus.v1"
 
@@ -84,6 +87,7 @@ class InitialGeometryPredicateSpec:
         "ring_torsions",
     )
     enabled: bool = False
+    reference_level: str = "medium"
 
 
 @dataclass(frozen=True)
@@ -93,6 +97,11 @@ class MorpheusInputConfig:
     components: str | None = None
     fixed_parameters: tuple[str, ...] = ()
     initial_geometry_predicates: InitialGeometryPredicateSpec = InitialGeometryPredicateSpec()
+    primitive_classes: tuple[PrimitiveClassSpec, ...] = ()
+    synthon_primitive_classes: SynthonPrimitiveClassSpec = SynthonPrimitiveClassSpec()
+    primitive_class_min: float | None = None
+    primitive_class_cross_max: float | None = None
+    primitive_class_budget: str | None = None
 
 
 def morpheus_section_from_result(
@@ -278,12 +287,18 @@ def parse_morpheus_input_config(lines: list[str] | tuple[str, ...]) -> MorpheusI
     fixed = _multi_value_tuple(values, ("FIXED_PARAMETER", "FIXED_PARAMETERS", "FIXED"))
     coordinate_model = values.get("FIT_COORDINATES") or values.get("COORDINATE_MODEL")
     predicates = _initial_geometry_predicate_spec(values)
+    primitive_specs, synthon_specs = _primitive_class_specs(values)
     return MorpheusInputConfig(
         coordinate_model=_blank_to_none(coordinate_model),
         observable=_blank_to_none(values.get("OBSERVABLE")),
         components=_normalize_input_components(values.get("COMPONENTS")),
         fixed_parameters=fixed,
         initial_geometry_predicates=predicates,
+        primitive_classes=primitive_specs,
+        synthon_primitive_classes=synthon_specs,
+        primitive_class_min=_optional_float(values.get("PRIMITIVE_CLASS_MIN")),
+        primitive_class_cross_max=_optional_float(values.get("PRIMITIVE_CLASS_CROSS_MAX")),
+        primitive_class_budget=_blank_to_none(values.get("PRIMITIVE_CLASS_BUDGET")),
     )
 
 
@@ -359,6 +374,19 @@ def _multi_value_tuple(values: dict[str, str], keys: tuple[str, ...]) -> tuple[s
     return tuple(result)
 
 
+def _primitive_class_entries(values: dict[str, str], keys: tuple[str, ...]) -> tuple[str, ...]:
+    result: list[str] = []
+    for key in keys:
+        raw = values.get(key)
+        if not raw:
+            continue
+        for item in raw.split(";"):
+            text = item.strip()
+            if text and text not in result:
+                result.append(text)
+    return tuple(result)
+
+
 def _blank_to_none(raw: str | None) -> str | None:
     if raw is None:
         return None
@@ -397,15 +425,80 @@ def _initial_geometry_predicate_spec(values: dict[str, str]) -> InitialGeometryP
             "#MORPHEUS PREDICATES currently supports INITIAL_GEOMETRY, NONE or OFF"
         )
     assignments = _assignment_dict(tokens[1:])
+    reference_level = (
+        assignments.get("REFERENCE_LEVEL")
+        or assignments.get("LEVEL")
+        or values.get("PREDICATE_REFERENCE_LEVEL")
+        or "medium"
+    )
+    default_distance, default_angle, default_dihedral = predicate_sigmas_for_reference_level(
+        reference_level
+    )
     scope_raw = values.get("PREDICATE_SCOPE") or assignments.get("SCOPE", "")
     scope = tuple(item.strip().lower() for item in scope_raw.split(",") if item.strip())
     return InitialGeometryPredicateSpec(
-        distance_sigma_angstrom=_float_value(assignments.get("DISTANCE_SIGMA"), 0.003),
-        angle_sigma_degree=_float_value(assignments.get("ANGLE_SIGMA"), 0.3),
-        dihedral_sigma_degree=_float_value(assignments.get("DIHEDRAL_SIGMA"), 0.5),
+        distance_sigma_angstrom=_float_or_auto(
+            assignments.get("DISTANCE_SIGMA"), default_distance
+        ),
+        angle_sigma_degree=_float_or_auto(assignments.get("ANGLE_SIGMA"), default_angle),
+        dihedral_sigma_degree=_float_or_auto(
+            assignments.get("DIHEDRAL_SIGMA"), default_dihedral
+        ),
         scope=scope or InitialGeometryPredicateSpec().scope,
         enabled=True,
+        reference_level=reference_level,
     )
+
+
+def _primitive_class_specs(
+    values: dict[str, str],
+) -> tuple[tuple[PrimitiveClassSpec, ...], SynthonPrimitiveClassSpec]:
+    raw_classes = _primitive_class_entries(values, ("PRIMITIVE_CLASS", "PRIMITIVE_CLASSES"))
+    explicit = tuple(
+        parse_primitive_class_spec(item)
+        for item in raw_classes
+        if item.strip().upper() not in {"AUTO", "AUTO_SYNTHON", "SYNTHON"}
+    )
+    mode = (values.get("PRIMITIVE_CLASSES") or values.get("PRIMITIVE_CLASS") or "").upper()
+    advisor_raw = values.get("PRIMITIVE_CLASS_ADVISOR", "")
+    advisor_tokens = shlex.split(advisor_raw)
+    advisor_mode = advisor_tokens[0].upper() if advisor_tokens else ""
+    assignments = _assignment_dict(advisor_tokens[1:])
+    auto_enabled = any(token in mode for token in ("AUTO", "SYNTHON")) or advisor_mode in {
+        "AUTO",
+        "AUTO_SYNTHON",
+        "SYNTHON",
+    }
+    include_raw = (
+        values.get("PRIMITIVE_CLASS_INCLUDE")
+        or assignments.get("INCLUDE")
+        or "bonds,angles"
+    ).lower()
+    include = {item.strip() for item in include_raw.split(",") if item.strip()}
+    min_group_size = int(
+        _float_or_auto(
+            values.get("PRIMITIVE_CLASS_MIN_GROUP_SIZE")
+            or assignments.get("MIN_GROUP_SIZE"),
+            2.0,
+        )
+    )
+    bo_bins_raw = values.get("PRIMITIVE_CLASS_BOND_ORDER_BINS") or assignments.get(
+        "BOND_ORDER_BINS"
+    )
+    synthon = SynthonPrimitiveClassSpec(
+        enabled=auto_enabled,
+        level=(
+            values.get("SYNTHON_LEVEL")
+            or values.get("PRIMITIVE_CLASS_SYNTHON_LEVEL")
+            or assignments.get("LEVEL")
+            or "auto"
+        ).strip().lower(),
+        include_bonds=not include or "bonds" in include or "bond" in include,
+        include_angles=not include or "angles" in include or "angle" in include,
+        min_group_size=min_group_size,
+        bond_order_bins=_truthy(bo_bins_raw, True),
+    )
+    return explicit, synthon
 
 
 def _assignment_dict(tokens: list[str] | tuple[str, ...]) -> dict[str, str]:
@@ -416,6 +509,25 @@ def _assignment_dict(tokens: list[str] | tuple[str, ...]) -> dict[str, str]:
         key, value = token.split("=", 1)
         values[key.strip().upper()] = value.strip()
     return values
+
+
+def _optional_float(raw: str | None) -> float | None:
+    text = _blank_to_none(raw)
+    return None if text is None else float(text)
+
+
+def _float_or_auto(raw: str | None, default: float) -> float:
+    text = _blank_to_none(raw)
+    if text is None or text.upper() == "AUTO":
+        return float(default)
+    return float(text)
+
+
+def _truthy(raw: str | None, default: bool) -> bool:
+    text = _blank_to_none(raw)
+    if text is None:
+        return default
+    return text.lower() in {"1", "true", "yes", "on", "y"}
 
 
 def _float_value(raw: str | None, default: float) -> float:

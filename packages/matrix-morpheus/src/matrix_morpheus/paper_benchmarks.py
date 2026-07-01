@@ -636,7 +636,7 @@ def _constraint_label(system: str, count: int) -> str:
     if system == "p-EBN":
         return f"{count} frozen"
     if system == "norcamphor":
-        return f"{count} H primitive"
+        return f"{count} H + 58 pred."
     return f"{count} primitive"
 
 

@@ -4,6 +4,6 @@ cyclopentadiene,C2v,cartesian_symmetry,ABC,14,42,27,10,10,10,0,10,0,635.39723324
 nitrobenzene,C2v,gic,AB,9,27,36,13,13,13,8,4,0,27464.444022609037,0.1479783904355257,0.260455141268,0.280469392263,flat_or_rank_deficient,working/semiexp/nitrobenzene/run_pair_auto
 p-EBN,C2v,gic,AB,11,33,39,14,6,6,22,4,20,2440.2453803166427,0.11897469514086748,0.567403095696,25.9063599697,minimum,working/semiexp/p-EBN/run_legacy_import
 azulene,C2v,gic,AB,12,36,48,17,10,10,8,8,28,956.6899599969396,0.07306079646893053,0.289989156513,994936302.426,minimum,working/semiexp/azulene/run_msr_like_planar_AB
-norcamphor,C1,gic,ABC,9,27,48,48,18,18,30,8,0,3700.2816684721843,0.07099233691760591,0.209142098706,0.175456863111,minimum,working/semiexp/norcamphor/run_msr_rd_explicit
+norcamphor,C1,gic,ABC,9,27,48,48,18,18,30,12,7,5199.222374936271,0.0941012545908,0.262854416558,412124.021324,minimum,working/semiexp/norcamphor_from_pdf/predicates_kraitchman_fix_h
 glycine_I,Cs,gic,ABC,5,15,24,15,11,11,4,3,17,10203.867287514242,0.02685950948210901,0.0570480817205,547708.346436,minimum,working/semiexp/glycine_I_pcs4_auto_gic_fortran
 glycine_II,C1,gic,ABC,10,30,24,24,19,19,5,26,8,10543.733315477484,0.24911633684024337,0.670672228787,61995.9464426,minimum,working/semiexp/glycine_II_dpcs3_auto_gic_fortran

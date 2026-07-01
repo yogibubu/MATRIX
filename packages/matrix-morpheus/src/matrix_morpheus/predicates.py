@@ -12,12 +12,41 @@ from .contracts import QMParameterPredicate
 
 
 DEFAULT_INITIAL_GEOMETRY_PREDICATE_SCOPE = (
-    "heavy_bonds",
-    "oh_bonds",
+    "xy_bonds",
+    "xh_bonds",
     "heavy_angles",
     "coh_angles",
     "ring_torsions",
 )
+
+REFERENCE_LEVEL_PREDICATE_SIGMAS = {
+    "high": (0.0015, 0.15, 0.30),
+    "medium": (0.0030, 0.30, 0.50),
+    "low": (0.0060, 0.60, 1.00),
+    "kraitchman": (0.0100, 1.00, 2.00),
+}
+
+
+def predicate_sigmas_for_reference_level(level: str) -> tuple[float, float, float]:
+    """Return default predicate sigmas for a declared reference-geometry level."""
+
+    key = str(level).strip().lower().replace("-", "_")
+    aliases = {
+        "accurate": "high",
+        "cc": "high",
+        "coupled_cluster": "high",
+        "best": "high",
+        "dft": "medium",
+        "hf": "medium",
+        "semiempirical": "low",
+        "mm": "low",
+        "kra": "kraitchman",
+    }
+    key = aliases.get(key, key)
+    if key not in REFERENCE_LEVEL_PREDICATE_SIGMAS:
+        known = ", ".join(sorted(REFERENCE_LEVEL_PREDICATE_SIGMAS))
+        raise ValueError(f"Unknown MORPHEUS predicate reference level {level!r}; known: {known}")
+    return REFERENCE_LEVEL_PREDICATE_SIGMAS[key]
 
 
 def initial_geometry_predicates(
@@ -45,14 +74,18 @@ def initial_geometry_predicates(
     scopes = {str(item).strip().lower() for item in scope if str(item).strip()}
     if "all" in scopes:
         scopes = set(DEFAULT_INITIAL_GEOMETRY_PREDICATE_SCOPE)
+    if "heavy_bonds" in scopes:
+        scopes.add("xy_bonds")
     predicates: list[QMParameterPredicate] = []
 
     bonds = tuple(sorted(tuple(sorted((int(i), int(j)))) for i, j in graph.bonds))
-    if {"heavy_bonds", "oh_bonds"} & scopes:
+    if {"xy_bonds", "xh_bonds", "oh_bonds"} & scopes:
         for i, j in bonds:
             zi, zj = int(z_numbers[i]), int(z_numbers[j])
-            include = ("heavy_bonds" in scopes and zi > 1 and zj > 1) or (
-                "oh_bonds" in scopes and {zi, zj} == {1, 8}
+            include = (
+                ("xy_bonds" in scopes and zi > 1 and zj > 1)
+                or ("xh_bonds" in scopes and 1 in {zi, zj} and max(zi, zj) > 1)
+                or ("oh_bonds" in scopes and {zi, zj} == {1, 8})
             )
             if not include:
                 continue

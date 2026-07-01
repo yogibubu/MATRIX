@@ -126,11 +126,19 @@ Cyclopentadiene & Sym. Cart. & 27 & 10 & 10 & 10 & 635.4 & 0.0635/0.2289 \\
 p-EBN & GICs & 39 & 14 & 6 & 6 & 2440.2 & 0.1190/0.5674 \\
 Azulene & GICs & 48 & 17 & 10 & 10 & 956.7 & 0.0731/0.2900 \\
 Azulene & Sym. Cart. & 48 & 17 & 10 & 10 & 744.8 & 0.0731/0.2900 \\
-Norcamphor & GICs & 48 & 48 & 18 & 18 & 3700.3 & 0.0710/0.2091 \\
-Norcamphor & Sym. Cart. & 48 & 48 & 18 & 18 & 1615.8 & 0.0710/0.2091 \\
+Norcamphor & GICs & 48 & 48 & 18 & 18 & 5199.2 & 0.0941/0.2629 \\
+Norcamphor & Sym. Cart. & 48 & 48 & 18 & 18 & 4216.7 & 0.0941/0.2629 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+The norcamphor rows use the standalone \texttt{xyzin} file archived in the
+MORPHEUS norcamphor example directory.  That file contains the DPCS3 Cartesian
+geometry, the experimental rotational constants from Table 3 of the
+norcamphor rotational study, and the tabulated vibrational corrections.  The
+reported run adds 58 Kraitchman-derived soft predicates with
+$\sigma_R=0.003$~\AA{} and $\sigma_A=0.3^\circ$; the same predicate set gives
+the same residual with GIC and symmetry-adapted Cartesian working coordinates.
 
 \section{\texorpdfstring{Glycine I C$_s$ Constraint Benchmark}{Glycine I Cs Constraint Benchmark}}
 
@@ -860,29 +868,36 @@ generated GICs onto disjoint shared classes with default coefficient
 thresholds. Later, more specific classes in the declaration have priority over
 earlier, broader classes; GICs that do not satisfy the thresholds, or that
 cannot be supported within the data-compatible class budget, are frozen. In the
-predicate model, a
-compact C--C/C--O GIC subset is kept independent and QC bond lengths for the
-corresponding graph are added as weighted observations with a default
-uncertainty of 0.05~\AA{}. The predicate uncertainty is intentionally exposed as
-\texttt{MATRIX\_TESTOSTERONE\_PREDICATE\_SIGMA}, because it controls the
-tradeoff between the parent rotational data and the QC reference geometry.
+predicate model, a compact C--C/C--O GIC subset is kept independent and XY QC
+bond lengths for the corresponding graph are added as weighted observations
+with a default uncertainty of 0.005~\AA{}. A second sensitivity run used
+0.01~\AA{}. These values are tied to the expected quality of the QM reference
+geometry: 0.005--0.01~\AA{} is already a conservative range for good
+equilibrium XY bonds, whereas 0.05~\AA{} would be too loose to represent a
+chemically meaningful bond-length predicate. The predicate uncertainty is
+exposed as \texttt{MATRIX\_TESTOSTERONE\_XY\_PREDICATE\_SIGMA}, because it
+controls the tradeoff between the parent rotational data and the QC reference
+geometry.
 
 \begin{center}
 \refstepcounter{table}\label{tab:si-testosterone-rotconstants}
 \parbox{0.94\linewidth}{\small Table~\thetable: Testosterone T1-H2$^{-}$-gp
 rotational constants used for the large-molecule scale check. Constants are in
 MHz. The QC column is the unrefined rotational constant calculated from the
-input geometry. The three MORPHEUS columns are, respectively, the one-class
-C--C baseline, the two-class C--C/C--O model, and the weighted predicate model.}
+input geometry. The MORPHEUS columns are, respectively, the one-class C--C
+baseline, the two-class C--C/C--O model, and weighted XY-predicate sensitivity
+runs.}
 
 \smallskip
-\begin{tabular}{lrrrrrrr}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrrrrr}
 \toprule
-Constant & $B_0$ & $\Delta B_\mathrm{vib}$ & $B_e^\mathrm{SE}$ & QC & C--C & C--C/C--O & Pred. \\
+Constant & $B_0$ & $\Delta B_\mathrm{vib}$ & $B_e^\mathrm{SE}$ & QC & C--C & C--C/C--O & Pred. 0.005 & Pred. 0.01 \\
 \midrule
-$A$ & 801.5 & 8.1 & 793.4 & 788.762 & 793.427 & 793.398 & 793.018 \\
-$B$ & 171.9 & 1.6 & 170.3 & 169.626 & 169.667 & 170.254 & 169.801 \\
-$C$ & 156.6 & 1.4 & 155.2 & 154.637 & 154.908 & 155.258 & 155.026 \\
+$A$ & 801.5 & 8.1 & 793.4 & 788.762 & 793.427 & 793.398 & 789.272 & 790.286 \\
+$B$ & 171.9 & 1.6 & 170.3 & 169.626 & 169.667 & 170.254 & 169.596 & 169.545 \\
+$C$ & 156.6 & 1.4 & 155.2 & 154.637 & 154.908 & 155.258 & 154.645 & 154.669 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -895,19 +910,19 @@ observables and all three parent components. The rotational RMS residual is in
 MHz.}
 
 \smallskip
-\begin{tabular}{lrrr}
+\begin{tabular}{lrrrr}
 \toprule
-Quantity & C--C & C--C/C--O & Predicates \\
+Quantity & C--C & C--C/C--O & Pred. 0.005 & Pred. 0.01 \\
 \midrule
-Atoms & 49 & 49 & 49 \\
-Non-redundant GICs & 141 & 141 & 141 \\
-Retained C--C GICs & 5 & 21 & 5 \\
-Retained C--O GICs & 0 & 2 & 2 \\
-Effective fitted variables & 1 & 2 & 7 \\
-Rank & 1 & 2 & 7 \\
-Condition number & 1.0 & 28.36 & 4.17 \\
-Rotational RMS residual / MHz & 0.403 & 0.043 & 0.376 \\
-Iterations & 5 & 3 & 11 \\
+Atoms & 49 & 49 & 49 & 49 \\
+Non-redundant GICs & 141 & 141 & 141 & 141 \\
+Retained C--C GICs & 5 & 21 & 5 & 5 \\
+Retained C--O GICs & 0 & 2 & 2 & 2 \\
+Effective fitted variables & 1 & 2 & 7 & 7 \\
+Rank & 1 & 2 & 7 & 7 \\
+Condition number & 1.0 & 28.36 & 1.32 & 1.47 \\
+Rotational RMS residual / MHz & 0.403 & 0.043 & 2.439 & 1.875 \\
+Iterations & 5 & 3 & 25 & 8 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -981,7 +996,7 @@ Cyclopentadiene & No fixed primitive constraints         & SAI and SAC, ABC \\
 Nitrobenzene    & No fixed primitive constraints         & SAI, AB \\
 p-EBN           & Legacy frozen Z-matrix parameters      & SAI, AB \\
 Azulene         & C--H bond lengths and selected angles  & SAI, AB \\
-Norcamphor      & H-atom constraints                     & SAI and SAC, ABC \\
+Norcamphor      & H-atom constraints and Kraitchman predicates & SAI and SAC, ABC \\
 Glycine I       & Four generated QC-reference constraints        & SAI, ABC \\
 Glycine II      & Five generated QC constraints      & SAI, ABC \\
 Maleic anhydride & No fixed primitive constraints        & SAI and SAC, AB \\

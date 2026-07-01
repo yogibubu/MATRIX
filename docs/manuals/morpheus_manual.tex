@@ -296,8 +296,13 @@ OBSERVABLE = moments
 COMPONENTS = Ia,Ib,Ic
 FIT_COORDINATES = gic
 FIXED_PARAMETER = @hydrogen_parameters
-PREDICATES = INITIAL_GEOMETRY DISTANCE_SIGMA=0.003 ANGLE_SIGMA=0.3 DIHEDRAL_SIGMA=0.5
-PREDICATE_SCOPE = heavy_bonds,oh_bonds,heavy_angles,coh_angles,ring_torsions
+PREDICATES = INITIAL_GEOMETRY REFERENCE_LEVEL=medium DISTANCE_SIGMA=AUTO ANGLE_SIGMA=AUTO DIHEDRAL_SIGMA=AUTO
+PREDICATE_SCOPE = xy_bonds,xh_bonds,heavy_angles,coh_angles,ring_torsions
+PRIMITIVE_CLASS_ADVISOR = AUTO_SYNTHON INCLUDE=bonds,angles MIN_GROUP_SIZE=2
+SYNTHON_LEVEL = auto
+PRIMITIVE_CLASS_MIN = 0.70
+PRIMITIVE_CLASS_CROSS_MAX = 0.20
+PRIMITIVE_CLASS_BUDGET = auto
 \end{lstlisting}
 
 \noindent
@@ -306,8 +311,51 @@ PREDICATE_SCOPE = heavy_bonds,oh_bonds,heavy_angles,coh_angles,ring_torsions
 written as \texttt{ABC}, \texttt{AB}, \texttt{AC}, \texttt{BC} or in moment
 notation such as \texttt{Ia,Ib,Ic}.  \texttt{PREDICATES=INITIAL\_GEOMETRY}
 generates weighted primitive predicates centered on the initial Cartesian
-geometry using the requested scope and sigmas.  These are input priors, not
-output diagnostics.
+geometry using the requested scope and sigmas.  If a sigma is \texttt{AUTO},
+MORPHEUS selects it from \texttt{REFERENCE\_LEVEL}: \texttt{high},
+\texttt{medium}, \texttt{low}, or \texttt{kraitchman}.  These are input priors,
+not output diagnostics.
+
+\texttt{xy\_bonds} denotes bonds between non-hydrogen atoms, while
+\texttt{xh\_bonds} denotes any X--H bond; the legacy \texttt{heavy\_bonds} and
+\texttt{oh\_bonds} scopes remain accepted but new inputs should use the
+general XY/XH names.  \texttt{PRIMITIVE\_CLASS\_ADVISOR=AUTO\_SYNTHON} builds bond and angle
+primitive classes from MATRIX topology and atomic synthons.  The synthon
+descriptors are continuous; \texttt{SYNTHON\_LEVEL=coarse}, \texttt{medium},
+or \texttt{fine} changes the quantization thresholds for covalency,
+delocalization, strain, and bond order.  With \texttt{SYNTHON\_LEVEL=auto},
+MORPHEUS runs a short internal scan over \texttt{coarse}, \texttt{medium}, and
+\texttt{fine}; the candidate results are written under
+\texttt{\_synthon\_auto\_candidates}.  The selected level is the simplest model
+that satisfies rank and propagated-uncertainty checks for XY bonds,
+X--H bonds, and heavy-atom angles.  Non-CH X--H bonds use the same threshold as
+XY bonds; C--H bonds use a wider threshold because C--D substitutions are often
+absent and C--H distances are therefore less directly determined.  The advisor maps the resulting primitive classes
+onto the actual reduced GICs, freezes unsupported directions, limits the number
+of active classes to the experimental data budget when
+\texttt{PRIMITIVE\_CLASS\_BUDGET=auto}, and prints explicit accept/reject
+decision lines.  Explicit user classes remain available through
+\texttt{PRIMITIVE\_CLASS = name:R(1,2)|R(2,3)} entries.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Selector quantity & Meaning & Default acceptance threshold \\
+\midrule
+XY distance & bond between two non-H atoms & 0.002~\AA{} \\
+non-CH X--H distance & X--H bond with X different from C & 0.002~\AA{} \\
+C--H distance & C--H bond & 0.005~\AA{} \\
+heavy-atom angle & valence angle without H atoms & 0.2$^\circ$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The broader C--H threshold is not a special rule for sugars.  It reflects the
+general information content of many rotational datasets: heavy-atom isotopic
+substitution constrains the heavy skeleton much more directly than C--H distances,
+and deuterated isotopologues are often absent.  Non-CH X--H bonds are kept with
+the tighter XY threshold unless the user explicitly chooses a different predicate
+or class policy.
 
 Validate a container with:
 
