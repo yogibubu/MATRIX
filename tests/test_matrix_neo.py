@@ -1388,6 +1388,21 @@ def test_gicforge_ring_puckering_coefficients_match_merlino_six_ring():
     )
 
 
+def test_gicforge_ring_puckering_weights_high_bond_order_dihedral():
+    ring = (1, 2, 3, 4, 5)
+    unweighted = _ring_pucker_component_terms(ring)[0]
+    weighted = _ring_pucker_component_terms(ring, bond_orders={(2, 3): 1.8})[0]
+    by_atoms = {atoms: coefficient for coefficient, atoms in weighted}
+    unweighted_by_atoms = {atoms: coefficient for coefficient, atoms in unweighted}
+
+    assert abs(by_atoms[(1, 2, 3, 4)]) < abs(unweighted_by_atoms[(1, 2, 3, 4)])
+    np.testing.assert_allclose(
+        np.linalg.norm([coefficient for coefficient, _atoms in weighted]),
+        1.0,
+        atol=1.0e-14,
+    )
+
+
 @pytest.mark.parametrize(
     ("molecule", "expected_rank", "expected_rpck_count"),
     [

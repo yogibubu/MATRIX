@@ -564,6 +564,7 @@ def _fortran_like_primitive_blocks(
                     ring,
                     valence_angle=False,
                     coords=coords,
+                    atomic_numbers=atomic_numbers,
                     prefix="RPck",
                     start=len(torsions) + 1,
                 )
@@ -571,7 +572,12 @@ def _fortran_like_primitive_blocks(
         else:
             torsions.extend(
                 _cyclic_coordinates(
-                    ring, valence_angle=False, prefix="RPck", start=len(torsions) + 1
+                    ring,
+                    valence_angle=False,
+                    prefix="RPck",
+                    start=len(torsions) + 1,
+                    coords=coords,
+                    atomic_numbers=atomic_numbers,
                 )
             )
 
@@ -1131,6 +1137,8 @@ def _cyclic_coordinates(
     valence_angle: bool,
     prefix: str,
     start: int,
+    coords: np.ndarray | None = None,
+    atomic_numbers: tuple[int, ...] = (),
 ) -> list[GICForgePythonCoordinate]:
     ncyc = len(ring)
     if ncyc == 3:
@@ -1173,6 +1181,13 @@ def _cyclic_coordinates(
                 coefficient = vnorm * np.cos(value)
             else:
                 coefficient = vnorm1 * np.cos(float(iterm - 1) * np.pi)
+            if not valence_angle:
+                coefficient *= _ring_dihedral_flexibility(
+                    ring[iang2],
+                    ring[iang3],
+                    coords=coords,
+                    atomic_numbers=atomic_numbers,
+                )
             if abs(coefficient) < 1.0e-14:
                 coefficient = 0.0
             if valence_angle:
@@ -1182,6 +1197,8 @@ def _cyclic_coordinates(
                     "dihedral", (ring[iang1], ring[iang2], ring[iang3], ring[iang4])
                 )
             terms.append((float(coefficient), primitive))
+        if not valence_angle:
+            terms = _normalize_coordinate_terms(terms)
         coordinates.append(
             GICForgePythonCoordinate(
                 name=f"{prefix}{start + len(coordinates):04d}",
@@ -1198,6 +1215,7 @@ def _cyclic_svd_coordinates(
     *,
     valence_angle: bool,
     coords: np.ndarray,
+    atomic_numbers: tuple[int, ...] = (),
     prefix: str,
     start: int,
 ) -> list[GICForgePythonCoordinate]:
@@ -1214,6 +1232,15 @@ def _cyclic_svd_coordinates(
     coordinates: list[GICForgePythonCoordinate] = []
     for mode in range(rank):
         coeffs = coefficients[:, mode].astype(float)
+        if not valence_angle:
+            for idx, primitive in enumerate(primitives):
+                coeffs[idx] *= _ring_dihedral_flexibility(
+                    primitive.atoms[1],
+                    primitive.atoms[2],
+                    coords=coords,
+                    atomic_numbers=atomic_numbers,
+                )
+            coeffs = _normalize_coefficients(coeffs)
         coeffs[np.abs(coeffs) < 1.0e-14] = 0.0
         terms = tuple(
             (float(coefficient), primitive)
@@ -1231,6 +1258,47 @@ def _cyclic_svd_coordinates(
             )
         )
     return coordinates
+
+
+def _ring_dihedral_flexibility(
+    left: int,
+    right: int,
+    *,
+    coords: np.ndarray | None,
+    atomic_numbers: tuple[int, ...],
+) -> float:
+    if coords is None or not atomic_numbers:
+        return 1.0
+    if left < 0 or right < 0 or left >= len(atomic_numbers) or right >= len(atomic_numbers):
+        return 1.0
+    radius_left = covalent_radius(atomic_numbers[left]) or 0.0
+    radius_right = covalent_radius(atomic_numbers[right]) or 0.0
+    reference = float(radius_left) + float(radius_right)
+    distance = float(np.linalg.norm(np.asarray(coords[right], dtype=float) - np.asarray(coords[left], dtype=float)))
+    if reference <= 0.0 or distance <= 1.0e-12:
+        return 1.0
+    bond_order = float(np.exp((reference - distance) / 0.30))
+    if bond_order < 1.75:
+        return 1.0
+    return 1.0 / float(np.sqrt(bond_order))
+
+
+def _normalize_coordinate_terms(
+    terms: list[tuple[float, Primitive]],
+) -> list[tuple[float, Primitive]]:
+    coefficients = np.asarray([coefficient for coefficient, _primitive in terms], dtype=float)
+    coefficients = _normalize_coefficients(coefficients)
+    return [
+        (float(coefficient), primitive)
+        for coefficient, (_old_coefficient, primitive) in zip(coefficients, terms)
+    ]
+
+
+def _normalize_coefficients(coefficients: np.ndarray) -> np.ndarray:
+    norm = float(np.linalg.norm(coefficients))
+    if norm <= 1.0e-14:
+        return coefficients
+    return coefficients / norm
 
 
 def _cyclic_primitives(ring: tuple[int, ...], *, valence_angle: bool) -> list[Primitive]:

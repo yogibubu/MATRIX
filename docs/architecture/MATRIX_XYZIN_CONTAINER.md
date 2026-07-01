@@ -59,6 +59,8 @@ quantities are accepted as topology overrides:
 
 - CM5 atomic charges;
 - Mayer bond orders.
+- Normalized topology bond orders in `#TOPOLOGY [BOND_ORDERS]` for all bonded
+  pairs used by NEO/GF.
 
 If CM5 charges are present, `#SYNTHONS` uses them as the atomic charge column
 and records `CHARGE_SOURCE Gaussian CM5`. If CM5 charges are absent, synthons
@@ -69,7 +71,9 @@ If Mayer bond orders are present, topology and synthons use them and record
 `BOND_ORDER_SOURCE Gaussian Mayer`. If Mayer bond orders are absent, topology
 uses the ORACLE continuous Pauling bond-order model and records
 `BOND_ORDER_SOURCE Topology Pauling continuous model`. Gaussian total bond
-orders are not a fallback source.
+orders are not a fallback source.  NEO uses these normalized bond orders to
+weight endocyclic ring-puckering dihedrals: high-bond-order central bonds get a
+smaller flexibility factor before each RPck vector is normalized.
 
 ## Gaussian Rovibrational Promotion
 

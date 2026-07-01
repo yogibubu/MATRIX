@@ -710,12 +710,12 @@ C
 *Deck CyGND   
       Subroutine CyGND(IOut,IPrint,MxAtCy,MaxAtD,MxTrmD,NAtC,
      $  NDih,ICyc,IAtomC,NTermD,IAtomD,ITVD,CoefD,DoLocSVD,
-     $  NAtoms,C)
+     $  NAtoms,C,IAn)
       Implicit none 
       Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
       Common/bic1/NBrL,NBrA,NBrD,IBrL(4,100),IBrA(5,100),IBrD(6,100)
 C Input
-      Integer NAtC(*),IAtomC(MxAtCy,*)
+      Integer NAtC(*),IAtomC(MxAtCy,*),IAn(*)
       Integer IOut,IPrint,MxAtCy,MaxAtD,MxTrmD,NDih,ICyc,NAtoms
       Integer N2Cyc,N3Cyc,NBrL,NBrA,NBrD,IAt2C,IAt3C,IBrL,IBrA,IBrD
       Logical DoLocSVD
@@ -726,6 +726,8 @@ C Input/Output
 C Local
       Logical ValAng
       Integer NAtPrm,NDih0,NAtCyc,ii,jj,Ip,I4,iall3c,iall2c
+      Integer IG,ITerm,JAt,KAt
+      Real*8 RingFlex,Flex,Norm
 C            
 C builds ring coordinates for dihedral angles
 C for symmetry reasons the first dihedral is always: n123  
@@ -754,6 +756,22 @@ C suppresses free torsions, not protected ring coordinates.
        call CycAng(IOut,Iprint,MaxAtD,MxTrmD,MxAtCy,ValAng,NDih,
      $  ICyc,NAtC,IAtomC,NTermD,ITVD,IAtomD,CoefD)
       EndIf
+      Do 55 IG=NDih0+1,NDih
+       Norm=0.0D0
+       Do 50 ITerm=1,NTermD(IG)
+        JAt=IAtomD(2,ITerm,IG)
+        KAt=IAtomD(3,ITerm,IG)
+        Flex=RingFlex(JAt,KAt,IAn,C)
+        CoefD(ITerm,IG)=CoefD(ITerm,IG)*Flex
+        Norm=Norm+CoefD(ITerm,IG)*CoefD(ITerm,IG)
+   50  Continue
+       Norm=DSqrt(Norm)
+       If(Norm.gt.1.0D-14) then
+        Do 52 ITerm=1,NTermD(IG)
+         CoefD(ITerm,IG)=CoefD(ITerm,IG)/Norm
+   52   Continue
+       EndIf
+   55 Continue
       if(IPrint.gt.0) then
        write(IOut,'(/,I2,''-membered Cycle'')') NAtCyc
        do 30 ip=1,NAtCyc-3
@@ -766,6 +784,26 @@ C suppresses free torsions, not protected ring coordinates.
       endif 
       return
       end
+*Deck RingFlex
+      Real*8 Function RingFlex(JAt,KAt,IAn,C)
+      Implicit Real*8 (A-H,O-Z)
+      Integer JAt,KAt,IAn(*)
+      Real*8 C(3,*)
+      Real*8 Distan,RCovCT,Val0,Value,BndOrd
+      Val0=RCovCT(IAn(JAt),IAn(KAt))
+      Value=Distan(C,JAt,KAt,0)
+      If(Val0.le.0.0D0.or.Value.le.1.0D-12) then
+       RingFlex=1.0D0
+       Return
+      EndIf
+      BndOrd=DEXP((Val0-Value)/3.0D-01)
+      If(BndOrd.lt.1.75D0) then
+       RingFlex=1.0D0
+      Else
+       RingFlex=1.0D0/DSqrt(BndOrd)
+      EndIf
+      Return
+      End
 *Deck CyGNSVD
       Subroutine CyGNSVD(IOut,IPrint,MxAt,MxTrm,MxAtCy,ValAng,IGnic,
      $ ICyc,NAtC,IAtomC,NTerm,ITV,IAtomG,Coeff,NAtoms,C)

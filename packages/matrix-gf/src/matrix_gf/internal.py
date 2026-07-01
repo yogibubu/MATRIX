@@ -15,6 +15,7 @@ from matrix_neo import (
     GICPrimitive,
     build_gic_b_matrix,
     read_gic_definition_from_xyzin,
+    topology_bond_orders_from_lines,
     write_gicforge_build_sections,
 )
 
@@ -481,6 +482,11 @@ def _large_amplitude_topology_context_from_xyzin(
     atomic_numbers: np.ndarray,
     coordinates_angstrom: np.ndarray,
 ):
+    lines = read_sectioned_lines(Path(path))
+    topology_bond_orders = topology_bond_orders_from_lines(
+        lines,
+        natoms=int(len(atomic_numbers)),
+    )
     try:
         from matrix_chem.link import gaussian_topology_overrides_from_xyzin
 
@@ -493,7 +499,7 @@ def _large_amplitude_topology_context_from_xyzin(
     return large_amplitude_topology_context_from_arrays(
         atomic_numbers=atomic_numbers,
         coordinates_angstrom=coordinates_angstrom,
-        bond_order_overrides=gaussian.get("bond_orders") or None,
+        bond_order_overrides=topology_bond_orders or gaussian.get("bond_orders") or None,
         bond_order_source=str(
             gaussian.get("bond_order_source") or "Topology Pauling continuous model"
         ),

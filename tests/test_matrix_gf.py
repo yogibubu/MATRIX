@@ -359,6 +359,30 @@ def test_large_amplitude_dvr_plan_excludes_high_frequency_and_double_bond_torsio
     assert double_bond.dvr_candidates[0].status == "EXCLUDED_HIGH_BOND_ORDER"
 
 
+def test_large_amplitude_ring_puckering_records_high_bond_order_stiffening():
+    context = LargeAmplitudeTopologyContext(
+        atomic_numbers=(6, 6, 6, 6),
+        bonds=((1, 2), (2, 3), (3, 4), (1, 4)),
+        bond_orders={(2, 3): 1.7},
+        synthon_signatures={1: (6,), 2: (6,), 3: (6,), 4: (6,)},
+    )
+    analysis = large_amplitude_analysis_from_gf_matrices(
+        force_constants=np.diag([0.001]),
+        g_matrix=np.eye(1),
+        frequencies_cm=np.asarray([120.0], dtype=float),
+        ped=np.asarray([[100.0]], dtype=float),
+        gic_labels=("RPck001=[0.5*D(1,2,3,4)]",),
+        gic_names=("A1RPck001",),
+        gic_irreps=("A1",),
+        frequency_cutoff_cm=1000.0,
+        topology_context=context,
+    )
+
+    coordinate = analysis.coordinates[0]
+    assert coordinate.family == "ring_puckering"
+    assert coordinate.anharmonic_reason == "RING_MODE_HIGH_BOND_ORDER_STIFFENED"
+
+
 def test_gf_rejects_cross_irrep_couplings_when_symmetry_blocks_requested():
     with pytest.raises(ValueError, match="not block diagonal"):
         gf_from_cartesian_hessian_and_gic_b_matrix(

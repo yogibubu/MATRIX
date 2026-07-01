@@ -281,16 +281,17 @@ time, then call the B-matrix evaluator at every geometry iteration.
 | Contract area | Python path | Fortran path | Regression gate |
 | --- | --- | --- | --- |
 | Primitive stretches and bond local classes | `matrix_neo.runtime.gicforge_python`, `matrix_neo.definition` | `MkBAL`, `MkGNCB`, `ORCLBND`, `ORCLLIG` | `matrix gicforge fortran-audit`, `test_matrix_fortran_neo.py` |
-| Valence-angle local classes and high coordination | `matrix_neo.runtime.gicforge_python` local-equivalence and template selection | `MkGNCA`, `MkGNCALocSVD`, `ORCLLIG`, `ORCLTPL`, `LocSVDJacobi` | SF6/Oh, cubane/Oh, ferrocene/D5h |
+| Valence-angle local classes and high coordination | `matrix_neo.runtime.gicforge_python` local-equivalence and template selection | `MkGNCA`, `MkGNCALocSVD`, `ORCLLIG`, `ORCLTPL`, `LocSVDJacobi` | SF6/Oh, cubane/Oh, ferrocene/D5h and D5d |
 | Ring deformation and puckering source spaces | `RDef`, `RPck`, `QPck`, `PhiP` builders | Merlino `mkcyc.f` and `mksalc.f` ring blocks | pyrrole, azulene, pyrene, ribose, cyclottane |
 | Butterfly, OOP and improper-dihedral policy | protected special-coordinate classes and Gaussian export policy | Merlino butterfly/OOP builders and `ImpDih` branch | cubane, norbornanes, Gaussian ReadAllGIC examples |
 | Symmetry projector and total-symmetric subset | `symmetrize_gic_definition` and point-group projector diagnostics | vendored `symm.f` plus Fortran audit B-row comparison | D6h, D5h, Oh, D2h, C2v corpus cases |
 | B-matrix identity | `build_gic_b_matrix` analytic evaluator | Merlino `MkBNew`/`bmat.out` | Wilson-B row-space residual in the Fortran audit |
 
-Known open parity gap: staggered ferrocene detects `D5d` and has matching rank
-57, but the strict Fortran high-coordination bending block does not yet span
-the same Wilson-B row space as MATRIX Python. It remains a tracked metallocene
-special-coordinate regression, not a passing release gate.
+The metallocene gate includes both eclipsed ferrocene (`D5h`) and staggered
+ferrocene (`D5d`).  The Fortran high-coordination angle generator uses the
+same linear-angle threshold as Python, so linear Fe--ring-center directions are
+not kept as ordinary bending rows and the Wilson-B row-space audit is a release
+gate for both conformers.
 
 ## Gaussian ReadAllGIC And GF Cross-Checks
 

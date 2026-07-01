@@ -220,7 +220,9 @@ def classify_gic_anharmonic_model(
         )
     if family == "oop":
         return _local_assignment(family, "OUT_OF_PLANE")
-    if family in {"ring_puckering", "ring_bend", "butterfly"}:
+    if family in {"ring_puckering", "butterfly"}:
+        return _ring_torsional_assignment(family, text, topology_context)
+    if family == "ring_bend":
         return _local_assignment(family, "RING_MODE")
     if family == "torsion":
         return _torsion_assignment(text, topology_context)
@@ -743,6 +745,24 @@ def _torsion_assignment(
         cross_coupling_policy=CROSS_COUPLING_PENDING,
         reason="TORSION_BOND_ORDER_UNKNOWN",
     )
+
+
+def _ring_torsional_assignment(
+    family: str,
+    text: str,
+    context: LargeAmplitudeTopologyContext | None,
+) -> AnharmonicModelAssignment:
+    torsions = _torsion_terms(text)
+    if context is None or not torsions:
+        return _local_assignment(family, "RING_MODE")
+    central_bonds = tuple(dict.fromkeys(_pair_key(term[1], term[2]) for term in torsions))
+    bond_orders = [context.bond_order(*bond) for bond in central_bonds]
+    if any(
+        order is not None and order >= DEFAULT_TORSION_DOUBLE_BOND_ORDER_THRESHOLD
+        for order in bond_orders
+    ):
+        return _local_assignment(family, "RING_MODE_HIGH_BOND_ORDER_STIFFENED")
+    return _local_assignment(family, "RING_MODE")
 
 
 def _block_anharmonic_assignment(family: str) -> AnharmonicModelAssignment:

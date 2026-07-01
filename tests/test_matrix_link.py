@@ -106,6 +106,9 @@ def test_link_preprocess_imports_gaussian_cm5_and_mayer_topology(tmp_path):
     assert "BO_SOURCE = Mayer" in gaussian
     assert "CHARGE_SOURCE Gaussian CM5" in synthons
     assert "BOND_ORDER_SOURCE Gaussian Mayer" in topology
+    assert "[BOND_ORDERS]" in topology
+    assert any(line.startswith("1 2 0.9") for line in topology)
+    assert any(line.startswith("1 3 0.91") for line in topology)
     oxygen_line = next(line for line in synthons if line.startswith("1 O "))
     assert float(oxygen_line.split()[3]) == -0.4
 

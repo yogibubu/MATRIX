@@ -178,6 +178,18 @@ def write_topology_and_synthons_sections(
         topology_lines.extend(f"{i + 1} {j + 1}" for i, j in discrete.bonds)
     else:
         topology_lines.append("NONE")
+    topology_lines.append("[BOND_ORDERS]")
+    bond_order_rows = []
+    for i, j in discrete.bonds:
+        try:
+            value = float(synthons.bond_order(i, j))
+        except Exception:
+            continue
+        bond_order_rows.append(f"{i + 1} {j + 1} {value:.10g}")
+    if bond_order_rows:
+        topology_lines.extend(bond_order_rows)
+    else:
+        topology_lines.append("NONE")
     topology_lines.append("[RINGS]")
     if ringset.rings:
         for idx, ring in enumerate(ringset.rings, start=1):

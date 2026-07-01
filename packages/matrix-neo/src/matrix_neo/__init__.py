@@ -31,6 +31,7 @@ from .definition import (
     read_gic_definition_from_xyzin,
     symmetrize_gic_definition,
     sycart_definition_section_lines,
+    topology_bond_orders_from_lines,
     total_symmetric_gic_names,
     total_symmetric_gics,
     write_gic_b_matrix,

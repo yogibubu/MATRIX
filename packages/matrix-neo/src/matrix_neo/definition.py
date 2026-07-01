@@ -265,6 +265,7 @@ def construct_gic_definition_from_xyzin(
 
     bonds = _topology_bonds(lines, natoms=geometry.natoms)
     rings = _topology_rings(lines, natoms=geometry.natoms)
+    bond_orders = topology_bond_orders_from_lines(lines, natoms=geometry.natoms)
     pseudo_bonds: tuple[tuple[int, int], ...] = ()
     pseudo_bond_kinds: tuple[str, ...] = ()
     candidate_fragment_records = fragment_records
@@ -293,6 +294,7 @@ def construct_gic_definition_from_xyzin(
         improper_dihedrals=improper_dihedrals,
         fragment_records=candidate_fragment_records,
         interaction_centers=candidate_interaction_centers,
+        bond_orders=bond_orders,
     )
     target_rank = _vibrational_rank(coords)
     selected, rank, reduction_diagnostics = _select_ranked_primitives_with_diagnostics(
@@ -1343,6 +1345,35 @@ def _topology_bonds(lines: list[str], *, natoms: int) -> tuple[tuple[int, int], 
     return tuple(sorted(bonds))
 
 
+def topology_bond_orders_from_lines(
+    lines: list[str],
+    *,
+    natoms: int,
+) -> dict[tuple[int, int], float]:
+    """Read optional one-based #TOPOLOGY [BOND_ORDERS] rows."""
+    topology = section_content(lines, "TOPOLOGY")
+    expected = "SCHEMA oracle.xyz.topology.v1"
+    if not topology or topology[0].strip() != expected:
+        return {}
+    bond_order_lines = _subsection(topology, "BOND_ORDERS")
+    orders: dict[tuple[int, int], float] = {}
+    for line in bond_order_lines:
+        if line.strip().upper() == "NONE":
+            continue
+        parts = line.replace(",", " ").replace("(", " ").replace(")", " ").split()
+        if len(parts) < 3:
+            continue
+        try:
+            i, j = int(parts[0]), int(parts[1])
+            value = float(parts[2])
+        except ValueError as exc:
+            raise GICForgeContractError(f"invalid #TOPOLOGY bond-order line: {line}") from exc
+        if i == j or i < 1 or j < 1 or i > natoms or j > natoms:
+            raise GICForgeContractError(f"invalid #TOPOLOGY bond-order indexes: {line}")
+        orders[tuple(sorted((i, j)))] = value
+    return orders
+
+
 def _topology_rings(lines: list[str], *, natoms: int) -> tuple[tuple[int, tuple[int, ...]], ...]:
     topology = section_content(lines, "TOPOLOGY")
     expected = "SCHEMA oracle.xyz.topology.v1"
@@ -1396,6 +1427,7 @@ def _primitive_candidates(
     improper_dihedrals: bool = False,
     fragment_records: tuple[object, ...] = (),
     interaction_centers: object | None = None,
+    bond_orders: dict[tuple[int, int], float] | None = None,
 ) -> tuple[GICPrimitive, ...]:
     adjacency = _adjacency(bonds, natoms=natoms)
     counters: dict[str, int] = {family: 0 for family in PRIMITIVE_FAMILY_ORDER}
@@ -1461,7 +1493,9 @@ def _primitive_candidates(
 
     for family, torsion in butterfly_torsions:
         candidates.append(_make_primitive(family, "D", torsion, counters))
-    candidates.extend(_ring_pucker_component_candidates(rings, counters=counters))
+    candidates.extend(
+        _ring_pucker_component_candidates(rings, counters=counters, bond_orders=bond_orders or {})
+    )
     for family, torsion in condensed_torsions:
         candidates.append(_make_primitive(family, "D", torsion, counters))
     for family, torsion in ordinary_torsions:
@@ -1507,10 +1541,11 @@ def _ring_pucker_component_candidates(
     rings: tuple[tuple[int, tuple[int, ...]], ...],
     *,
     counters: dict[str, int],
+    bond_orders: dict[tuple[int, int], float],
 ) -> tuple[GICPrimitive, ...]:
     candidates: list[GICPrimitive] = []
     for _ring_index, ring_atoms in rings:
-        for terms in _ring_pucker_component_terms(ring_atoms):
+        for terms in _ring_pucker_component_terms(ring_atoms, bond_orders=bond_orders):
             candidates.append(
                 _make_primitive(
                     "RING_PUCKER_COMPONENT",
@@ -1527,6 +1562,8 @@ def _ring_pucker_component_candidates(
 
 def _ring_pucker_component_terms(
     ring_atoms: tuple[int, ...],
+    *,
+    bond_orders: dict[tuple[int, int], float] | None = None,
 ) -> tuple[tuple[tuple[float, tuple[int, int, int, int]], ...], ...]:
     """Return ORACLE RPck linear combinations for one ordered ring."""
     ncyc = len(ring_atoms)
@@ -1562,7 +1599,12 @@ def _ring_pucker_component_terms(
                 coefficient = 0.0
             terms.append(
                 (
-                    coefficient,
+                    coefficient
+                    * _ring_dihedral_flexibility_one_based(
+                        ring_atoms[iang2],
+                        ring_atoms[iang3],
+                        bond_orders=bond_orders or {},
+                    ),
                     (
                         ring_atoms[iang1],
                         ring_atoms[iang2],
@@ -1571,8 +1613,29 @@ def _ring_pucker_component_terms(
                     ),
                 )
             )
-        components.append(tuple(terms))
+        components.append(_normalize_ring_pucker_terms(terms))
     return tuple(components)
+
+
+def _ring_dihedral_flexibility_one_based(
+    left: int,
+    right: int,
+    *,
+    bond_orders: dict[tuple[int, int], float],
+) -> float:
+    bond_order = bond_orders.get(tuple(sorted((left, right))))
+    if bond_order is None or bond_order < 1.75:
+        return 1.0
+    return 1.0 / float(np.sqrt(float(bond_order)))
+
+
+def _normalize_ring_pucker_terms(
+    terms: list[tuple[float, tuple[int, int, int, int]]],
+) -> tuple[tuple[float, tuple[int, int, int, int]], ...]:
+    norm = float(np.sqrt(sum(float(coefficient) ** 2 for coefficient, _atoms in terms)))
+    if norm <= 1.0e-14:
+        return tuple(terms)
+    return tuple((float(coefficient) / norm, atoms) for coefficient, atoms in terms)
 
 
 def _cyclic_index(index_1based: int, ncyc: int) -> int:

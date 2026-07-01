@@ -448,7 +448,7 @@ C Make ring coordinates for dihedra angles
        do 30 ICyc=1,NCyc
         NDih0=NDih
         call CyGND(IOut,IPrtCD,MxAtCy,MxAtP,MxTrm,NAtC,NDih,ICyc,ICAt,
-     $    NTermD,IAtomD,ITVD,CoefD,DoLocSVD,NAtoms,C)
+     $    NTermD,IAtomD,ITVD,CoefD,DoLocSVD,NAtoms,C,IAn)
         If(NAtC(ICyc).eq.3) then
          write(IOut,'(1X,I2,A,3I4,A,I2,A)')
      $     NAtC(ICyc),'-Membered Ring (',

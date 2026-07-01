@@ -65,7 +65,7 @@ C    $    NBond,IBond,IAtCyc,NTermA,IAtomA,CoefA)
        endif 
        if(NBJ.gt.4) then
         call HighCoordAt(IOut,IPrint,MxBnd,MaxAtA,MxTerA,NGICA,JAt,
-     $   NBond,IBond,NTermA,IAtomA,ITVA,CoefA,C)
+     $   NBond,IBond,NTermA,IAtomA,ITVA,CoefA,C,TreshL)
         go to 30
        endif
    30 continue
@@ -503,7 +503,7 @@ C    $     MAt,NEq1,FrozJ,FrozK,FrozL,FrozM,NTermA,IAtomA,ITVA,CoefA)
       end
 *Deck HighCoordAt
       Subroutine HighCoordAt(IOut,IPrint,MxBnd,MaxAtA,MxTrmA,ICoord,IAt,
-     $  NBond,IBond,NTermA,IAtomA,ITVA,CoefA,C)
+     $  NBond,IBond,NTermA,IAtomA,ITVA,CoefA,C,TreshL)
       Implicit None
 C
 C High-coordination fallback: explicit pairwise valence angles for centers
@@ -514,7 +514,7 @@ C Dimensions
       Integer IOut,IPrint,MxBnd,MaxAtA,MxTrmA,ICoord,IAt
       Integer NBond(*),IBond(MxBnd,*)
       Integer NTermA(*),IAtomA(MaxAtA,MxTrmA,*),ITVA(*)
-      Real*8 CoefA(MxTrmA,*),C(3,*)
+      Real*8 CoefA(MxTrmA,*),C(3,*),TreshL
       Double Precision ValAng
 C Local
       Integer II,KK,I1,I2,ILeft,IRight,NAng
@@ -532,6 +532,8 @@ C Local
          ILeft = I2
          IRight = I1
         EndIf
+        Value = ValAng(C(1,ILeft),C(1,IAt),C(1,IRight))
+        If(Value.ge.TreshL) GoTo 10
         ICoord = ICoord + 1
         NTermA(ICoord) = 1
         ITVA(ICoord) = 17
@@ -541,9 +543,8 @@ C Local
         IAtomA(3,1,ICoord) = IRight
         NAng = NAng + 1
         If(IPrint.gt.0) then
-         Value = ValAng(C(1,ILeft),C(1,IAt),C(1,IRight))*ToDeg
          Write(IOut,'(I4,6X,''HCAn'',1X,2I4,14X,I2,4X,''Value='',F8.3)')
-     $     IAt,ILeft,IRight,NAng,Value
+     $     IAt,ILeft,IRight,NAng,Value*ToDeg
         EndIf
    10   Continue
    20 Continue
