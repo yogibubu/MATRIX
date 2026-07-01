@@ -187,6 +187,15 @@ the local class by GF itself; the choice belongs to NEO through
 symmetry-adapted, keep all of them local, or keep only selected \texttt{XH},
 \texttt{XH2} or \texttt{XH3} geminal groups local.
 
+When NEO marks X--H stretches as local, GF groups them by the heavy atom in the
+frozen topology.  A single X--H stretch gives a one-dimensional local block.
+Two or three equivalent/geminal stretches attached to the same heavy atom give
+an \texttt{XH2} or \texttt{XH3} coupled local block, so their strong geminal
+harmonic couplings are retained inside \(F_{SS}\) and \(G_{SS}\).  Couplings
+between that local block and the normal-mode subspace are still diagnosed with
+the same \(F/G\) criteria and are intended for perturbative treatment only when
+small.
+
 The reference mass-metric data used to plan the DVR branch are not recomputed
 from a separate rotor geometry algorithm.  Since the GF calculation already
 owns the Wilson \(G\) matrix in the final non-redundant GIC basis, MATRIX

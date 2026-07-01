@@ -134,6 +134,48 @@ def test_gf_xh_local_class_comes_only_from_neo_family():
     assert local.gic_anharmonic_classes[0] == "LOCAL_XH_STRETCH_UNSYMMETRIZED"
 
 
+def test_large_amplitude_groups_local_xh_by_geminal_heavy_atom():
+    water = large_amplitude_analysis_from_gf_matrices(
+        force_constants=np.diag([0.001, 0.0015, 0.2]),
+        g_matrix=np.eye(3),
+        frequencies_cm=np.asarray([120.0, 130.0, 800.0], dtype=float),
+        ped=np.eye(3) * 100.0,
+        gic_labels=("R(1,2)", "R(1,3)", "A(2,1,3)"),
+        gic_names=("XHSt0001", "XHSt0002", "Bend0001"),
+        gic_irreps=("LOCAL", "LOCAL", "A1"),
+        topology_context=LargeAmplitudeTopologyContext(
+            atomic_numbers=(8, 1, 1),
+            bonds=((1, 2), (1, 3)),
+            bond_orders={(1, 2): 1.0, (1, 3): 1.0},
+        ),
+    )
+    ammonia = large_amplitude_analysis_from_gf_matrices(
+        force_constants=np.diag([0.001, 0.0012, 0.0014, 0.2]),
+        g_matrix=np.eye(4),
+        frequencies_cm=np.asarray([120.0, 125.0, 130.0, 800.0], dtype=float),
+        ped=np.eye(4) * 100.0,
+        gic_labels=("R(1,2)", "R(1,3)", "R(1,4)", "A(2,1,3)"),
+        gic_names=("XHSt0001", "XHSt0002", "XHSt0003", "Bend0001"),
+        gic_irreps=("LOCAL", "LOCAL", "LOCAL", "A1"),
+        topology_context=LargeAmplitudeTopologyContext(
+            atomic_numbers=(7, 1, 1, 1),
+            bonds=((1, 2), (1, 3), (1, 4)),
+            bond_orders={(1, 2): 1.0, (1, 3): 1.0, (1, 4): 1.0},
+        ),
+    )
+
+    water_blocks = {block.label: block for block in water.blocks}
+    ammonia_blocks = {block.label: block for block in ammonia.blocks}
+
+    assert water_blocks["local_xh_stretch_atom001_XH2"].indices == (1, 2)
+    assert water_blocks["local_xh_stretch_atom001_XH2"].family == "local_xh_stretch"
+    assert water_blocks["local_xh_stretch_atom001_XH2"].anharmonic_class == (
+        "LOCAL_XH_STRETCH_UNSYMMETRIZED"
+    )
+    assert ammonia_blocks["local_xh_stretch_atom001_XH3"].indices == (1, 2, 3)
+    assert len(ammonia_blocks["local_xh_stretch_atom001_XH3"].frequencies_cm) == 3
+
+
 def test_gf_large_amplitude_subspaces_use_existing_gic_blocks_without_projection():
     result = gf_from_cartesian_hessian_and_gic_b_matrix(
         np.diag([4.0, 9.0, 16.0]),

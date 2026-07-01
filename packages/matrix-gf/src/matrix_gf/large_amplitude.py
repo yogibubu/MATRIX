@@ -30,6 +30,7 @@ DEFAULT_ANHARMONIC_CLASS = ANHARMONIC_CLASS_PENDING
 DEFAULT_ZEROTH_ORDER_MODEL = ZEROTH_ORDER_PENDING
 DEFAULT_CROSS_COUPLING_POLICY = CROSS_COUPLING_PENDING
 DEFAULT_LARGE_AMPLITUDE_FAMILIES = (
+    "local_xh_stretch",
     "torsion",
     "ring_puckering",
     "butterfly",
@@ -261,7 +262,7 @@ def large_amplitude_analysis_from_gf_matrices(
     selected_families = tuple(dict.fromkeys(family for family in families if family))
     selected = set(selected_families)
     coordinates = []
-    by_family: dict[str, list[int]] = {family: [] for family in selected_families}
+    by_block: dict[tuple[str, str], list[int]] = {}
     for index in range(ncoord):
         family = gic_coordinate_family(names[index], labels[index])
         if family not in selected:
@@ -292,11 +293,18 @@ def large_amplitude_analysis_from_gf_matrices(
                 anharmonic_reason=assignment.reason,
             )
         )
-        by_family.setdefault(family, []).append(index)
+        block_label = _large_amplitude_block_label(
+            family,
+            names[index],
+            labels[index],
+            index=index,
+            topology_context=topology_context,
+        )
+        by_block.setdefault((block_label, family), []).append(index)
 
     blocks = [
         _large_amplitude_block(
-            label=family,
+            label=label,
             family=family,
             indices=tuple(indices),
             force_constants=f_mat,
@@ -304,7 +312,7 @@ def large_amplitude_analysis_from_gf_matrices(
             g_inverse=g_inverse,
             g_inverse_source=g_inverse_source,
         )
-        for family, indices in by_family.items()
+        for (label, family), indices in by_block.items()
         if indices
     ]
     all_indices = tuple(coordinate.index - 1 for coordinate in coordinates)
@@ -614,6 +622,71 @@ def _torsion_terms(text: str) -> tuple[tuple[int, int, int, int], ...]:
     return tuple(tuple(int(value) for value in match) for match in matches)
 
 
+def _stretch_terms(text: str) -> tuple[tuple[int, int], ...]:
+    matches = re.findall(
+        r"\bR\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return tuple(tuple(int(value) for value in match) for match in matches)
+
+
+def _large_amplitude_block_label(
+    family: str,
+    name: str,
+    label: str,
+    *,
+    index: int,
+    topology_context: LargeAmplitudeTopologyContext | None,
+) -> str:
+    if family != "local_xh_stretch":
+        return family
+    text = f"{name} {label}"
+    for left, right in _stretch_terms(text):
+        heavy, _hydrogen = _xh_heavy_and_hydrogen(left, right, topology_context)
+        if heavy is not None:
+            return f"local_xh_stretch_atom{heavy:03d}_{_xh_class_for_heavy_atom(heavy, topology_context)}"
+    return f"local_xh_stretch_gic{index + 1:03d}"
+
+
+def _xh_heavy_and_hydrogen(
+    left: int,
+    right: int,
+    context: LargeAmplitudeTopologyContext | None,
+) -> tuple[int | None, int | None]:
+    if context is None or not context.atomic_numbers:
+        return None, None
+    if left < 1 or right < 1:
+        return None, None
+    if left > len(context.atomic_numbers) or right > len(context.atomic_numbers):
+        return None, None
+    z_left = int(context.atomic_numbers[left - 1])
+    z_right = int(context.atomic_numbers[right - 1])
+    if z_left == 1 and z_right != 1:
+        return right, left
+    if z_right == 1 and z_left != 1:
+        return left, right
+    return None, None
+
+
+def _xh_class_for_heavy_atom(
+    heavy: int,
+    context: LargeAmplitudeTopologyContext | None,
+) -> str:
+    if context is None:
+        return "XH"
+    count = 0
+    for left, right in context.bonds:
+        atom, hydrogen = _xh_heavy_and_hydrogen(left, right, context)
+        if atom == heavy and hydrogen is not None:
+            count += 1
+    if count <= 1:
+        return "XH"
+    if count == 2:
+        return "XH2"
+    return "XH3"
+
+
 def _local_assignment(family: str, reason: str) -> AnharmonicModelAssignment:
     return AnharmonicModelAssignment(
         family=family,
@@ -673,6 +746,14 @@ def _torsion_assignment(
 
 
 def _block_anharmonic_assignment(family: str) -> AnharmonicModelAssignment:
+    if family == "local_xh_stretch":
+        return AnharmonicModelAssignment(
+            family=family,
+            anharmonic_class=ANHARMONIC_CLASS_XH_LOCAL,
+            zeroth_order_model=ZEROTH_ORDER_XH_LOCAL,
+            cross_coupling_policy=CROSS_COUPLING_LOCAL,
+            reason="XH_LOCAL_GEMINAL_BLOCK",
+        )
     if family in {"torsion", "ring_puckering", "ring_bend", "butterfly", "oop", "special"}:
         return _local_assignment(family, "CHEMICAL_LOCAL_COORDINATE_FAMILY")
     if family == "mixed_large_amplitude":
