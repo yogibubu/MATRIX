@@ -11,6 +11,8 @@ from typing import Any
 
 
 PAPER_BENCHMARK_SCHEMA = "oracle.semiexp.paper_regression.v1"
+LEGACY_PAPER_BENCHMARK_SCHEMA = "merlino.semiexp.paper_regression.v1"
+SUPPORTED_PAPER_BENCHMARK_SCHEMAS = (PAPER_BENCHMARK_SCHEMA, LEGACY_PAPER_BENCHMARK_SCHEMA)
 DEFAULT_SNAPSHOT = Path("benchmarks/semiexp_msr/golden/semiexp_paper_regression.json")
 DEFAULT_OUTPUT_DIR = Path("benchmarks/semiexp_msr/generated")
 CASE_ORDER = (
@@ -105,7 +107,7 @@ def validate_paper_benchmark_snapshot(
     snapshot: dict[str, Any], *, source: Path | None = None
 ) -> None:
     label = str(source) if source is not None else "snapshot"
-    if snapshot.get("schema") != PAPER_BENCHMARK_SCHEMA:
+    if snapshot.get("schema") not in SUPPORTED_PAPER_BENCHMARK_SCHEMAS:
         raise SnapshotValidationError(f"{label}: unsupported schema {snapshot.get('schema')!r}")
     cases = snapshot.get("cases")
     if not isinstance(cases, dict):

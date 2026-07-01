@@ -25,6 +25,30 @@ def test_semiexp_paper_benchmark_paths_resolve_from_repo_root():
     assert repository_root() == root
 
 
+def test_semiexp_paper_benchmark_snapshot_generates_tables(tmp_path):
+    from matrix_morpheus import generate_paper_benchmark_artifacts
+
+    snapshot, artifacts = generate_paper_benchmark_artifacts(
+        outdir=tmp_path / "paper",
+        refresh_from_outputs=False,
+    )
+
+    assert snapshot["schema"] == "oracle.semiexp.paper_regression.v1"
+    assert tuple(snapshot["cases"]) == (
+        "glycolaldehyde",
+        "glycine_I",
+        "glycine_II",
+        "cyclopentadiene",
+        "nitrobenzene",
+        "azulene",
+        "norcamphor",
+    )
+    assert set(snapshot["planar_pair_diagnostics"]) == {"nitrobenzene", "azulene"}
+    assert artifacts["summary_tex"].is_file()
+    assert artifacts["planar_tex"].is_file()
+    assert "Nitrobenzene" in artifacts["summary_tex"].read_text(encoding="utf-8")
+
+
 def test_semiexp_job_accepts_oracle_and_legacy_schemas(tmp_path):
     from matrix_morpheus import read_semiexperimental_job
 
