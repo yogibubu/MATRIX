@@ -427,7 +427,10 @@ constraint. A constraint removes a direction from the fit, whereas a predicate
 keeps the direction in the least-squares problem and assigns a stated
 uncertainty to the reference value. Predicate widths must consequently encode
 the reliability and information content of the reference geometry, not merely
-the desired smoothness of the refinement. In the automatic predicate selector
+the desired smoothness of the refinement. Default predicate widths are
+intentionally conservative and reflect the expected uncertainty of the
+reference information rather than the intrinsic accuracy of the underlying QC
+method. In the automatic predicate selector
 used below, distance predicates are not treated as one chemically uniform
 class. XY bonds, where both atoms are non-hydrogen atoms, and non-CH X--H bonds
 are tested against the same tight propagated-error criterion because they may
