@@ -22,6 +22,7 @@ rm -f "$TARGET" "$LOG"
   "$SRC_DIR/mkcyc.f" \
   "$SRC_DIR/mksalc.f" \
   "$SRC_DIR/locsvd.f" \
+  "$ROOT_DIR/local_equiv.f" \
   "$SRC_DIR/gicprune.f" \
   "$SRC_DIR/gic_type_symmetry.f" \
   "$SRC_DIR/pcsgeo.f" \

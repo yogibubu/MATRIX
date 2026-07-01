@@ -763,3 +763,20 @@ C
         cwd=root,
     )
     subprocess.run([str(executable)], check=True, cwd=root)
+
+
+def test_legacy_gicforge_build_links_local_equivalence_kernel():
+    gfortran = shutil.which("gfortran")
+    if gfortran is None:
+        pytest.skip("gfortran is not available")
+
+    root = Path(__file__).resolve().parents[1]
+    layout = gicforge_fortran_layout(root)
+    subprocess.run(
+        [str(layout.legacy_compile_script)],
+        check=True,
+        cwd=layout.root,
+        capture_output=True,
+        text=True,
+    )
+    assert layout.legacy_executable.is_file()

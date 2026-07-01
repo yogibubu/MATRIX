@@ -57,6 +57,7 @@ def validate_legacy_gicforge_sources(repo_root: Path | None = None) -> tuple[Pat
     layout = gicforge_fortran_layout(repo_root)
     required = (
         layout.matrix_kernel,
+        layout.root / "local_equiv.f",
         layout.legacy_compile_script,
         layout.legacy_source_dir / "MANIFEST.md",
         layout.root / "include" / "bdpcs3_hbond_params.inc",
