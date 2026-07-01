@@ -21,6 +21,7 @@ from matrix_gaussian import (
     read_gaussian_cartesian_input,
 )
 from matrix_neo import (
+    STAGE_COORDINATE_GENERATION,
     FrozenGIC,
     GICForgeContractError,
     GICDefinition,
@@ -28,6 +29,8 @@ from matrix_neo import (
     GICPrimitive,
     build_gic_b_matrix_from_xyzin,
     build_gic_definition_from_xyzin,
+    coordinate_generator_by_family,
+    default_coordinate_generator_registry,
     gaussian_gic_lines_from_xyzin,
     gic_report_from_xyzin,
     gic_b_matrix_lines,
@@ -36,6 +39,7 @@ from matrix_neo import (
     symmetrize_gic_definition,
     irrep_characters_for_operations,
     total_symmetric_gic_names,
+    validate_coordinate_generator_registry,
     write_gicforge_build_sections,
     write_gicforge_gaussian_input,
     write_gicforge_plan_sections,
@@ -338,6 +342,28 @@ def _assert_merlino_character_rows(
     for (name, chars), (expected_name, expected_chars) in zip(rows, expected):
         assert name == expected_name
         assert chars == pytest.approx(expected_chars, abs=1.0e-8)
+
+
+def test_coordinate_generator_registry_is_deterministic_and_stage_separated():
+    registry = default_coordinate_generator_registry()
+    by_family = coordinate_generator_by_family()
+
+    assert validate_coordinate_generator_registry() == ()
+    assert all(entry.stage == STAGE_COORDINATE_GENERATION for entry in registry)
+    assert len({entry.name for entry in registry}) == len(registry)
+    assert len({entry.coordinate_family for entry in registry}) == len(registry)
+    assert {
+        "STRETCH",
+        "LOCAL_XH_STRETCH",
+        "BEND",
+        "TORSION",
+        "RING_PUCKER_COMPONENT",
+        "BUTTERFLY",
+        "SPECIAL_COORDINATE",
+    } <= set(by_family)
+    assert by_family["LOCAL_XH_STRETCH"].implemented_by == (
+        "matrix_neo.definition._primitive_candidates"
+    )
 
 
 def test_gicforge_plan_requires_validation_pass(tmp_path):

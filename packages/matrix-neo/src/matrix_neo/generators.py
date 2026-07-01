@@ -1,0 +1,175 @@
+"""Coordinate-generator registry for the gradual NEO refactor.
+
+The registry is declarative: it documents the single logical owner of each
+coordinate-generation responsibility without replacing the current
+Merlino-compatible implementation.  Production generation still flows through
+``definition.py`` and the Fortran/Python backends until a generator is migrated
+and regression-tested explicitly.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+STAGE_TOPOLOGY = "TOPOLOGY"
+STAGE_GEOMETRY = "GEOMETRY"
+STAGE_COORDINATE_GENERATION = "COORDINATE_GENERATION"
+STAGE_COORDINATE_CLASSIFICATION = "COORDINATE_CLASSIFICATION"
+STAGE_REDUNDANCY_ELIMINATION = "REDUNDANCY_ELIMINATION"
+STAGE_SYMMETRIZATION = "SYMMETRIZATION"
+
+STATUS_LEGACY_PORTED = "LEGACY_PORTED"
+STATUS_REFACTOR_BOUNDARY = "REFACTOR_BOUNDARY"
+STATUS_PLANNED = "PLANNED"
+
+
+@dataclass(frozen=True)
+class CoordinateGeneratorSpec:
+    """Declarative ownership record for one coordinate-generation component."""
+
+    name: str
+    stage: str
+    coordinate_family: str
+    produces: tuple[str, ...]
+    consumes: tuple[str, ...]
+    implemented_by: str
+    status: str
+    notes: str = ""
+
+
+DEFAULT_COORDINATE_GENERATOR_REGISTRY: tuple[CoordinateGeneratorSpec, ...] = (
+    CoordinateGeneratorSpec(
+        name="StretchGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="STRETCH",
+        produces=("R(i,j)",),
+        consumes=("TOPOLOGY.BONDS",),
+        implemented_by="matrix_neo.definition._primitive_candidates",
+        status=STATUS_LEGACY_PORTED,
+        notes="Includes the default Merlino-compatible bonded stretch path.",
+    ),
+    CoordinateGeneratorSpec(
+        name="LocalXHStretchGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="LOCAL_XH_STRETCH",
+        produces=("R(X,H)",),
+        consumes=("TOPOLOGY.BONDS", "GIC.XH_STRETCH_POLICY"),
+        implemented_by="matrix_neo.definition._primitive_candidates",
+        status=STATUS_LEGACY_PORTED,
+        notes="Opt-in unsymmetrized X-H stretches for local-mode workflows.",
+    ),
+    CoordinateGeneratorSpec(
+        name="AngleGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="BEND",
+        produces=("A(i,j,k)",),
+        consumes=("TOPOLOGY.BONDS", "GEOMETRY.CARTESIAN"),
+        implemented_by="matrix_neo.definition._primitive_candidates",
+        status=STATUS_LEGACY_PORTED,
+    ),
+    CoordinateGeneratorSpec(
+        name="LinearBendGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="LINEAR_BEND",
+        produces=("L(i,j,k,mode)",),
+        consumes=("TOPOLOGY.BONDS", "GEOMETRY.CARTESIAN"),
+        implemented_by="matrix_neo.definition._primitive_candidates",
+        status=STATUS_LEGACY_PORTED,
+    ),
+    CoordinateGeneratorSpec(
+        name="DihedralGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="TORSION",
+        produces=("D(i,j,k,l)",),
+        consumes=("TOPOLOGY.BONDS",),
+        implemented_by="matrix_neo.definition._primitive_candidates",
+        status=STATUS_LEGACY_PORTED,
+        notes="Keeps the Merlino one-dihedral default unless explicitly changed.",
+    ),
+    CoordinateGeneratorSpec(
+        name="RingGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="RING_PUCKER_COMPONENT",
+        produces=("RPck", "RING_BEND"),
+        consumes=("TOPOLOGY.RINGS", "GEOMETRY.CARTESIAN"),
+        implemented_by="matrix_neo.definition._primitive_candidates",
+        status=STATUS_LEGACY_PORTED,
+    ),
+    CoordinateGeneratorSpec(
+        name="ButterflyGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="BUTTERFLY",
+        produces=("BtFl",),
+        consumes=("TOPOLOGY.RINGS", "TOPOLOGY.FUSED_RING_BONDS"),
+        implemented_by="matrix_neo.definition._primitive_candidates",
+        status=STATUS_LEGACY_PORTED,
+    ),
+    CoordinateGeneratorSpec(
+        name="OutOfPlaneGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="OUT_OF_PLANE",
+        produces=("U(i,j,k,l)", "improper D(i,j,k,l)"),
+        consumes=("TOPOLOGY.BONDS", "TOPOLOGY.RINGS"),
+        implemented_by="matrix_neo.definition._primitive_candidates",
+        status=STATUS_LEGACY_PORTED,
+        notes="Improper-dihedral mode is a Gaussian compatibility path.",
+    ),
+    CoordinateGeneratorSpec(
+        name="SpecialCoordinateGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="SPECIAL_COORDINATE",
+        produces=("fragment centers", "orientations", "ring/bond/contact centers"),
+        consumes=("TOPOLOGY.FRAGMENTS", "GEOMETRY.AUXILIARY_NODES"),
+        implemented_by=(
+            "matrix_neo.definition._fragment_primitive_candidates and "
+            "matrix_neo.definition._interaction_center_primitive_candidates"
+        ),
+        status=STATUS_LEGACY_PORTED,
+    ),
+    CoordinateGeneratorSpec(
+        name="MetalCoordinateGenerator",
+        stage=STAGE_COORDINATE_GENERATION,
+        coordinate_family="METAL_COORDINATION",
+        produces=("eta centers", "metal-ligand auxiliary coordinates"),
+        consumes=("TOPOLOGY.AUXILIARY_NODES", "GEOMETRY.AUXILIARY_NODES"),
+        implemented_by="planned matrix_neo generator module",
+        status=STATUS_PLANNED,
+        notes="Boundary for transition-metal extensions; not active in first release.",
+    ),
+)
+
+
+def default_coordinate_generator_registry() -> tuple[CoordinateGeneratorSpec, ...]:
+    """Return the immutable default registry in deterministic order."""
+
+    return DEFAULT_COORDINATE_GENERATOR_REGISTRY
+
+
+def coordinate_generator_by_family() -> dict[str, CoordinateGeneratorSpec]:
+    """Return one registry entry per coordinate family."""
+
+    return {entry.coordinate_family: entry for entry in DEFAULT_COORDINATE_GENERATOR_REGISTRY}
+
+
+def validate_coordinate_generator_registry(
+    registry: tuple[CoordinateGeneratorSpec, ...] = DEFAULT_COORDINATE_GENERATOR_REGISTRY,
+) -> tuple[str, ...]:
+    """Validate deterministic registry ownership and return diagnostics."""
+
+    diagnostics: list[str] = []
+    seen_names: set[str] = set()
+    seen_families: set[str] = set()
+    for entry in registry:
+        if entry.name in seen_names:
+            diagnostics.append(f"duplicate generator name: {entry.name}")
+        seen_names.add(entry.name)
+        if entry.coordinate_family in seen_families:
+            diagnostics.append(f"duplicate coordinate family: {entry.coordinate_family}")
+        seen_families.add(entry.coordinate_family)
+        if not entry.implemented_by:
+            diagnostics.append(f"missing implementation owner: {entry.name}")
+        if entry.stage != STAGE_COORDINATE_GENERATION:
+            diagnostics.append(f"unexpected generator stage for {entry.name}: {entry.stage}")
+    return tuple(diagnostics)
+

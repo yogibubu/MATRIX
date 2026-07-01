@@ -32,6 +32,14 @@ For in-program help, use `matrix help`, `matrix help TOOL`,
 views are generated from the same tool-contract metadata used to validate xyzin
 sections, so missing-section guidance stays aligned with the CLI and GUI.
 
+Developer-facing coordinate architecture rules live in
+`docs/architecture/INTERNAL_COORDINATE_FRAMEWORK.md` and the change checklist in
+`docs/architecture/DEVELOPER_WORKFLOW.md`.  Those documents are the reference
+for future NEO/GICForge refactoring: they require topology, geometry,
+coordinate generation, numerical reduction and symmetrization to remain
+separate, while preserving Merlino/GICForge numerical behaviour unless an
+explicit scientific change is requested.
+
 ## Manual Completion Plan
 
 The current first-release manual pass is closed by `matrix_first_release_manual`

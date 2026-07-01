@@ -24,6 +24,9 @@ Rules:
 - GUI classes must not contain scientific algorithms.
 - Gaussian, Fortran and other external formats are adapters, not internal data
   models.
+- Coordinate work must respect `docs/architecture/INTERNAL_COORDINATE_FRAMEWORK.md`:
+  topology, geometry, coordinate generation, reduction, symmetrization and
+  downstream analysis are separate stages.
 - Prefer typed ORACLE errors from `matrix_core.errors`.
 - Important numerical fits should use shared MATRIX numerical primitives for
   damped normal equations, step limiting and rank/condition diagnostics unless
@@ -36,6 +39,29 @@ Rules:
   regressions instead of inventing ad hoc molecule inputs.
 - Store new project outputs under `inputs/`, `runs/`, `outputs/`, `reports/`,
   `cache/` or `logs/`.
+
+## Internal-Coordinate Change Checklist
+
+Before changing NEO/GICForge, GF coordinate handling, topology clients or
+symmetry code, answer these questions in the commit, issue or review notes.
+
+- Does the change preserve Merlino/GICForge numerical behaviour unless the
+  requested scientific change explicitly requires otherwise?
+- Is there already a module that owns this responsibility?
+- Are topology, geometry, coordinate generation, numerical reduction and
+  symmetrization still separated?
+- Is the implementation reusing existing parsers/generators/policies rather
+  than duplicating them?
+- If a coordinate type changed, is there one clear logical generator and one
+  registry entry for it?
+- If behaviour changed, is there a focused regression test and, when relevant,
+  a Python/Fortran comparison?
+- Does the frozen xyzin contract still contain enough metadata for downstream
+  tools to work without reparsing external program input?
+- For symmetry changes, do the tests verify labels, total-symmetric selection
+  and absence of forbidden cross-irrep GF couplings where applicable?
+- For large-amplitude/local-mode changes, do the tests verify both F and G
+  coupling diagnostics?
 
 ## Continuous Integration
 
