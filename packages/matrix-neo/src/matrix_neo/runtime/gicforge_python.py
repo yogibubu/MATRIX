@@ -34,6 +34,7 @@ class GICForgePythonCoordinate:
     block: str
     terms: tuple[tuple[float, Primitive], ...]
     type_index: int = 0
+    diagnostic: str = ""
 
     @property
     def dominant_kind(self) -> str:
@@ -1358,6 +1359,7 @@ def _svd_local_coordinates(
     start: int,
     kind_type_index: int,
     max_modes: int | None = None,
+    diagnostic: str = "",
 ) -> list[GICForgePythonCoordinate]:
     if not primitives:
         return []
@@ -1383,6 +1385,7 @@ def _svd_local_coordinates(
                 block=prefix,
                 type_index=kind_type_index,
                 terms=terms,
+                diagnostic=f"{diagnostic} MODE={mode + 1}" if diagnostic else "",
             )
         )
     return coordinates
@@ -1430,6 +1433,10 @@ def _bond_length_coordinates(
                 prefix="Stre",
                 start=len(coordinates) + 1,
                 kind_type_index=0,
+                diagnostic=(
+                    "LOCAL_EQUIVALENCE KIND=STRETCH "
+                    f"SIZE={len(primitives)} ATOMS={_primitive_atom_group_token(primitives)}"
+                ),
             )
         )
     return coordinates
@@ -1472,6 +1479,10 @@ def _bond_primitives_by_equivalence(
             continue
         groups[match].append(primitive)
     return tuple(tuple(group) for _key, group in sorted(zip(keys, groups)))
+
+
+def _primitive_atom_group_token(primitives: tuple[Primitive, ...] | list[Primitive]) -> str:
+    return "+".join("-".join(str(int(atom) + 1) for atom in primitive.atoms) for primitive in primitives)
 
 
 def _cyclic_index(index_1based: int, ncyc: int) -> int:
@@ -2032,14 +2043,14 @@ def _high_coord_angle_coordinates(
                 angle_primitives.append(Primitive("angle", (left, center, right)))
     coordinates: list[GICForgePythonCoordinate] = []
     if 5 <= len(neigh) <= 9:
-        angle_primitives_by_class = _high_coord_angle_primitives_by_template_or_equivalence(
+        angle_group_records = _high_coord_angle_group_records_by_template_or_equivalence(
             center,
             neigh,
             effective_atomic_numbers=effective_atomic_numbers,
             coords=coords,
             linear_threshold=linear_threshold,
         )
-        for primitives in angle_primitives_by_class:
+        for diagnostic, primitives in angle_group_records:
             coordinates.extend(
                 _svd_local_coordinates(
                     primitives,
@@ -2047,6 +2058,7 @@ def _high_coord_angle_coordinates(
                     prefix="HCAn",
                     start=angle_start + len(coordinates),
                     kind_type_index=17,
+                    diagnostic=diagnostic,
                 )
             )
     else:
@@ -2057,6 +2069,33 @@ def _high_coord_angle_coordinates(
     return coordinates, linears
 
 
+def _high_coord_angle_group_records_by_template_or_equivalence(
+    center: int,
+    neigh: list[int],
+    *,
+    effective_atomic_numbers: tuple[float, ...],
+    coords: np.ndarray,
+    linear_threshold: float,
+) -> tuple[tuple[str, tuple[Primitive, ...]], ...]:
+    template, _score = _recognize_local_coordination_template(center, neigh, coords=coords)
+    if template is None:
+        return _high_coord_angle_group_records_by_ligand_equivalence(
+            center,
+            neigh,
+            effective_atomic_numbers=effective_atomic_numbers,
+            coords=coords,
+            linear_threshold=linear_threshold,
+        )
+    return _high_coord_angle_group_records_by_template(
+        center,
+        neigh,
+        template=template,
+        effective_atomic_numbers=effective_atomic_numbers,
+        coords=coords,
+        linear_threshold=linear_threshold,
+    )
+
+
 def _high_coord_angle_primitives_by_template_or_equivalence(
     center: int,
     neigh: list[int],
@@ -2065,22 +2104,44 @@ def _high_coord_angle_primitives_by_template_or_equivalence(
     coords: np.ndarray,
     linear_threshold: float,
 ) -> tuple[tuple[Primitive, ...], ...]:
-    template, _score = _recognize_local_coordination_template(center, neigh, coords=coords)
-    if template is None:
-        return _high_coord_angle_primitives_by_ligand_equivalence(
+    return tuple(
+        primitives
+        for _diagnostic, primitives in _high_coord_angle_group_records_by_template_or_equivalence(
             center,
             neigh,
             effective_atomic_numbers=effective_atomic_numbers,
             coords=coords,
             linear_threshold=linear_threshold,
         )
-    return _high_coord_angle_primitives_by_template(
+    )
+
+
+def _high_coord_angle_group_records_by_template(
+    center: int,
+    neigh: list[int],
+    *,
+    template: LocalCoordinationTemplate,
+    effective_atomic_numbers: tuple[float, ...],
+    coords: np.ndarray,
+    linear_threshold: float,
+) -> tuple[tuple[str, tuple[Primitive, ...]], ...]:
+    grouped = _high_coord_angle_grouped_by_template(
         center,
         neigh,
         template=template,
         effective_atomic_numbers=effective_atomic_numbers,
         coords=coords,
         linear_threshold=linear_threshold,
+    )
+    return tuple(
+        (
+            "LOCAL_EQUIVALENCE KIND=ANGLE "
+            f"CENTER={center + 1} SOURCE=TEMPLATE TEMPLATE={template.name} "
+            f"KEY={key[0]}-{key[1]}-{key[2]} SIZE={len(primitives)} "
+            f"ATOMS={_primitive_atom_group_token(primitives)}",
+            primitives,
+        )
+        for key, primitives in grouped
     )
 
 
@@ -2093,6 +2154,28 @@ def _high_coord_angle_primitives_by_template(
     coords: np.ndarray,
     linear_threshold: float,
 ) -> tuple[tuple[Primitive, ...], ...]:
+    return tuple(
+        primitives
+        for _key, primitives in _high_coord_angle_grouped_by_template(
+            center,
+            neigh,
+            template=template,
+            effective_atomic_numbers=effective_atomic_numbers,
+            coords=coords,
+            linear_threshold=linear_threshold,
+        )
+    )
+
+
+def _high_coord_angle_grouped_by_template(
+    center: int,
+    neigh: list[int],
+    *,
+    template: LocalCoordinationTemplate,
+    effective_atomic_numbers: tuple[float, ...],
+    coords: np.ndarray,
+    linear_threshold: float,
+) -> tuple[tuple[tuple[int, int, int], tuple[Primitive, ...]], ...]:
     classes = _local_ligand_equivalence_classes(
         center,
         neigh,
@@ -2117,7 +2200,34 @@ def _high_coord_angle_primitives_by_template(
             )
             key = (*sorted((first_class, second_class)), angle_class)
             grouped.setdefault(key, []).append(Primitive("angle", (left, center, right)))
-    return tuple(tuple(grouped[key]) for key in sorted(grouped))
+    return tuple((key, tuple(grouped[key])) for key in sorted(grouped))
+
+
+def _high_coord_angle_group_records_by_ligand_equivalence(
+    center: int,
+    neigh: list[int],
+    *,
+    effective_atomic_numbers: tuple[float, ...],
+    coords: np.ndarray,
+    linear_threshold: float,
+) -> tuple[tuple[str, tuple[Primitive, ...]], ...]:
+    grouped = _high_coord_angle_grouped_by_ligand_equivalence(
+        center,
+        neigh,
+        effective_atomic_numbers=effective_atomic_numbers,
+        coords=coords,
+        linear_threshold=linear_threshold,
+    )
+    return tuple(
+        (
+            "LOCAL_EQUIVALENCE KIND=ANGLE "
+            f"CENTER={center + 1} SOURCE=EQUIVALENCE "
+            f"KEY={key[0]}-{key[1]} SIZE={len(primitives)} "
+            f"ATOMS={_primitive_atom_group_token(primitives)}",
+            primitives,
+        )
+        for key, primitives in grouped
+    )
 
 
 def _high_coord_angle_primitives_by_ligand_equivalence(
@@ -2128,6 +2238,26 @@ def _high_coord_angle_primitives_by_ligand_equivalence(
     coords: np.ndarray,
     linear_threshold: float,
 ) -> tuple[tuple[Primitive, ...], ...]:
+    return tuple(
+        primitives
+        for _key, primitives in _high_coord_angle_grouped_by_ligand_equivalence(
+            center,
+            neigh,
+            effective_atomic_numbers=effective_atomic_numbers,
+            coords=coords,
+            linear_threshold=linear_threshold,
+        )
+    )
+
+
+def _high_coord_angle_grouped_by_ligand_equivalence(
+    center: int,
+    neigh: list[int],
+    *,
+    effective_atomic_numbers: tuple[float, ...],
+    coords: np.ndarray,
+    linear_threshold: float,
+) -> tuple[tuple[tuple[int, int], tuple[Primitive, ...]], ...]:
     classes = _local_ligand_equivalence_classes(
         center,
         neigh,
@@ -2147,7 +2277,7 @@ def _high_coord_angle_primitives_by_ligand_equivalence(
             second_class = class_by_atom[second]
             key = tuple(sorted((first_class, second_class)))
             grouped.setdefault(key, []).append(Primitive("angle", (left, center, right)))
-    return tuple(tuple(grouped[key]) for key in sorted(grouped))
+    return tuple((key, tuple(grouped[key])) for key in sorted(grouped))
 
 
 def _local_ligand_equivalence_classes(
@@ -2428,6 +2558,15 @@ def _python_model_diagnostics(
         "candidate_counts_by_block": candidate_counts,
         "final_counts_by_block": kept_counts,
         "removed_counts_by_block": removed_counts,
+        "local_equivalence": tuple(
+            sorted(
+                {
+                    coordinate.diagnostic
+                    for coordinate in coordinates
+                    if coordinate.diagnostic.startswith("LOCAL_EQUIVALENCE")
+                }
+            )
+        ),
     }
 
 

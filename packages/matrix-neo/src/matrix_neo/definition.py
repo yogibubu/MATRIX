@@ -469,6 +469,9 @@ def _construct_merlino_python_definition(
                 )
                 if int(count) > 0
             ),
+            skipped_dependent_details=tuple(
+                str(item) for item in diagnostics.get("local_equivalence", ())
+            ),
         ),
         symmetry_diagnostics=_empty_symmetry_diagnostics(point_group, requested=False),
         xh_stretch_policy=xh_stretch_policy,

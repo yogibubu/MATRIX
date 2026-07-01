@@ -101,6 +101,10 @@ def gic_report_lines(definition: GICDefinition) -> list[str]:
     else:
         lines.append("NONE")
 
+    lines.extend(["", "Local Equivalence Diagnostics", "-----------------------------"])
+    local_equivalence = _local_equivalence_lines(definition)
+    lines.extend(local_equivalence or ["NONE"])
+
     symmetry = definition.symmetry_diagnostics
     lines.extend(["", "Symmetrization Diagnostics", "---------------------------"])
     if symmetry:
@@ -149,6 +153,17 @@ def gic_report_lines(definition: GICDefinition) -> list[str]:
     else:
         lines.append("NONE")
     return lines
+
+
+def _local_equivalence_lines(definition: GICDefinition) -> list[str]:
+    diagnostics = definition.reduction_diagnostics
+    if diagnostics is None:
+        return []
+    return [
+        item.removeprefix("LOCAL_EQUIVALENCE ")
+        for item in diagnostics.skipped_dependent_details
+        if item.startswith("LOCAL_EQUIVALENCE ")
+    ]
 
 
 def gic_report_from_xyzin(path: Path) -> list[str]:

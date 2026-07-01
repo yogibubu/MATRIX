@@ -2409,6 +2409,55 @@ def test_gicforge_benzene_d6h_projector_symmetrizes_ring_puckering(tmp_path):
     assert not any(line.startswith("PhiP") for line in gaussian_lines)
 
 
+@pytest.mark.parametrize(
+    ("molecule", "expected_group", "expected_tokens"),
+    [
+        ("h2ocart.inp", "C2v", ("KIND=STRETCH",)),
+        ("benzene.inp", "D6h", ("KIND=STRETCH",)),
+        ("pyrrole.inp", "C2v", ("KIND=STRETCH",)),
+        ("cubane.inp", "Oh", ("KIND=STRETCH",)),
+        ("ferrocene.inp", "D5h", ()),
+    ],
+)
+def test_gicforge_local_equivalence_golden_corpus_reports_real_cases(
+    tmp_path,
+    molecule,
+    expected_group,
+    expected_tokens,
+):
+    source = _test_molecule_path(molecule)
+    xyzin = tmp_path / f"{Path(molecule).stem}.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    if molecule.startswith("ferrocene"):
+        write_interaction_center_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    report = "\n".join(gic_report_from_xyzin(xyzin))
+
+    assert definition.point_group == expected_group
+    assert definition.rank == definition.target_rank
+    assert "Local Equivalence Diagnostics" in report
+    for token in expected_tokens:
+        assert token in report
+
+
+@pytest.mark.parametrize("example", ["benzene", "cubane"])
+def test_gaussian_readallgic_examples_are_matrix_generated_and_frozen(example):
+    root = Path(__file__).resolve().parents[1]
+    gjf = root / "examples" / "gaussian_readallgic" / example / f"{example}.gjf"
+    xyzin = root / "examples" / "gaussian_readallgic" / example / f"{example}.xyzin"
+
+    text = gjf.read_text(encoding="utf-8")
+    gic = "\n".join(section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC"))
+
+    assert "#p hf/sto-3g opt=readallgic output=pickett" in text
+    assert "SYMMETRY_MODE POINT_GROUP_PROJECTOR" in gic
+    assert "LOCAL_EQUIVALENCE KIND=STRETCH" in gic
+    assert "Str001 =" in text
+    assert "(Frozen) =" in text
+
+
 def test_gicforge_pyrrole_c2v_projector_keeps_ring_coordinates(tmp_path):
     source = _test_molecule_path("pyrrole.inp")
     xyzin = tmp_path / "pyrrole.xyzin"
