@@ -2,6 +2,9 @@ from pathlib import Path
 import numpy as np
 
 
+ORACLE_XYZ_TOPOLOGY_SCHEMA = "oracle.xyz.topology.v1"
+
+
 def write_topology_section(
     fh,
     *,
@@ -22,6 +25,10 @@ def write_topology_section(
     # ========================================================
 
     fh.write("\n#TOPOLOGY\n")
+    fh.write(f"SCHEMA {ORACLE_XYZ_TOPOLOGY_SCHEMA}\n")
+    fh.write("INDEXING ATOMS=ONE_BASED\n")
+    bond_order_source = getattr(synthons, "_bond_order_source", "Topology Pauling continuous model")
+    fh.write(f"BOND_ORDER_SOURCE {bond_order_source}\n")
 
     # ========================================================
     # ATOMS
@@ -49,13 +56,28 @@ def write_topology_section(
     # ========================================================
 
     fh.write("\n[BONDS]\n")
-    fh.write("(i,j)\n")
-
     if dg.bonds:
         for i, j in dg.bonds:
-            fh.write(f"({i + 1},{j + 1})\n")
+            fh.write(f"{i + 1} {j + 1}\n")
     else:
-        fh.write("Bonds: none\n")
+        fh.write("NONE\n")
+
+    # ========================================================
+    # BOND ORDERS
+    # ========================================================
+
+    fh.write("\n[BOND_ORDERS]\n")
+    bond_order_rows = []
+    if synthons is not None:
+        for i, j in dg.bonds:
+            try:
+                bond_order_rows.append(f"{i + 1} {j + 1} {float(synthons.bond_order(i, j)):.10g}")
+            except Exception:
+                continue
+    if bond_order_rows:
+        fh.write("\n".join(bond_order_rows) + "\n")
+    else:
+        fh.write("NONE\n")
 
     # ========================================================
     # RINGS
@@ -65,10 +87,10 @@ def write_topology_section(
         fh.write("\n[RINGS]\n")
         if ringset.rings:
             for ir, ring in enumerate(ringset.rings, start=1):
-                atoms = ", ".join(str(i + 1) for i in ring.atoms)
-                fh.write(f"Ring {ir}: size={len(ring)} atoms=[{atoms}]\n")
+                atoms = " ".join(str(i + 1) for i in ring.atoms)
+                fh.write(f"{ir} SIZE={len(ring)} ATOMS={atoms}\n")
         else:
-            fh.write("Rings: none\n")
+            fh.write("NONE\n")
 
     # ========================================================
     # AROMATICITY
@@ -78,16 +100,16 @@ def write_topology_section(
         fh.write("\n[AROMATICITY]\n")
 
         if aromaticity.aromatic_atoms:
-            atoms = ", ".join(str(i + 1) for i in aromaticity.aromatic_atoms)
-            fh.write(f"Atoms: [{atoms}]\n")
+            atoms = " ".join(str(i + 1) for i in sorted(aromaticity.aromatic_atoms))
+            fh.write(f"ATOMS {atoms}\n")
         else:
-            fh.write("Atoms: none\n")
+            fh.write("ATOMS NONE\n")
 
         if aromaticity.aromatic_bonds:
-            bonds = ", ".join(f"({i + 1},{j + 1})" for i, j in aromaticity.aromatic_bonds)
-            fh.write(f"Bonds: [{bonds}]\n")
+            bonds = " ".join(f"{i + 1}-{j + 1}" for i, j in sorted(aromaticity.aromatic_bonds))
+            fh.write(f"BONDS {bonds}\n")
         else:
-            fh.write("Bonds: none\n")
+            fh.write("BONDS NONE\n")
 
     # ========================================================
     # SMILES (optional)

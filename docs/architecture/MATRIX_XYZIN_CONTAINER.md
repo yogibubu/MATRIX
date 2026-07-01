@@ -77,6 +77,51 @@ same ring.  If the ring bond orders are equivalent within tolerance the RPck
 vector is unchanged; if they differ, the more rigid central bonds get smaller
 flexibility factors before each RPck vector is normalized.
 
+## Topology Contract
+
+`#TOPOLOGY` is the only molecular graph contract consumed by NEO, GF,
+MORPHEUS/SEfit, fragments and spectroscopy tools.  It is written by
+`matrix-chem` after geometry import and must not be reconstructed privately by
+scientific tools.
+
+The canonical section starts with:
+
+```text
+#TOPOLOGY
+SCHEMA oracle.xyz.topology.v1
+INDEXING ATOMS=ONE_BASED
+BOND_ORDER_SOURCE ...
+[BONDS]
+...
+[BOND_ORDERS]
+...
+[RINGS]
+...
+[AROMATICITY]
+...
+```
+
+The required graph layer is `[BONDS]`.  `[BOND_ORDERS]` is required whenever
+ring-puckering weighting, local-mode selection, GF nonbonded corrections or
+torsional/large-amplitude classification depends on bond rigidity.  If no
+external QM bond orders are available, LINK writes continuous Pauling bond
+orders from the shared topology model so downstream modules still see one
+normalized source.
+
+`[RINGS]` contains canonical one-based atom lists for each elementary ring.
+Fused, spiro and bridged systems are not collapsed into a single super-ring:
+each elementary ring remains available to NEO so protected cyclic bends,
+ring-puckering source spaces and butterfly coordinates can be generated and
+reduced within their own coordinate families.  NEO may attach ring diagnostics
+to `#GIC`, but it does not own or mutate the topology.
+
+Weak complexes have two explicit policies.  `SPECIAL_COORDINATES` keeps
+fragments separate and lets NEO build inter-fragment center/orientation
+coordinates.  `PSEUDO_BONDS` records selected contacts, for example hydrogen
+bonds, as graph edges before ordinary internal-coordinate generation; in that
+mode primitive redundancy elimination is allowed, but no artificial ring is
+created from the pseudo-contact.
+
 ## Gaussian Rovibrational Promotion
 
 Gaussian log/out text is converted once by `matrix-gaussian` before downstream
