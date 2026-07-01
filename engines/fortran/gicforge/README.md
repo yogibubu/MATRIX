@@ -78,3 +78,16 @@ The `FROT` B row is analytic: derivatives are propagated through the centroid,
 local frame, relative rotation matrix, quaternion and exponential-map
 small-rotation limit. It is intended to be called from the imported legacy
 `MkBNew` path instead of adding another local derivative implementation.
+
+`local_equiv.f` is the shared Fortran77 local-equivalence kernel for the new
+NEO stretch/angle SALC policy.  It provides:
+
+- `ORCLBND`: endpoint-equivalence and length classes for bond stretches;
+- `ORCLLIG`: local ligand classes around one coordination center;
+- `ORCLTPL`: local high-coordination template recognition for coordination
+  5-9 using the same cosine-pattern criterion as the Python NEO path.
+
+The vendored `legacy_merlino/` sources remain a frozen Merlino baseline.
+New Fortran generation paths should call `local_equiv.f` before the existing
+local SVD/Jacobi helper instead of duplicating local-class logic inside
+`mkprim.f`.

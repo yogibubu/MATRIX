@@ -1648,9 +1648,9 @@ def test_gicforge_corpus_cli_prints_inventory(capsys):
 
     out = capsys.readouterr().out
     assert rc == 0
-    assert "TOTAL_FILES 155" in out
-    assert "SUFFIX .inp 128" in out
-    assert "ROLE legacy_gic_input 128" in out
+    assert "TOTAL_FILES 156" in out
+    assert "SUFFIX .inp 129" in out
+    assert "ROLE legacy_gic_input 129" in out
 
 
 def test_gicforge_corpus_cli_filters_paths(capsys):
@@ -1680,12 +1680,12 @@ def test_gicforge_corpus_audit_cli_prints_parser_budget(capsys):
 
     out = capsys.readouterr().out
     assert rc == 0
-    assert "TOTAL_FILES 131" in out
+    assert "TOTAL_FILES 132" in out
     if rdkit_available():
         assert "PASS " in out
         assert "FAIL " in out
     else:
-        assert "PASS 116" in out
+        assert "PASS 117" in out
         assert "FAIL 15" in out
     assert "SOURCE_FORMAT gaussian_zmatrix_input " in out
 

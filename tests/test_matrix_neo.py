@@ -2417,6 +2417,11 @@ def test_gicforge_benzene_d6h_projector_symmetrizes_ring_puckering(tmp_path):
         ("pyrrole.inp", "C2v", ("KIND=STRETCH",)),
         ("cubane.inp", "Oh", ("KIND=STRETCH",)),
         ("ferrocene.inp", "D5h", ()),
+        (
+            "sf6_octahedral.inp",
+            "Oh",
+            ("KIND=STRETCH", "KIND=ANGLE", "SOURCE=TEMPLATE", "TEMPLATE=OCTAHEDRAL"),
+        ),
     ],
 )
 def test_gicforge_local_equivalence_golden_corpus_reports_real_cases(
@@ -2442,7 +2447,7 @@ def test_gicforge_local_equivalence_golden_corpus_reports_real_cases(
         assert token in report
 
 
-@pytest.mark.parametrize("example", ["benzene", "cubane"])
+@pytest.mark.parametrize("example", ["benzene", "cubane", "sf6_octahedral"])
 def test_gaussian_readallgic_examples_are_matrix_generated_and_frozen(example):
     root = Path(__file__).resolve().parents[1]
     gjf = root / "examples" / "gaussian_readallgic" / example / f"{example}.gjf"
@@ -2454,6 +2459,8 @@ def test_gaussian_readallgic_examples_are_matrix_generated_and_frozen(example):
     assert "#p hf/sto-3g opt=readallgic output=pickett" in text
     assert "SYMMETRY_MODE POINT_GROUP_PROJECTOR" in gic
     assert "LOCAL_EQUIVALENCE KIND=STRETCH" in gic
+    if example == "sf6_octahedral":
+        assert "TEMPLATE=OCTAHEDRAL" in gic
     assert "Str001 =" in text
     assert "(Frozen) =" in text
 

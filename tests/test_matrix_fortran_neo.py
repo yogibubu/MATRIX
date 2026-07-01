@@ -149,6 +149,7 @@ def test_default_fortran_audit_covers_official_golden_parity_roles():
         "thujone.inp",
         "ribose.inp",
         "cubane.inp",
+        "sf6_octahedral.inp",
         "spiro.inp",
         "cyclottane.inp",
     } <= default
@@ -407,6 +408,7 @@ def test_legacy_merlino_executable_bmatrix_span_matches_bridged_ring_probe(
         ("thujone.inp", 75),
         ("ribose.inp", 51),
         ("cubane.inp", 42),
+        ("sf6_octahedral.inp", 15),
         ("cyclottane.inp", 66),
     ],
 )
@@ -654,6 +656,92 @@ C
       Call ORCGSEL(3,3,BMAT,IPROT,1,1.0D-7,ISEL,NSEL,IRANK,
      $  Q,WORK,IFAIL)
       If(IFAIL.ne.2) Stop 18
+      End
+""",
+        encoding="ascii",
+    )
+
+    subprocess.run(
+        [
+            gfortran,
+            "-std=legacy",
+            "-Wall",
+            "-Wextra",
+            "-fcheck=all",
+            str(source),
+            str(driver),
+            "-o",
+            str(executable),
+        ],
+        check=True,
+        cwd=root,
+    )
+    subprocess.run([str(executable)], check=True, cwd=root)
+
+
+def test_fortran_local_equivalence_kernel_compiles_and_runs(tmp_path):
+    gfortran = shutil.which("gfortran")
+    if gfortran is None:
+        pytest.skip("gfortran is not available")
+
+    root = Path(__file__).resolve().parents[1]
+    source = root / "engines" / "fortran" / "gicforge" / "local_equiv.f"
+    driver = tmp_path / "driver_local_equiv.f"
+    executable = tmp_path / "driver_local_equiv"
+    driver.write_text(
+        """
+      Program TLOCEQ
+      Implicit Real*8(A-H,O-Z)
+      Integer IAT(4),JAT(4),BCLS(4),NEI(6),LCLS(6)
+      Dimension C(3,7),ZEFF(7)
+      Data IAT /1,1,1,1/
+      Data JAT /2,3,4,5/
+      Data NEI /2,3,4,5,6,7/
+C
+      Do 10 I=1,7
+       ZEFF(I)=1.0D0
+       Do 20 J=1,3
+        C(J,I)=0.0D0
+   20  Continue
+   10 Continue
+      ZEFF(1)=16.0D0
+      C(1,2)= 1.0D0
+      C(1,3)=-1.0D0
+      C(2,4)= 1.2D0
+      C(2,5)=-1.2D0
+      C(3,6)= 1.0D0
+      C(3,7)=-1.0D0
+C
+      Call ORCLBND(4,IAT,JAT,C,ZEFF,BCLS,NBC)
+      If(NBC.ne.2) Stop 1
+      If(BCLS(1).ne.BCLS(2)) Stop 2
+      If(BCLS(3).ne.BCLS(4)) Stop 3
+      If(BCLS(1).eq.BCLS(3)) Stop 4
+C
+      Call ORCLLIG(1,6,NEI,C,ZEFF,LCLS,NLC)
+      If(NLC.ne.2) Stop 5
+C
+      C(1,2)= 1.0D0
+      C(2,2)= 0.0D0
+      C(3,2)= 0.0D0
+      C(1,3)=-1.0D0
+      C(2,3)= 0.0D0
+      C(3,3)= 0.0D0
+      C(1,4)= 0.0D0
+      C(2,4)= 1.0D0
+      C(3,4)= 0.0D0
+      C(1,5)= 0.0D0
+      C(2,5)=-1.0D0
+      C(3,5)= 0.0D0
+      C(1,6)= 0.0D0
+      C(2,6)= 0.0D0
+      C(3,6)= 1.0D0
+      C(1,7)= 0.0D0
+      C(2,7)= 0.0D0
+      C(3,7)=-1.0D0
+      Call ORCLTPL(1,6,NEI,C,ITPL,SCORE)
+      If(ITPL.ne.1) Stop 6
+      If(SCORE.gt.1.0D-12) Stop 7
       End
 """,
         encoding="ascii",
