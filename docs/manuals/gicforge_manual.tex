@@ -185,13 +185,23 @@ metadata to verify that the same model is reused later.
 
 \subsection{Topology perception}
 
-\program{} starts from interatomic distances and atomic covalent radii.  The
-result is a covalent graph with atoms as vertices and bonds as edges.  The graph
-is checked before coordinate construction: symbols and atomic numbers must be
-consistent, atom indexes must be unique, and obvious nonbonded H--H contacts or
-other impossible short contacts are treated as input/topology errors.  The graph
-is then frozen for the run.  Later refinement or optimization modules must not
-allow a geometry step to change this graph silently.
+\program{} consumes the topology written by MATRIX preprocessing; it does not
+own a private graph parser.  The shared \texttt{\#TOPOLOGY} section, schema
+\texttt{oracle.xyz.topology.v1}, supplies one-based bonds, normalized bond
+orders, elementary rings and aromaticity annotations.  Gaussian Mayer bond
+orders are used when present; otherwise MATRIX writes continuous Pauling bond
+orders from the shared topology model.  The graph is checked before coordinate
+construction: symbols and atomic numbers must be consistent, atom indexes must
+be unique, and obvious nonbonded H--H contacts or other impossible short
+contacts are treated as input/topology errors.  The graph is then frozen for
+the run.  Later refinement or optimization modules must not allow a geometry
+step to change this graph silently.
+
+This ownership boundary is part of the GIC contract.  NEO may report how
+topology was used, for example which ring bond orders changed the
+ring-puckering flexibility factors, but it must not reconstruct another graph
+inside GIC construction.  GF, MORPHEUS/SEfit and anharmonic tools consume the
+frozen \texttt{\#GIC} and B matrix produced from that same topology.
 
 Ring perception is performed on the covalent graph.  The ring basis is
 canonicalized before any ring coordinate is built, so the same molecule gives
@@ -210,6 +220,14 @@ dihedrals centered on those bonds receive smaller flexibility factors
 \(\sqrt{BO_\mathrm{min}/BO_i}\) before the component is normalized.  The frozen
 coordinate therefore carries relative ring rigidity, not a hard simple/double
 bond classification.
+
+Weak complexes use an explicit topology policy.  In
+\texttt{SPECIAL\_COORDINATES} mode fragments remain separate rigid bodies and
+NEO adds protected inter-fragment distances, center--atom distances,
+translations and orientation coordinates.  In \texttt{PSEUDO\_BONDS} mode
+selected contacts, especially hydrogen bonds, are inserted into the construction
+graph before ordinary primitive generation; they produce standard stretches,
+bends and torsions, but they must not create artificial rings.
 
 \subsection{Primitive coordinate generation}
 
@@ -299,6 +317,25 @@ type-local pruning.  The number of pre-pruning attempts is capped by the number
 of available primitive coordinates.  If the final count is still not \(3N-6\)
 or \(3N-5\), the run stops.  A downstream solver must never repair the basis by
 inventing an independent coordinate model.
+
+\subsection{Closure report}
+
+Every build can produce a human-readable report with a \texttt{Closure Summary}
+section.  This section is the operational checklist for a production GIC
+definition: rank completeness, symmetry method and status, total-symmetric
+irrep and count, protected special-coordinate families, ring diagnostics, SALC
+coefficient-vector count, maximum SALC normalization residual, and numbers of
+singular or dependent rows skipped during reduction.  A production coordinate
+set is considered closed only when the rank equals the target vibrational rank,
+no singular row is selected, symmetry is either applied or explicitly not
+requested, and all nontrivial SALC coefficient vectors are normalized.
+
+The report also prints \texttt{Ring Puckering Diagnostics}.  Each line records
+the ring atom list, the endocyclic central bonds used by the \texttt{RPck}
+dihedral source space, their normalized bond orders and the final flexibility
+factors.  This is the place to inspect whether a fused, spiro or bridged ring
+has been treated as intended before the same frozen GIC definition is used by
+Gaussian, GF or MORPHEUS.
 
 \section{Coordinate Definition Format}
 

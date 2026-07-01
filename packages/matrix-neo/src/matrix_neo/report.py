@@ -65,6 +65,10 @@ def gic_report_lines(definition: GICDefinition) -> list[str]:
         f"Skipped singular/zero rows: {len(skipped_singular)}",
         f"Skipped dependent rows: {len(skipped_dependent)}",
         "",
+        "Closure Summary",
+        "---------------",
+        *_closure_summary_lines(definition),
+        "",
         "Fragment Mode Policy",
         "--------------------",
         *_fragment_policy_lines(definition),
@@ -104,6 +108,9 @@ def gic_report_lines(definition: GICDefinition) -> list[str]:
     lines.extend(["", "Local Equivalence Diagnostics", "-----------------------------"])
     local_equivalence = _local_equivalence_lines(definition)
     lines.extend(local_equivalence or ["NONE"])
+
+    lines.extend(["", "Ring Puckering Diagnostics", "--------------------------"])
+    lines.extend(definition.ring_puckering_diagnostics or ("NONE",))
 
     symmetry = definition.symmetry_diagnostics
     lines.extend(["", "Symmetrization Diagnostics", "---------------------------"])
@@ -195,6 +202,54 @@ def _target_rank_rationale(definition: GICDefinition) -> str:
     return f"contract-specified rank {definition.target_rank} for N={natoms}"
 
 
+def _closure_summary_lines(definition: GICDefinition) -> list[str]:
+    symmetry = definition.symmetry_diagnostics
+    salc_count = sum(1 for gic in definition.gics if len(gic.coefficients) > 1)
+    salc_norm_error = _max_salc_norm_error(definition)
+    special_count = sum(
+        1
+        for primitive in definition.primitives
+        if primitive.reduction_class == SPECIAL_REDUCTION_CLASS
+    )
+    protected_families = tuple(
+        sorted(
+            {
+                primitive.family
+                for primitive in definition.primitives
+                if primitive.reduction_class == SPECIAL_REDUCTION_CLASS
+            }
+        )
+    )
+    diagnostics = definition.reduction_diagnostics
+    skipped_singular = diagnostics.skipped_singular if diagnostics else ()
+    skipped_dependent = diagnostics.skipped_dependent if diagnostics else ()
+    rank_closed = definition.rank == definition.target_rank
+    symmetry_status = symmetry.status if symmetry is not None else "NONE"
+    symmetry_method = symmetry.method if symmetry is not None else "NONE"
+    total_irrep = symmetry.total_symmetric_irrep if symmetry is not None else "NONE"
+    total_count = len(symmetry.total_symmetric_gics) if symmetry is not None else 0
+    closed = (
+        rank_closed
+        and not skipped_singular
+        and (symmetry is None or symmetry.status in {"APPLIED", "NOT_REQUESTED", "NO_ELIGIBLE_GROUPS"})
+        and salc_norm_error <= 1.0e-10
+    )
+    return [
+        f"Closed: {'YES' if closed else 'NO'}",
+        f"Rank complete: {'YES' if rank_closed else 'NO'} ({definition.rank}/{definition.target_rank})",
+        f"Symmetry method: {symmetry_method}",
+        f"Symmetry status: {symmetry_status}",
+        f"Total-symmetric irrep/count: {total_irrep}/{total_count}",
+        f"Protected special coordinates: {special_count}",
+        f"Protected special families: {_list_or_none(protected_families)}",
+        f"Ring diagnostics: {len(definition.ring_puckering_diagnostics)}",
+        f"SALC coefficient vectors: {salc_count}",
+        f"Max SALC norm error: {salc_norm_error:.12g}",
+        f"Skipped singular rows: {len(skipped_singular)}",
+        f"Skipped dependent rows: {len(skipped_dependent)}",
+    ]
+
+
 def _fragment_policy_lines(definition: GICDefinition) -> list[str]:
     mode = definition.fragment_mode
     lines = [f"Mode: {mode}"]
@@ -248,3 +303,13 @@ def _salc_coefficient_lines(definition: GICDefinition) -> list[str]:
             f"{gic.name} irrep={gic.irrep} family={gic.family} norm2={norm2:.12g} coeffs={terms}"
         )
     return lines
+
+
+def _max_salc_norm_error(definition: GICDefinition) -> float:
+    errors = []
+    for gic in definition.gics:
+        if len(gic.coefficients) <= 1:
+            continue
+        norm2 = sum(float(coefficient) ** 2 for _primitive_id, coefficient in gic.coefficients)
+        errors.append(abs(norm2 - 1.0))
+    return max(errors) if errors else 0.0

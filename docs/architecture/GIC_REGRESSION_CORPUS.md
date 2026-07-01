@@ -35,6 +35,19 @@ scientific role it protects: ring coordinates, fused/polycyclic behavior,
 bridged rings, special metal/ring-center coordinates, H-bond pseudo-bonds,
 fragment coordinates, symmetry projectors and Python/Fortran parity.
 
+Selected symmetry-adapted coefficient vectors are pinned separately:
+
+```text
+tests/fixtures/golden_corpus/neo_gic_salc_coefficients.json
+```
+
+This snapshot stores the nontrivial SALC/GIC coefficient vectors for pyrrole,
+benzene, azulene, pyrene, spiro, cubane and ferrocene in the D5h/D5d forms.
+It complements the Fortran row-space audit: the row-space audit proves that the
+coordinate span is equivalent to Merlino/Fortran, while the coefficient
+snapshot catches unintended changes in the explicit symmetry-coordinate form
+used by Gaussian inputs, GF labels and human reports.
+
 Inputs in the registry are deliberately versioned. Larger generated audit
 workdirs, numerical reports and run outputs are not committed; their provenance
 belongs in run manifests.

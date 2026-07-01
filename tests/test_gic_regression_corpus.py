@@ -3,18 +3,27 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from matrix_chem import preprocess_to_enriched_xyz, write_validation_section
+from matrix_fragments import write_interaction_center_section
 from matrix_link import rdkit_available
 from matrix_neo import (
     DEFAULT_FORTRAN_AUDIT_MOLECULES,
     audit_gic_corpus_geometry,
     discover_gic_corpus,
     summarize_gic_corpus,
+    write_gicforge_build_sections,
 )
 
 
 CORPUS = Path(__file__).resolve().parent / "fixtures" / "test_molecules" / "molecules"
 GOLDEN_CORPUS = (
     Path(__file__).resolve().parent / "fixtures" / "golden_corpus" / "neo_gic_golden.json"
+)
+GOLDEN_SALC_COEFFICIENTS = (
+    Path(__file__).resolve().parent
+    / "fixtures"
+    / "golden_corpus"
+    / "neo_gic_salc_coefficients.json"
 )
 ENV_HELPERS = Path(__file__).resolve().parents[1] / "scripts" / "matrix_env.sh"
 
@@ -96,6 +105,45 @@ def test_fortran_audit_default_covers_golden_gic_closure_roles():
     }
 
     assert required <= set(DEFAULT_FORTRAN_AUDIT_MOLECULES)
+
+
+def test_neo_gic_salc_coefficient_snapshots_are_stable(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    snapshot = json.loads(GOLDEN_SALC_COEFFICIENTS.read_text(encoding="utf-8"))
+
+    assert snapshot["schema"] == "matrix.neo.gic_salc_coefficients.v1"
+    assert snapshot["rounding_decimals"] == 12
+    assert len(snapshot["entries"]) >= 8
+
+    for entry in snapshot["entries"]:
+        xyzin = tmp_path / f"{entry['id']}.xyzin"
+        preprocess_to_enriched_xyz(root / entry["source"], xyzin)
+        write_validation_section(xyzin)
+        if str(entry["id"]).startswith("ferrocene"):
+            write_interaction_center_section(xyzin)
+        definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+
+        current = [
+            {
+                "name": gic.name,
+                "family": gic.family,
+                "irrep": gic.irrep,
+                "coefficients": [
+                    [primitive_id, round(float(coefficient), snapshot["rounding_decimals"])]
+                    for primitive_id, coefficient in gic.coefficients
+                ],
+            }
+            for gic in definition.gics
+            if len(gic.coefficients) > 1
+        ]
+
+        assert definition.point_group == entry["point_group"], entry["id"]
+        assert definition.rank == entry["rank"], entry["id"]
+        assert definition.target_rank == entry["target_rank"], entry["id"]
+        assert definition.symmetry_diagnostics is not None
+        assert definition.symmetry_diagnostics.method == entry["symmetry_method"], entry["id"]
+        assert len(current) == entry["salc_count"], entry["id"]
+        assert current == entry["salcs"], entry["id"]
 
 
 def test_gic_regression_corpus_keeps_qm_adapter_outputs():

@@ -971,6 +971,11 @@ def test_gicforge_build_writes_frozen_gics_and_sycart(tmp_path):
     report_lines = gic_report_from_xyzin(xyzin)
     assert "Method: POINT_GROUP_PROJECTOR" in report_lines
     assert "Total irrep: A1" in report_lines
+    assert "Closure Summary" in report_lines
+    assert "Closed: YES" in report_lines
+    assert "Rank complete: YES (3/3)" in report_lines
+    assert "SALC coefficient vectors: 2" in report_lines
+    assert any(line.startswith("Max SALC norm error: 1.27986510279e-12") for line in report_lines)
     assert "Target rank rationale: 3N-6 non-linear vibrational rank for N=3" in report_lines
     assert "Mode: NONE" in report_lines
     assert "Policy: no built fragments were consumed by this GIC definition." in report_lines
@@ -2581,6 +2586,7 @@ def test_gicforge_pyrrole_c2v_projector_keeps_ring_coordinates(tmp_path):
     preprocess_to_enriched_xyz(source, xyzin)
     write_validation_section(xyzin)
     definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+    report_lines = gic_report_from_xyzin(xyzin)
     gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin)
     total_gaussian_lines = gaussian_gic_lines_from_xyzin(xyzin, total_symmetric_only=True)
     gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
@@ -2618,6 +2624,12 @@ def test_gicforge_pyrrole_c2v_projector_keeps_ring_coordinates(tmp_path):
     assert not any(line.startswith("QPck") for line in gaussian_lines)
     assert not any(line.startswith("PhiP") for line in gaussian_lines)
     assert not any("RPck" in line or "OuPl" in line for line in total_gaussian_lines)
+    assert "Ring Puckering Diagnostics" in report_lines
+    assert any(
+        line.startswith("RING 1 ATOMS=") and "BOND_ORDERS=" in line and "FLEX=" in line
+        for line in report_lines
+    )
+    assert "Closed: YES" in report_lines
 
     write_gicforge_gaussian_input(xyzin, gjf, route="#p hf/sto-3g opt=readallgic")
     text = gjf.read_text(encoding="utf-8")
