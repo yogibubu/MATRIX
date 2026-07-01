@@ -208,6 +208,49 @@ def generate_paper_benchmark_artifacts(
     return snapshot, write_paper_benchmark_artifacts(snapshot, outdir)
 
 
+def validate_paper_run_outputs(snapshot: dict[str, Any] | None = None) -> dict[str, tuple[str, ...]]:
+    """Validate available run directories backing the paper-regression snapshot.
+
+    The golden snapshot is intentionally portable: archived or regenerated run
+    directories may live outside a clean checkout.  This helper therefore
+    returns missing cases separately from incomplete ones, and treats any
+    present run directory as an end-to-end reproducibility contract.
+    """
+
+    data = snapshot if snapshot is not None else load_paper_benchmark_snapshot()
+    validate_paper_benchmark_snapshot(data)
+    missing: list[str] = []
+    incomplete: list[str] = []
+    complete: list[str] = []
+    required = (
+        "semiexp_manifest.json",
+        "semiexp_diagnostics.csv",
+        "semiexp_rotational_constants.csv",
+        "semiexp_parameters.csv",
+        "semiexp_report.html",
+        "semiexp_weight_diagnostics.csv",
+    )
+    for name in CASE_ORDER:
+        run_dir = _resolve_repo_path(Path(data["cases"][name]["run_dir"]))
+        if not run_dir.is_dir():
+            missing.append(name)
+            continue
+        missing_files = [item for item in required if not (run_dir / item).is_file()]
+        manifest = _read_json(run_dir / "semiexp_manifest.json")
+        outputs = manifest.get("outputs", {}) if isinstance(manifest, dict) else {}
+        if "weight_diagnostics" not in outputs:
+            missing_files.append("manifest.outputs.weight_diagnostics")
+        if missing_files:
+            incomplete.append(f"{name}:{','.join(missing_files)}")
+        else:
+            complete.append(name)
+    return {
+        "complete": tuple(complete),
+        "missing": tuple(missing),
+        "incomplete": tuple(incomplete),
+    }
+
+
 def _refresh_case_from_run_dir(case: dict[str, Any], run_dir: Path) -> None:
     diagnostics = _read_key_value_csv(run_dir / "semiexp_diagnostics.csv")
     manifest = _read_json(run_dir / "semiexp_manifest.json")

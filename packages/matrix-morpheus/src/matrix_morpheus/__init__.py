@@ -1,4 +1,4 @@
-"""MORPHEUS semiexperimental equilibrium-geometry tools for ORACLE."""
+"""MORPHEUS semiexperimental equilibrium-geometry tools for MATRIX."""
 
 from .contracts import (
     CorrectedRotationalConstants,
@@ -41,6 +41,11 @@ from .kraitchman import (
     KraitchmanSeedResult,
     kraitchman_comparison,
     kraitchman_seed_geometry,
+    kraitchman_seed_predicates,
+)
+from .predicates import (
+    DEFAULT_INITIAL_GEOMETRY_PREDICATE_SCOPE,
+    initial_geometry_predicates,
 )
 from .cartesian_coordinates import CartesianCoordinateModel, cartesian_symmetry_coordinate_model
 from .geometry_input import (
@@ -79,6 +84,7 @@ from .fit import (
     semiexperimental_text_report,
     write_semiexperimental_outputs,
 )
+from .statistics import SemiexperimentalWeightDiagnostic
 from .ensemble import (
     ENSEMBLE_JOB_SCHEMA,
     EnsembleAcceptanceDecision,
@@ -157,15 +163,20 @@ from .paper_benchmarks import (
     load_paper_benchmark_snapshot,
     refresh_snapshot_from_outputs,
     validate_paper_benchmark_snapshot,
+    validate_paper_run_outputs,
     write_paper_benchmark_artifacts,
     write_snapshot,
 )
 from .sections import (
+    InitialGeometryPredicateSpec,
+    MorpheusInputConfig,
     ORACLE_XYZ_MORPHEUS_SCHEMA,
     MorpheusSection,
     morpheus_section_from_result,
     morpheus_section_lines,
+    parse_morpheus_input_config,
     parse_morpheus_section,
+    read_morpheus_input_config,
     read_morpheus_section,
     write_morpheus_section,
     write_morpheus_section_from_result,
@@ -194,12 +205,14 @@ __all__ = [
     "EnsembleNumericalDiagnostics",
     "KraitchmanComparison",
     "KraitchmanSeedResult",
+    "InitialGeometryPredicateSpec",
     "ParameterClassConstraint",
     "PAPER_BENCHMARK_SCHEMA",
     "PrimitiveClassSpec",
     "ORACLE_XYZ_MORPHEUS_SCHEMA",
     "CartesianCoordinateModel",
     "MorpheusSection",
+    "MorpheusInputConfig",
     "SemiexperimentalFitDiagnostics",
     "SemiexperimentalFitResult",
     "SemiexperimentalGeometryInput",
@@ -218,6 +231,7 @@ __all__ = [
     "SemiexperimentalParameter",
     "SemiexperimentalResidual",
     "SemiexperimentalRotationalConstantComparison",
+    "SemiexperimentalWeightDiagnostic",
     "SemiexperimentalXyzinPreprocessResult",
     "IsotopologueObservation",
     "QMParameterPredicate",
@@ -237,6 +251,7 @@ __all__ = [
     "fit_ensemble_job",
     "fit_ensemble_class_corrections",
     "format_substitutions",
+    "initial_geometry_predicates",
     "generate_paper_benchmark_artifacts",
     "observations_from_mapping",
     "combined_constraint_b_matrix",
@@ -246,6 +261,7 @@ __all__ = [
     "gic_expression_constraint_values",
     "kraitchman_comparison",
     "kraitchman_seed_geometry",
+    "kraitchman_seed_predicates",
     "load_se_reference_library",
     "load_paper_benchmark_snapshot",
     "geometry_parameters_csv",
@@ -254,6 +270,7 @@ __all__ = [
     "mass_vector_for_observation",
     "morpheus_section_from_result",
     "morpheus_section_lines",
+    "parse_morpheus_input_config",
     "parameters_csv",
     "parse_morpheus_section",
     "parse_substitutions",
@@ -274,6 +291,7 @@ __all__ = [
     "read_msr_legacy_input",
     "read_msr_legacy_observations",
     "read_morpheus_section",
+    "read_morpheus_input_config",
     "read_semiexperimental_job",
     "read_ensemble_job",
     "refresh_snapshot_from_outputs",
@@ -287,6 +305,7 @@ __all__ = [
     "uncertainty_diagnostics_csv",
     "validate_semiexperimental_request",
     "validate_paper_benchmark_snapshot",
+    "validate_paper_run_outputs",
     "write_observations_csv",
     "write_fragment_targets_csv",
     "write_morpheus_section",

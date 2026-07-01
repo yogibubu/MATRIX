@@ -48,6 +48,12 @@ from .kraitchman import (
     kraitchman_comparison,
     kraitchman_seed_geometry,
 )
+from .statistics import (
+    SemiexperimentalWeightDiagnostic,
+    leverage_values as _leverage_values,
+    weight_diagnostic_rows as _weight_diagnostic_rows,
+    weight_diagnostics_csv as _weight_diagnostics_csv,
+)
 from .cartesian_coordinates import CartesianCoordinateModel, cartesian_symmetry_coordinate_model
 
 
@@ -140,6 +146,9 @@ class SemiexperimentalGeometryParameter:
     value_degree: float | None = None
     sigma_angstrom: float | None = None
     sigma_degree: float | None = None
+    value: float | None = None
+    sigma: float | None = None
+    unit: str = ""
 
 
 @dataclass(frozen=True)
@@ -350,6 +359,7 @@ class SemiexperimentalFitResult:
     diagnostics: SemiexperimentalFitDiagnostics
     leave_one_out: tuple[SemiexperimentalLeaveOneOutRow, ...] = ()
     iteration_trace: tuple[SemiexperimentalIterationTrace, ...] = ()
+    weight_diagnostics: tuple[SemiexperimentalWeightDiagnostic, ...] = ()
     manifest: Path | None = None
 
 
@@ -369,7 +379,7 @@ def fit_semiexperimental_geometry(
 ) -> SemiexperimentalFitResult:
     """Fit equilibrium geometry to semiexperimental rotational constants.
 
-    The default working coordinates are ORACLE non-redundant GICs. As an
+    The default working coordinates are MATRIX/NEO non-redundant GICs. As an
     alternative, `coordinate_model="cartesian_symmetry"` uses a Hessian-free
     translation/rotation-free symmetry-adapted Cartesian displacement basis.
     """
@@ -508,6 +518,11 @@ def fit_semiexperimental_geometry(
             # Pruning is an observability refinement; unsupported mock/legacy primitives must not block the fit.
             auto_pruned_patterns = ()
     n_optimized_parameters = initial_transform.shape[1]
+    _validate_observation_budget(
+        measurement_model,
+        n_optimized_parameters,
+        coordinate_model=request.coordinate_model,
+    )
     loop_max_iter = (
         _resolve_max_iterations(max_iter, n_optimized_parameters) if n_optimized_parameters else 0
     )
@@ -973,6 +988,14 @@ def fit_semiexperimental_geometry(
     kraitchman_rows = kraitchman_comparison(atoms, coords, request.observations)
     kraitchman_seed = kraitchman_seed_geometry(atoms, coords, request.observations, kraitchman_rows)
     rms = float(np.sqrt(np.mean(residual * residual))) if residual.size else 0.0
+    weight_diagnostic_rows = _weight_diagnostic_rows(
+        measurement_model,
+        calc,
+        residual,
+        weighted_jac,
+        weighted_residual,
+        robust_sqrt,
+    )
     leave_one_out_rows = (
         _leave_one_out_refits(
             request,
@@ -1034,6 +1057,7 @@ def fit_semiexperimental_geometry(
             weighted_jacobian=weighted_jac,
             weighted_residual=weighted_residual,
             robust_sqrt_weights=robust_sqrt,
+            weight_diagnostics=weight_diagnostic_rows,
             iteration_trace=tuple(iteration_traces),
             preflight_warnings=preflight_warnings,
         )
@@ -1060,6 +1084,7 @@ def fit_semiexperimental_geometry(
         diagnostics=diagnostics,
         leave_one_out=leave_one_out_rows,
         iteration_trace=tuple(iteration_traces),
+        weight_diagnostics=weight_diagnostic_rows,
         manifest=manifest,
     )
 
@@ -1193,6 +1218,11 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
             )
 
     n_optimized_parameters = transform.shape[1]
+    _validate_observation_budget(
+        measurement_model,
+        n_optimized_parameters,
+        coordinate_model=request.coordinate_model,
+    )
     loop_max_iter = (
         _resolve_max_iterations(max_iter, n_optimized_parameters) if n_optimized_parameters else 0
     )
@@ -1582,6 +1612,14 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
     kraitchman_rows = kraitchman_comparison(atoms, coords, request.observations)
     kraitchman_seed = kraitchman_seed_geometry(atoms, coords, request.observations, kraitchman_rows)
     rms = float(np.sqrt(np.mean(residual * residual))) if residual.size else 0.0
+    weight_diagnostic_rows = _weight_diagnostic_rows(
+        measurement_model,
+        calc,
+        residual,
+        weighted_jac,
+        weighted_residual,
+        robust_sqrt,
+    )
     leave_one_out_rows = (
         _leave_one_out_refits(
             request,
@@ -1643,6 +1681,7 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
             weighted_jacobian=weighted_jac,
             weighted_residual=weighted_residual,
             robust_sqrt_weights=robust_sqrt,
+            weight_diagnostics=weight_diagnostic_rows,
             iteration_trace=tuple(iteration_traces),
             preflight_warnings=preflight_warnings,
         )
@@ -1669,6 +1708,7 @@ def _fit_semiexperimental_geometry_cartesian_symmetry(
         diagnostics=diagnostics,
         leave_one_out=leave_one_out_rows,
         iteration_trace=tuple(iteration_traces),
+        weight_diagnostics=weight_diagnostic_rows,
         manifest=manifest,
     )
 
@@ -1699,6 +1739,7 @@ def write_semiexperimental_outputs(
     weighted_jacobian: np.ndarray | None = None,
     weighted_residual: np.ndarray | None = None,
     robust_sqrt_weights: np.ndarray | None = None,
+    weight_diagnostics: tuple[SemiexperimentalWeightDiagnostic, ...] = (),
     iteration_trace: tuple[SemiexperimentalIterationTrace, ...] = (),
     preflight_warnings: tuple[SemiexperimentalDiagnosticWarning, ...] = (),
 ) -> Path:
@@ -1717,6 +1758,7 @@ def write_semiexperimental_outputs(
     hessian_eigs_csv = outdir / "semiexp_hessian_eigenvalues.csv"
     diagnostics_csv = outdir / "semiexp_diagnostics.csv"
     influence_csv = outdir / "semiexp_influence.csv"
+    weight_diagnostics_csv = outdir / "semiexp_weight_diagnostics.csv"
     high_correlation_csv = outdir / "semiexp_high_correlations.csv"
     svd_diagnostics_csv = outdir / "semiexp_svd_diagnostics.csv"
     uncertainty_diagnostics_csv = outdir / "semiexp_uncertainty_diagnostics.csv"
@@ -1752,11 +1794,12 @@ def write_semiexperimental_outputs(
             measurement_model,
             robust_sqrt_weights,
             weighted_residual,
+            weight_diagnostics,
             iteration_trace=iteration_trace,
             correlation=correlation,
         )
     )
-    write_xyz(xyz, atoms, coords, comment="ORACLE semiexperimental equilibrium geometry")
+    write_xyz(xyz, atoms, coords, comment="MATRIX/MORPHEUS semiexperimental equilibrium geometry")
     params.write_text(parameters_csv(parameters), encoding="utf-8")
     geometry_params.write_text(geometry_parameters_csv(geometry_rows), encoding="utf-8")
     residual_csv.write_text(residuals_csv(residuals), encoding="utf-8")
@@ -1785,7 +1828,7 @@ def write_semiexperimental_outputs(
             kraitchman_xyz,
             atoms,
             kraitchman_seed.coordinates_angstrom,
-            comment=f"ORACLE Kraitchman substitution geometry; method={kraitchman_seed.method}; principal-axis frame",
+            comment=f"MATRIX/MORPHEUS Kraitchman substitution geometry; method={kraitchman_seed.method}; principal-axis frame",
         )
     covariance_csv.write_text(_matrix_csv(active_names, covariance), encoding="utf-8")
     correlation_csv.write_text(_matrix_csv(active_names, correlation), encoding="utf-8")
@@ -1794,6 +1837,10 @@ def write_semiexperimental_outputs(
     diagnostics_csv.write_text(_diagnostics_csv(diagnostics), encoding="utf-8")
     influence_csv.write_text(
         _influence_csv(measurement_model, residuals, weighted_jacobian, weighted_residual),
+        encoding="utf-8",
+    )
+    weight_diagnostics_csv.write_text(
+        _weight_diagnostics_csv(weight_diagnostics),
         encoding="utf-8",
     )
     high_correlation_csv.write_text(
@@ -1855,6 +1902,7 @@ def write_semiexperimental_outputs(
         "hessian_eigenvalues": hessian_eigs_csv,
         "diagnostics": diagnostics_csv,
         "influence": influence_csv,
+        "weight_diagnostics": weight_diagnostics_csv,
         "high_correlations": high_correlation_csv,
         "svd_diagnostics": svd_diagnostics_csv,
         "uncertainty_diagnostics": uncertainty_diagnostics_csv,
@@ -1992,6 +2040,9 @@ def geometry_parameters_csv(parameters: tuple[SemiexperimentalGeometryParameter,
             "sigma_angstrom",
             "value_degree",
             "sigma_degree",
+            "value",
+            "sigma",
+            "unit",
         ]
     )
     for item in parameters:
@@ -2005,6 +2056,9 @@ def geometry_parameters_csv(parameters: tuple[SemiexperimentalGeometryParameter,
                 "" if item.sigma_angstrom is None else f"{item.sigma_angstrom:.12g}",
                 "" if item.value_degree is None else f"{item.value_degree:.12g}",
                 "" if item.sigma_degree is None else f"{item.sigma_degree:.12g}",
+                "" if item.value is None else f"{item.value:.12g}",
+                "" if item.sigma is None else f"{item.sigma:.12g}",
+                item.unit,
             ]
         )
     return stream.getvalue()
@@ -2260,11 +2314,11 @@ def semiexperimental_text_report(
 ) -> str:
     lines: list[str] = [
         "SEFIT TEXT OUTPUT v1",
-        "ORACLE semiexperimental equilibrium-geometry fit",
+        "MATRIX/MORPHEUS semiexperimental equilibrium-geometry fit",
         "=" * 72,
         "",
         "[method]",
-        f"program = ORACLE SEfit",
+        f"program = MATRIX/MORPHEUS",
         f"method = semiexperimental equilibrium-geometry least squares",
         f"solver = {diagnostics.solver if diagnostics is not None else 'adaptive_lm_trust_region'}",
         f"coordinate_model = {request.coordinate_model}",
@@ -2539,6 +2593,15 @@ def _geometry_parameters(
         _validate_locked_topology(atoms, coords, topology_lock, context="final geometry reporting")
         bonds = topology_lock.bonds
         adjacency = topology_lock.adjacency
+    dx_dr = _cartesian_derivatives_wrt_effective_parameters(
+        coords,
+        fit_prims=fit_prims,
+        fit_u_matrix=fit_u_matrix,
+        active_mask=active_mask,
+        transform=transform,
+        cartesian_from_parameters=cartesian_from_parameters,
+        covariance=covariance,
+    )
 
     specs: list[tuple[str, str, tuple[int, ...], tuple[str, ...], Primitive, float]] = []
     for i, j in bonds:
@@ -2595,11 +2658,7 @@ def _geometry_parameters(
     sigmas = _geometry_parameter_sigmas(
         primitives,
         coords,
-        fit_prims=fit_prims,
-        fit_u_matrix=fit_u_matrix,
-        active_mask=active_mask,
-        transform=transform,
-        cartesian_from_parameters=cartesian_from_parameters,
+        cartesian_derivatives=dx_dr,
         covariance=covariance,
     )
     rows: list[SemiexperimentalGeometryParameter] = []
@@ -2628,11 +2687,40 @@ def _geometry_parameters(
                     sigma_degree=None if sigma is None else sigma * angular_scale,
                 )
             )
+    rows.extend(
+        _ring_puckering_geometry_parameters(
+            atoms,
+            coords,
+            bonds,
+            cartesian_derivatives=dx_dr,
+            covariance=covariance,
+        )
+    )
     return tuple(rows)
 
 
 def _geometry_parameter_sigmas(
     geometry_prims: list[Primitive],
+    coords: np.ndarray,
+    *,
+    cartesian_derivatives: np.ndarray | None,
+    covariance: np.ndarray | None,
+) -> list[float | None] | None:
+    if not geometry_prims or covariance is None or covariance.size == 0:
+        return None
+    covariance = np.asarray(covariance, dtype=float)
+    if cartesian_derivatives is None:
+        return None
+    dx_dr = np.asarray(cartesian_derivatives, dtype=float)
+    if covariance.shape != (dx_dr.shape[1], dx_dr.shape[1]):
+        return None
+    b_geom = b_matrix_analytic(geometry_prims, coords)
+    jac = b_geom @ dx_dr
+    variances = np.einsum("ij,jk,ik->i", jac, covariance, jac, optimize=True)
+    return [float(np.sqrt(max(value, 0.0))) if np.isfinite(value) else None for value in variances]
+
+
+def _cartesian_derivatives_wrt_effective_parameters(
     coords: np.ndarray,
     *,
     fit_prims: object | None,
@@ -2641,34 +2729,187 @@ def _geometry_parameter_sigmas(
     transform: np.ndarray | None,
     covariance: np.ndarray | None,
     cartesian_from_parameters: np.ndarray | None = None,
-) -> list[float | None] | None:
-    if not geometry_prims or covariance is None or covariance.size == 0:
+) -> np.ndarray | None:
+    if covariance is None or np.asarray(covariance).size == 0:
         return None
     covariance = np.asarray(covariance, dtype=float)
     if cartesian_from_parameters is not None:
         dx_dr = np.asarray(cartesian_from_parameters, dtype=float)
-    else:
-        if (
-            fit_prims is None
-            or fit_u_matrix is None
-            or active_mask is None
-            or transform is None
-            or transform.size == 0
-        ):
-            return None
-        b_fit = np.asarray(fit_u_matrix, dtype=float).T @ b_matrix_analytic(fit_prims, coords)
-        active_indices = np.where(active_mask)[0]
-        dq_dr = np.zeros((b_fit.shape[0], transform.shape[1]), dtype=float)
-        dq_dr[active_indices, :] = transform
-        if covariance.shape != (dq_dr.shape[1], dq_dr.shape[1]):
-            return None
-        dx_dr = np.linalg.pinv(b_fit, rcond=1.0e-8) @ dq_dr
-    if covariance.shape != (dx_dr.shape[1], dx_dr.shape[1]):
+        return dx_dr if covariance.shape == (dx_dr.shape[1], dx_dr.shape[1]) else None
+    if (
+        fit_prims is None
+        or fit_u_matrix is None
+        or active_mask is None
+        or transform is None
+        or transform.size == 0
+    ):
         return None
-    b_geom = b_matrix_analytic(geometry_prims, coords)
-    jac = b_geom @ dx_dr
-    variances = np.einsum("ij,jk,ik->i", jac, covariance, jac, optimize=True)
-    return [float(np.sqrt(max(value, 0.0))) if np.isfinite(value) else None for value in variances]
+    b_fit = np.asarray(fit_u_matrix, dtype=float).T @ b_matrix_analytic(fit_prims, coords)
+    active_indices = np.where(active_mask)[0]
+    dq_dr = np.zeros((b_fit.shape[0], transform.shape[1]), dtype=float)
+    dq_dr[active_indices, :] = transform
+    if covariance.shape != (dq_dr.shape[1], dq_dr.shape[1]):
+        return None
+    return np.linalg.pinv(b_fit, rcond=1.0e-8) @ dq_dr
+
+
+def _ring_puckering_geometry_parameters(
+    atoms: list[str] | tuple[str, ...],
+    coords: np.ndarray,
+    bonds: tuple[tuple[int, int], ...],
+    *,
+    cartesian_derivatives: np.ndarray | None,
+    covariance: np.ndarray | None,
+) -> list[SemiexperimentalGeometryParameter]:
+    rings = _six_membered_ring_cycles(len(atoms), bonds)
+    rows: list[SemiexperimentalGeometryParameter] = []
+    for ring_index, ring in enumerate(rings, start=1):
+        primitives = _ring_puckering_dihedrals(ring)
+        values = np.asarray(eval_primitives(primitives, coords), dtype=float)
+        rp1_coeffs, rp2_coeffs, rp3_coeffs = _six_membered_ring_puckering_coefficients()
+        rp1 = float(rp1_coeffs @ values)
+        rp2 = float(rp2_coeffs @ values)
+        rp3 = float(rp3_coeffs @ values)
+        q = float(np.hypot(rp1, rp2))
+        phi = float(np.arctan2(rp2, rp1))
+        sigma_rp1 = sigma_rp2 = sigma_rp3 = sigma_q = sigma_phi = None
+        if (
+            cartesian_derivatives is not None
+            and covariance is not None
+            and np.asarray(covariance).size
+        ):
+            b_dihedrals = b_matrix_analytic(primitives, coords)
+            jac_rp1 = rp1_coeffs @ b_dihedrals @ cartesian_derivatives
+            jac_rp2 = rp2_coeffs @ b_dihedrals @ cartesian_derivatives
+            jac_rp3 = rp3_coeffs @ b_dihedrals @ cartesian_derivatives
+            covariance = np.asarray(covariance, dtype=float)
+            sigma_rp1 = _linear_error_sigma(jac_rp1, covariance)
+            sigma_rp2 = _linear_error_sigma(jac_rp2, covariance)
+            sigma_rp3 = _linear_error_sigma(jac_rp3, covariance)
+            if q > 1.0e-14:
+                jac_q = (rp1 * jac_rp1 + rp2 * jac_rp2) / q
+                jac_phi = (-rp2 * jac_rp1 + rp1 * jac_rp2) / (q * q)
+                sigma_q = _linear_error_sigma(jac_q, covariance)
+                sigma_phi = _linear_error_sigma(jac_phi, covariance)
+        atom_indices = tuple(item + 1 for item in ring)
+        atom_symbols = tuple(str(atoms[item]) for item in ring)
+        rows.extend(
+            [
+                SemiexperimentalGeometryParameter(
+                    "ring_puckering",
+                    f"RPck{ring_index:04d}_1",
+                    atom_indices,
+                    atom_symbols,
+                    value=rp1,
+                    sigma=sigma_rp1,
+                    unit="rad",
+                ),
+                SemiexperimentalGeometryParameter(
+                    "ring_puckering",
+                    f"RPck{ring_index:04d}_2",
+                    atom_indices,
+                    atom_symbols,
+                    value=rp2,
+                    sigma=sigma_rp2,
+                    unit="rad",
+                ),
+                SemiexperimentalGeometryParameter(
+                    "ring_puckering",
+                    f"RPck{ring_index:04d}_3",
+                    atom_indices,
+                    atom_symbols,
+                    value=rp3,
+                    sigma=sigma_rp3,
+                    unit="rad",
+                ),
+                SemiexperimentalGeometryParameter(
+                    "ring_puckering",
+                    f"QPck{ring_index:04d}",
+                    atom_indices,
+                    atom_symbols,
+                    value=q,
+                    sigma=sigma_q,
+                    unit="rad",
+                ),
+                SemiexperimentalGeometryParameter(
+                    "ring_puckering",
+                    f"PhiP{ring_index:04d}",
+                    atom_indices,
+                    atom_symbols,
+                    value=phi,
+                    sigma=sigma_phi,
+                    unit="rad",
+                    value_degree=float(np.degrees(phi)),
+                    sigma_degree=None if sigma_phi is None else float(np.degrees(sigma_phi)),
+                ),
+            ]
+        )
+    return rows
+
+
+def _linear_error_sigma(jacobian_row: np.ndarray, covariance: np.ndarray) -> float | None:
+    row = np.asarray(jacobian_row, dtype=float)
+    if covariance.shape != (row.size, row.size):
+        return None
+    variance = float(row @ covariance @ row)
+    return float(np.sqrt(max(variance, 0.0))) if np.isfinite(variance) else None
+
+
+def _six_membered_ring_puckering_coefficients() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return (
+        np.array([0.57735027, -0.28867513, -0.28867513, 0.57735027, -0.28867513, -0.28867513]),
+        np.array([0.0, 0.5, -0.5, 0.0, 0.5, -0.5]),
+        np.array([0.40824829, -0.40824829, 0.40824829, -0.40824829, 0.40824829, -0.40824829]),
+    )
+
+
+def _ring_puckering_dihedrals(ring: tuple[int, ...]) -> list[Primitive]:
+    size = len(ring)
+    return [
+        Primitive(
+            "dihedral",
+            (
+                ring[(idx - 1) % size],
+                ring[idx % size],
+                ring[(idx + 1) % size],
+                ring[(idx + 2) % size],
+            ),
+        )
+        for idx in range(size)
+    ]
+
+
+def _six_membered_ring_cycles(
+    atom_count: int, bonds: tuple[tuple[int, int], ...]
+) -> tuple[tuple[int, ...], ...]:
+    adjacency = {idx: set() for idx in range(atom_count)}
+    for i, j in bonds:
+        adjacency[i].add(j)
+        adjacency[j].add(i)
+    cycles: set[tuple[int, ...]] = set()
+    for start in range(atom_count):
+        stack = [(start, (start,))]
+        while stack:
+            current, path = stack.pop()
+            if len(path) == 6:
+                if start in adjacency[current]:
+                    cycles.add(_canonical_cycle(path))
+                continue
+            for neighbor in adjacency[current]:
+                if neighbor <= start or neighbor in path:
+                    continue
+                stack.append((neighbor, (*path, neighbor)))
+    return tuple(sorted(cycles))
+
+
+def _canonical_cycle(path: tuple[int, ...]) -> tuple[int, ...]:
+    variants = []
+    nitems = len(path)
+    for seq in (path, tuple(reversed(path))):
+        for offset in range(nitems):
+            rotated = seq[offset:] + seq[:offset]
+            variants.append(rotated)
+    return min(variants)
 
 
 def kraitchman_csv_rows(rows: tuple[KraitchmanComparison, ...]) -> str:
@@ -3379,6 +3620,7 @@ def _semiexp_warning_rows(
     measurement_model: MeasurementModel | None,
     robust_sqrt_weights: np.ndarray | None,
     weighted_residual: np.ndarray | None = None,
+    weight_diagnostics: tuple[SemiexperimentalWeightDiagnostic, ...] = (),
     *,
     iteration_trace: tuple[SemiexperimentalIterationTrace, ...] = (),
     correlation: np.ndarray | None = None,
@@ -3550,6 +3792,9 @@ def _semiexp_warning_rows(
         add(warning.severity, warning.code, warning.message, warning.context)
 
     for warning in _leverage_warnings(measurement_model, weighted_jacobian):
+        add(warning.severity, warning.code, warning.message, warning.context)
+
+    for warning in _weight_model_warnings(weight_diagnostics):
         add(warning.severity, warning.code, warning.message, warning.context)
 
     for warning in _high_correlation_warnings(active_names, correlation):
@@ -3783,12 +4028,50 @@ def _influence_csv(
     return stream.getvalue()
 
 
-def _leverage_values(weighted_jac: np.ndarray) -> np.ndarray:
-    jac = np.asarray(weighted_jac, dtype=float)
-    if jac.ndim != 2 or jac.size == 0:
-        return np.zeros((jac.shape[0] if jac.ndim == 2 else 0,), dtype=float)
-    normal_inv = np.linalg.pinv(jac.T @ jac, rcond=1.0e-10)
-    return np.einsum("ij,jk,ik->i", jac, normal_inv, jac)
+def _weight_model_warnings(
+    rows: tuple[SemiexperimentalWeightDiagnostic, ...],
+) -> tuple[SemiexperimentalDiagnosticWarning, ...]:
+    if not rows:
+        return ()
+    warnings: list[SemiexperimentalDiagnosticWarning] = []
+    positive = np.array([item.effective_weight for item in rows if item.effective_weight > 0.0])
+    if positive.size:
+        ratio = float(np.max(positive) / np.min(positive))
+        if np.isfinite(ratio) and ratio > 1.0e8:
+            warnings.append(
+                SemiexperimentalDiagnosticWarning(
+                    "info",
+                    "large_weight_dynamic_range",
+                    "Effective least-squares weights span a very large range.",
+                    f"ratio={ratio:.6g}",
+                )
+            )
+    dominant = max(rows, key=lambda item: item.total_weight_fraction)
+    if dominant.total_weight_fraction > 0.50:
+        warnings.append(
+            SemiexperimentalDiagnosticWarning(
+                "warning",
+                "dominant_weight_row",
+                "One fit row carries more than half of the total effective weight.",
+                f"row={dominant.row};kind={dominant.kind};label={dominant.isotopologue}:{dominant.observable};fraction={dominant.total_weight_fraction:.6g}",
+            )
+        )
+    predicate_fraction = sum(
+        item.total_weight_fraction for item in rows if item.kind == "predicate"
+    )
+    experimental_fraction = sum(
+        item.total_weight_fraction for item in rows if item.kind == "experimental"
+    )
+    if predicate_fraction > experimental_fraction and experimental_fraction > 0.0:
+        warnings.append(
+            SemiexperimentalDiagnosticWarning(
+                "info",
+                "predicate_weight_dominates",
+                "QM predicate rows carry more total effective weight than experimental rows.",
+                f"predicate_fraction={predicate_fraction:.6g};experimental_fraction={experimental_fraction:.6g}",
+            )
+        )
+    return tuple(warnings)
 
 
 def _high_correlations_csv(
@@ -3828,6 +4111,26 @@ def _resolve_max_iterations(max_iter: int | None, n_optimized_parameters: int) -
     if max_iter is not None and max_iter > 0:
         return int(max_iter)
     return max(8, 2 * int(n_optimized_parameters))
+
+
+def _validate_observation_budget(
+    measurement_model: MeasurementModel,
+    n_optimized_parameters: int,
+    *,
+    coordinate_model: str,
+) -> None:
+    n_rows = int(len(measurement_model.observed))
+    if n_optimized_parameters <= n_rows:
+        return
+    n_predicate_rows = max(0, n_rows - int(measurement_model.n_experimental_rows))
+    raise ScientificValidationError(
+        "Underdetermined MORPHEUS refinement rejected: "
+        f"{n_optimized_parameters} optimized parameters but only {n_rows} fit rows "
+        f"({measurement_model.n_experimental_rows} experimental, "
+        f"{n_predicate_rows} predicate). Add constraints, parameter classes, "
+        "fixed coordinates, or QM predicates before running this refinement. "
+        f"coordinate_model={coordinate_model}"
+    )
 
 
 def _make_gicforge_backend(atoms: tuple[str, ...], outdir: Path | None) -> GICForgeSEBackend:

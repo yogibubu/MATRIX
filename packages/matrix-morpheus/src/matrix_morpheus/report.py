@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
+import re
 
 import numpy as np
 
@@ -42,7 +43,7 @@ class SemiexperimentalGICPreview:
     @property
     def text(self) -> str:
         lines = [
-            "ORACLE semiexperimental GIC preview",
+            "MATRIX/MORPHEUS semiexperimental GIC preview",
             f"Atoms: {len(self.atoms)}",
             f"Non-redundant GICs: {len(self.gic_labels)}",
             "",
@@ -293,29 +294,148 @@ def suggest_parameter_classes(
     gic_labels: tuple[str, ...],
     observations: tuple[IsotopologueObservation, ...] = (),
 ) -> tuple[ParameterClassConstraint, ...]:
-    suggestions: list[ParameterClassConstraint] = []
+    suggestions: list[ParameterClassConstraint] = list(
+        _dominant_primitive_parameter_classes(atoms, gic_labels)
+    )
     h_substituted = _substituted_hydrogens(atoms, observations)
-    h_atoms = tuple(idx + 1 for idx, atom in enumerate(atoms) if atom.upper() == "H")
-    if h_atoms:
-        for heavy in sorted({heavy for heavy, h in _heavy_h_bonds(atoms, gic_labels)}):
-            patterns = tuple(
-                f"R({heavy},{h})"
-                for h in h_atoms
-                if _matches_any(gic_labels, f"R({heavy},{h})")
-                or _matches_any(gic_labels, f"R({h},{heavy})")
-            )
-            if len(patterns) >= 2:
-                name = f"{atoms[heavy - 1].upper()}H_stretches"
-                suggestions.append(ParameterClassConstraint(name, patterns, "shared"))
-        angle_patterns = tuple(
-            _first_gic_expression(label, "angle")
+    if not h_substituted:
+        xh_angle_gics = tuple(
+            _gic_id(label)
             for label in gic_labels
-            if _gic_kind(label) == "angle" and _angle_has_h(label, atoms)
+            if _gic_kind(label) == "angle" and _dominant_angle_has_h(atoms, label)
         )
-        angle_patterns = tuple(pattern for pattern in angle_patterns if pattern)
-        if angle_patterns and not h_substituted:
-            suggestions.append(ParameterClassConstraint("XH_angles", angle_patterns, "fixed"))
-    return tuple(suggestions)
+        if xh_angle_gics:
+            suggestions.append(ParameterClassConstraint("XH_angle_directions", xh_angle_gics, "fixed"))
+    return _deduplicate_parameter_classes(tuple(suggestions))
+
+
+def _dominant_primitive_parameter_classes(
+    atoms: tuple[str, ...],
+    gic_labels: tuple[str, ...],
+    *,
+    min_abs_coeff: float = 0.55,
+    min_group_size: int = 2,
+) -> tuple[ParameterClassConstraint, ...]:
+    groups: dict[str, list[str]] = {}
+    for label in gic_labels:
+        dominant = _dominant_primitive(label)
+        if dominant is None:
+            continue
+        coeff, primitive = dominant
+        if coeff < min_abs_coeff:
+            continue
+        name = _primitive_class_name(atoms, primitive)
+        if not name:
+            continue
+        groups.setdefault(name, []).append(_gic_id(label))
+    classes = []
+    for name, patterns in sorted(groups.items()):
+        unique = tuple(dict.fromkeys(patterns))
+        if len(unique) >= min_group_size:
+            classes.append(ParameterClassConstraint(name, unique, "shared"))
+    return tuple(classes)
+
+
+def _deduplicate_parameter_classes(
+    classes: tuple[ParameterClassConstraint, ...],
+) -> tuple[ParameterClassConstraint, ...]:
+    merged: dict[tuple[str, str], list[str]] = {}
+    order: list[tuple[str, str]] = []
+    for item in classes:
+        key = (item.name, item.mode)
+        if key not in merged:
+            merged[key] = []
+            order.append(key)
+        merged[key].extend(item.patterns)
+    return tuple(
+        ParameterClassConstraint(name, _unique_patterns(tuple(merged[(name, mode)])), mode)
+        for name, mode in order
+        if _unique_patterns(tuple(merged[(name, mode)]))
+    )
+
+
+def _dominant_angle_has_h(atoms: tuple[str, ...], label: str) -> bool:
+    dominant = _dominant_primitive(label)
+    if dominant is None:
+        return False
+    _coeff, primitive = dominant
+    kind, indices = _primitive_kind_atoms(primitive)
+    return kind == "A" and any(atoms[idx - 1].upper() == "H" for idx in indices)
+
+
+def _dominant_primitive(label: str) -> tuple[float, str] | None:
+    terms = _primitive_terms(label)
+    if not terms:
+        return None
+    return max(terms, key=lambda item: item[0])
+
+
+def _primitive_terms(label: str) -> tuple[tuple[float, str], ...]:
+    terms = []
+    for value, primitive in re.findall(
+        r"([+-]?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)\s*\*\s*"
+        r"([A-Za-z][A-Za-z0-9_]*\(\s*\d+(?:\s*,\s*\d+)*\s*\))",
+        str(label),
+    ):
+        terms.append((abs(float(value)), _canonical_primitive_expression(primitive)))
+    return tuple(terms)
+
+
+def _canonical_primitive_expression(primitive: str) -> str:
+    kind, atoms = _primitive_kind_atoms(primitive)
+    if kind == "R" and len(atoms) == 2:
+        atoms = tuple(sorted(atoms))
+    elif kind in {"A", "B"} and len(atoms) == 3:
+        atoms = min(atoms, tuple(reversed(atoms)))
+    elif kind in {"D", "T"} and len(atoms) == 4:
+        atoms = min(atoms, tuple(reversed(atoms)))
+    return f"{kind}({','.join(str(item) for item in atoms)})"
+
+
+def _primitive_kind_atoms(primitive: str) -> tuple[str, tuple[int, ...]]:
+    text = re.sub(r"\s+", "", str(primitive))
+    match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_]*)\(([^)]*)\)", text)
+    if match is None:
+        return "", ()
+    kind = match.group(1).upper()
+    atoms = tuple(int(item) for item in match.group(2).split(",") if item)
+    return kind, atoms
+
+
+def _primitive_class_name(atoms: tuple[str, ...], primitive: str) -> str:
+    kind, indices = _primitive_kind_atoms(primitive)
+    if not indices:
+        return ""
+    symbols = tuple(atoms[idx - 1].upper() for idx in indices)
+    if kind == "R" and len(symbols) == 2:
+        pair = "".join(sorted(symbols))
+        return f"{pair}_stretches"
+    if kind in {"A", "B"} and len(symbols) == 3:
+        endpoints = sorted((symbols[0], symbols[2]))
+        return f"{endpoints[0]}{symbols[1]}{endpoints[1]}_bends"
+    if kind in {"D", "T"} and len(symbols) == 4:
+        forward = "".join(symbols)
+        backward = "".join(reversed(symbols))
+        return f"{min(forward, backward)}_torsions"
+    if kind in {"U", "OOP"} and len(symbols) >= 4:
+        return f"{''.join(sorted(symbols))}_oop"
+    return ""
+
+
+def _gic_id(label: str) -> str:
+    return str(label).split(None, 1)[0]
+
+
+def _unique_patterns(patterns: tuple[str, ...]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for pattern in patterns:
+        normalized = pattern.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(normalized)
+    return tuple(unique)
 
 
 def write_semiexperimental_html_report(
@@ -327,13 +447,15 @@ def write_semiexperimental_html_report(
     target.parent.mkdir(parents=True, exist_ok=True)
     html = [
         "<!doctype html><html><head><meta charset='utf-8'>",
-        "<title>ORACLE semiexperimental geometry report</title>",
+        "<title>MATRIX/MORPHEUS semiexperimental geometry report</title>",
         "<style>body{font-family:Helvetica,Arial,sans-serif;margin:32px;line-height:1.35}"
         "table{border-collapse:collapse;margin:16px 0;width:100%}"
         "th,td{border:1px solid #ccc;padding:5px 7px;text-align:left;font-size:13px}"
         "th{background:#f3f3f3} code{background:#f7f7f7;padding:1px 3px}</style>",
         "</head><body>",
-        "<h1>ORACLE Semiexperimental Geometry Report</h1>",
+        "<h1>MATRIX/MORPHEUS Semiexperimental Geometry Report</h1>",
+        "<h2>Publishable Summary</h2>",
+        _publishable_summary_table(result),
         "<h2>Diagnostics</h2>",
         "<table><tr><th>Quantity</th><th>Value</th></tr>",
         _row("RMS", f"{result.rms_MHz:.8g}"),
@@ -364,6 +486,8 @@ def write_semiexperimental_html_report(
         _rotational_constants_table(result),
         "<h2>Residuals</h2>",
         _residuals_table(result),
+        "<h2>Weight and Influence Diagnostics</h2>",
+        _weight_diagnostics_table(result),
         "<h2>Kraitchman Comparison</h2>",
         _kraitchman_table(result),
         "</body></html>",
@@ -432,9 +556,11 @@ def benchmark_csv(rows: tuple[SemiexperimentalBenchmarkRow, ...]) -> str:
 
 def semiexperimental_latex_tables(result: SemiexperimentalFitResult) -> dict[str, str]:
     return {
+        "summary": _latex_publishable_summary_table(result),
         "parameters": _latex_parameter_table(result),
         "rotational_constants": _latex_rotational_constants_table(result),
         "residuals": _latex_residual_table(result),
+        "weight_diagnostics": _latex_weight_diagnostics_table(result),
         "kraitchman": _latex_kraitchman_table(result),
     }
 
@@ -632,6 +758,35 @@ def _diagnostic_warnings_table(result: SemiexperimentalFitResult) -> str:
     return "\n".join(rows)
 
 
+def _publishable_summary_table(result: SemiexperimentalFitResult) -> str:
+    warnings = _semiexp_warning_rows(
+        result.diagnostics,
+        (),
+        result.parameters,
+        result.geometry_parameters,
+        None,
+        None,
+        None,
+        weight_diagnostics=result.weight_diagnostics,
+    )
+    severe = sum(1 for item in warnings if item.severity == "severe")
+    warning = sum(1 for item in warnings if item.severity == "warning")
+    info = sum(1 for item in warnings if item.severity == "info")
+    return "\n".join(
+        [
+            "<table><tr><th>Quantity</th><th>Value</th></tr>",
+            _row("RMS / MHz", f"{result.rms_MHz:.8g}"),
+            _row("Weighted RMS", f"{result.diagnostics.weighted_rms:.8g}"),
+            _row("Reduced chi-square", f"{result.diagnostics.reduced_chi_square:.8g}"),
+            _row("Rank / parameters", f"{result.diagnostics.rank}/{result.diagnostics.n_optimized_parameters}"),
+            _row("Condition number", f"{result.diagnostics.condition_number:.8g}"),
+            _row("Stationary point", result.stationary_point),
+            _row("Warnings", f"{severe} severe, {warning} warning, {info} info"),
+            "</table>",
+        ]
+    )
+
+
 def _parameters_table(result: SemiexperimentalFitResult) -> str:
     rows = [
         "<table><tr><th>Name</th><th>Value</th><th>Sigma</th><th>Active</th><th>Class</th></tr>"
@@ -676,6 +831,28 @@ def _residuals_table(result: SemiexperimentalFitResult) -> str:
             f"<tr><td>{escape(item.isotopologue)}</td><td>{escape(item.constant)}</td>"
             f"<td>{item.observed_equilibrium_MHz:.10g}</td><td>{item.calculated_MHz:.10g}</td>"
             f"<td>{item.residual_MHz:.10g}</td></tr>"
+        )
+    rows.append("</table>")
+    return "\n".join(rows)
+
+
+def _weight_diagnostics_table(result: SemiexperimentalFitResult) -> str:
+    if not result.weight_diagnostics:
+        return "<p>No weight diagnostics available.</p>"
+    rows = [
+        "<table><tr><th>Row</th><th>Kind</th><th>Label</th><th>Sigma</th>"
+        "<th>Weight</th><th>Robust weight</th><th>Weighted residual</th>"
+        "<th>Leverage</th><th>Studentized residual</th><th>Cook distance</th></tr>"
+    ]
+    for item in result.weight_diagnostics:
+        rows.append(
+            f"<tr><td>{item.row}</td><td>{escape(item.kind)}</td>"
+            f"<td>{escape(item.isotopologue)}:{escape(item.observable)}</td>"
+            f"<td>{item.sigma:.8g}</td><td>{item.base_weight:.8g}</td>"
+            f"<td>{item.robust_weight:.8g}</td>"
+            f"<td>{item.weighted_residual:.8g}</td><td>{item.leverage:.8g}</td>"
+            f"<td>{item.studentized_residual:.8g}</td>"
+            f"<td>{item.cooks_distance:.8g}</td></tr>"
         )
     rows.append("</table>")
     return "\n".join(rows)
@@ -729,6 +906,28 @@ def _latex_parameter_table(result: SemiexperimentalFitResult) -> str:
     return "\n".join(lines)
 
 
+def _latex_publishable_summary_table(result: SemiexperimentalFitResult) -> str:
+    lines = [
+        "\\begin{tabular}{lr}",
+        "\\toprule",
+        "Quantity & Value \\\\",
+        "\\midrule",
+        f"RMS / MHz & {result.rms_MHz:.6g} \\\\",
+        f"Weighted RMS & {result.diagnostics.weighted_rms:.6g} \\\\",
+        f"Reduced $\\chi^2$ & {result.diagnostics.reduced_chi_square:.6g} \\\\",
+        (
+            f"Rank / parameters & {result.diagnostics.rank}/"
+            f"{result.diagnostics.n_optimized_parameters} \\\\"
+        ),
+        f"Condition number & {result.diagnostics.condition_number:.6g} \\\\",
+        f"Stationary point & {_tex(result.stationary_point)} \\\\",
+        "\\bottomrule",
+        "\\end{tabular}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _latex_residual_table(result: SemiexperimentalFitResult) -> str:
     lines = [
         "\\begin{tabular}{llrrr}",
@@ -739,6 +938,23 @@ def _latex_residual_table(result: SemiexperimentalFitResult) -> str:
     for item in result.residuals:
         lines.append(
             f"{_tex(item.isotopologue)} & {_tex(item.constant)} & {item.observed_equilibrium_MHz:.8g} & {item.calculated_MHz:.8g} & {item.residual_MHz:.3g} \\\\"
+        )
+    lines.extend(["\\bottomrule", "\\end{tabular}", ""])
+    return "\n".join(lines)
+
+
+def _latex_weight_diagnostics_table(result: SemiexperimentalFitResult) -> str:
+    lines = [
+        "\\begin{tabular}{llrrrr}",
+        "\\toprule",
+        "Row & Type & Weight & Robust & Weighted residual & Leverage \\\\",
+        "\\midrule",
+    ]
+    for item in result.weight_diagnostics:
+        lines.append(
+            f"{item.row} & {_tex(item.kind)} & {item.base_weight:.4g} & "
+            f"{item.robust_weight:.4g} & {item.weighted_residual:.4g} & "
+            f"{item.leverage:.4g} \\\\"
         )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     return "\n".join(lines)

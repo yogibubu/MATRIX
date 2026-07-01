@@ -277,6 +277,38 @@ no isotopic substitution.  \texttt{SIGMA\_MHZ=inf} is accepted for a component
 with zero least-squares weight; each isotopologue must still retain at least
 one positive finite component weight.
 
+A complete standalone \xyzin{} input can also contain the \texttt{\#MORPHEUS}
+run section and be passed directly to the command line:
+
+\begin{lstlisting}[style=oracle]
+python -m matrix semiexp --xyzin molecule.xyzin --outdir run
+\end{lstlisting}
+
+\noindent
+In that mode the initial Cartesian XYZ block and \texttt{\#ISOTOPOLOGUES}
+provide the molecular and spectroscopic input.  The \texttt{\#MORPHEUS}
+section selects the active coordinate model and optional predicates:
+
+\begin{lstlisting}[style=oracle]
+#MORPHEUS
+COORDINATE_MODEL = gic
+OBSERVABLE = moments
+COMPONENTS = Ia,Ib,Ic
+FIT_COORDINATES = gic
+FIXED_PARAMETER = @hydrogen_parameters
+PREDICATES = INITIAL_GEOMETRY DISTANCE_SIGMA=0.003 ANGLE_SIGMA=0.3 DIHEDRAL_SIGMA=0.5
+PREDICATE_SCOPE = heavy_bonds,oh_bonds,heavy_angles,coh_angles,ring_torsions
+\end{lstlisting}
+
+\noindent
+\texttt{COORDINATE\_MODEL} and \texttt{FIT\_COORDINATES} accept
+\texttt{gic} or \texttt{cartesian\_symmetry}.  \texttt{COMPONENTS} may be
+written as \texttt{ABC}, \texttt{AB}, \texttt{AC}, \texttt{BC} or in moment
+notation such as \texttt{Ia,Ib,Ic}.  \texttt{PREDICATES=INITIAL\_GEOMETRY}
+generates weighted primitive predicates centered on the initial Cartesian
+geometry using the requested scope and sigmas.  These are input priors, not
+output diagnostics.
+
 Validate a container with:
 
 \begin{lstlisting}[style=oracle]

@@ -24,7 +24,7 @@ from .geometry_input import (
 
 
 MSR_LEGACY_SUFFIXES = (".msr", ".msr.inp", "_msr.inp")
-MSR_SECTION_NAMES = {"bexp", "dbvib", "weights", "dbelec", "dbele", "dbelec"}
+MSR_SECTION_NAMES = {"bexp", "dbvib", "dvib", "weights", "dbelec", "dbele", "dbelec"}
 MSR_CARTESIAN_CONSTRAINT_HEADERS = {
     "constraints",
     "constraint",
@@ -549,7 +549,9 @@ def _build_observations(
 ) -> tuple[IsotopologueObservation, ...]:
     parent = isotope_blocks[0].masses
     bexp = _section_by_label_or_order(sections["bexp"], isotope_blocks)
-    dbvib = _section_by_label_or_order(sections.get("dbvib", ()), isotope_blocks)
+    dbvib = _section_by_label_or_order(
+        sections.get("dbvib") or sections.get("dvib", ()), isotope_blocks
+    )
     weights = _section_by_label_or_order(sections.get("weights", ()), isotope_blocks)
     electronic_rows = sections.get("dbelec") or sections.get("dbele") or ()
     dbelec = _section_by_label_or_order(electronic_rows, isotope_blocks)

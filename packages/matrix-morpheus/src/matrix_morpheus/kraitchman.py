@@ -9,8 +9,10 @@ from matrix_chem.isotopes_table import get_default_isotope, get_isotope
 from matrix_chem.physical_constants import Phy, get_physical_constants
 from matrix_chem.structure import Structure
 from matrix_chem.topology.elements import atomic_number
+from matrix_chem.topology.pipeline import build_topology_objects
+from matrix_neo.survibfit.primitives import Primitive, eval_primitives
 
-from .contracts import IsotopologueObservation
+from .contracts import IsotopologueObservation, QMParameterPredicate
 
 
 ROTCONST_TO_MOMENT = (
@@ -42,6 +44,76 @@ class KraitchmanSeedResult:
     method: str
     fitted_atom_indices: tuple[int, ...]
     rms_atom_displacement_angstrom: float
+
+
+def kraitchman_seed_predicates(
+    atoms: list[str] | tuple[str, ...],
+    coords: np.ndarray,
+    observations: tuple[IsotopologueObservation, ...],
+    *,
+    sigma_distance_angstrom: float = 0.01,
+    sigma_angle_degree: float = 1.0,
+    include_angles: bool = True,
+    require_all_atoms_seeded: bool = True,
+) -> tuple[QMParameterPredicate, ...]:
+    """Build local primitive predicates from the Kraitchman seed geometry.
+
+    Kraitchman substitution coordinates are not exact structural constraints.
+    This helper therefore returns weighted predicates, and by default only for
+    primitive coordinates whose atoms are all directly determined by single
+    substitutions.
+    """
+
+    if sigma_distance_angstrom <= 0.0:
+        raise ValueError("sigma_distance_angstrom must be positive")
+    if sigma_angle_degree <= 0.0:
+        raise ValueError("sigma_angle_degree must be positive")
+    rows = kraitchman_comparison(atoms, coords, observations)
+    seed = kraitchman_seed_geometry(atoms, coords, observations, rows)
+    if seed is None:
+        return ()
+    seeded_atoms = {idx - 1 for idx in seed.fitted_atom_indices}
+    z_numbers = np.array([atomic_number(symbol) or 0 for symbol in atoms], dtype=int)
+    _continuous, graph, _ringset, _synthons, _aromaticity = build_topology_objects(
+        np.asarray(coords, dtype=float), z_numbers
+    )
+    bonds = tuple(sorted(tuple(sorted((int(i), int(j)))) for i, j in graph.bonds))
+    adjacency = tuple(
+        tuple(sorted(int(item) for item in graph.adjacency[index]))
+        for index in range(len(atoms))
+    )
+    predicates: list[QMParameterPredicate] = []
+    for i, j in bonds:
+        primitive = Primitive("bond", (i, j))
+        if require_all_atoms_seeded and not {i, j}.issubset(seeded_atoms):
+            continue
+        value = float(eval_primitives([primitive], seed.coordinates_angstrom)[0])
+        predicates.append(
+            QMParameterPredicate(
+                f"R({i + 1},{j + 1})",
+                value,
+                sigma_distance_angstrom,
+                "kraitchman_seed_distance",
+            )
+        )
+    if include_angles:
+        for center, neighbors in enumerate(adjacency):
+            for pos, left in enumerate(neighbors):
+                for right in neighbors[pos + 1 :]:
+                    atoms_set = {left, center, right}
+                    if require_all_atoms_seeded and not atoms_set.issubset(seeded_atoms):
+                        continue
+                    primitive = Primitive("angle", (left, center, right))
+                    value = float(np.rad2deg(eval_primitives([primitive], seed.coordinates_angstrom)[0]))
+                    predicates.append(
+                        QMParameterPredicate(
+                            f"A({left + 1},{center + 1},{right + 1})",
+                            value,
+                            sigma_angle_degree,
+                            "kraitchman_seed_angle",
+                        )
+                    )
+    return tuple(predicates)
 
 
 def kraitchman_comparison(

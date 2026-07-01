@@ -28,6 +28,9 @@ class DerivedPrimitiveClassPlan:
     parameter_classes: tuple[ParameterClassConstraint, ...]
     rejected_labels: tuple[str, ...]
     budget: int
+    class_support: tuple[tuple[str, int, float], ...] = ()
+    ambiguous_labels: tuple[str, ...] = ()
+    budget_limited_classes: tuple[str, ...] = ()
 
 
 def parse_primitive_class_spec(raw: str) -> PrimitiveClassSpec:
@@ -78,6 +81,7 @@ def derive_primitive_class_plan(
     assignments: dict[str, list[tuple[str, float]]] = {spec.name: [] for spec in primitive_classes}
     rejected: list[str] = []
     fixed: list[str] = []
+    ambiguous: list[str] = []
 
     for label in gic_labels:
         gid = _gic_id(label)
@@ -89,6 +93,9 @@ def derive_primitive_class_plan(
             )
             for spec in primitive_classes
         }
+        positive_scores = sorted((score for score in scores.values() if score > 0.0), reverse=True)
+        if len(positive_scores) > 1 and positive_scores[1] >= cross_fraction_max:
+            ambiguous.append(gid)
         assigned_name = ""
         assigned_score = 0.0
         for index, spec in enumerate(primitive_classes):
@@ -117,6 +124,11 @@ def derive_primitive_class_plan(
             raise ValueError("max_classes must be non-negative")
         class_order = class_order[:max_classes]
     kept_names = {spec.name for spec in class_order if assignments[spec.name]}
+    budget_limited = tuple(
+        spec.name
+        for spec in primitive_classes
+        if assignments[spec.name] and spec.name not in kept_names
+    )
 
     constraints: list[ParameterClassConstraint] = []
     for spec in class_order:
@@ -139,6 +151,16 @@ def derive_primitive_class_plan(
         parameter_classes=tuple(constraints),
         rejected_labels=tuple(dict.fromkeys(rejected)),
         budget=len(constraints) if max_classes is None else max_classes,
+        class_support=tuple(
+            (
+                spec.name,
+                len(assignments[spec.name]),
+                float(sum(score for _gid, score in assignments[spec.name])),
+            )
+            for spec in primitive_classes
+        ),
+        ambiguous_labels=tuple(dict.fromkeys(ambiguous)),
+        budget_limited_classes=budget_limited,
     )
 
 

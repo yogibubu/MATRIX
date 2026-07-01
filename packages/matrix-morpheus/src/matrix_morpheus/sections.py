@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shlex
 
 from matrix_core import (
     key_value_section_lines,
@@ -68,6 +69,30 @@ class MorpheusSection:
             if value is not None:
                 object.__setattr__(self, attr, Path(value))
         object.__setattr__(self, "components", tuple(self.components))
+
+
+@dataclass(frozen=True)
+class InitialGeometryPredicateSpec:
+    distance_sigma_angstrom: float = 0.003
+    angle_sigma_degree: float = 0.3
+    dihedral_sigma_degree: float = 0.5
+    scope: tuple[str, ...] = (
+        "heavy_bonds",
+        "oh_bonds",
+        "heavy_angles",
+        "coh_angles",
+        "ring_torsions",
+    )
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
+class MorpheusInputConfig:
+    coordinate_model: str | None = None
+    observable: str | None = None
+    components: str | None = None
+    fixed_parameters: tuple[str, ...] = ()
+    initial_geometry_predicates: InitialGeometryPredicateSpec = InitialGeometryPredicateSpec()
 
 
 def morpheus_section_from_result(
@@ -241,6 +266,27 @@ def read_morpheus_section(path: Path | str) -> MorpheusSection:
     return parse_morpheus_section(content)
 
 
+def read_morpheus_input_config(path: Path | str) -> MorpheusInputConfig | None:
+    content = section_content(read_sectioned_lines(Path(path)), "MORPHEUS")
+    if not content:
+        return None
+    return parse_morpheus_input_config(content)
+
+
+def parse_morpheus_input_config(lines: list[str] | tuple[str, ...]) -> MorpheusInputConfig:
+    values = parse_key_value_section(lines)
+    fixed = _multi_value_tuple(values, ("FIXED_PARAMETER", "FIXED_PARAMETERS", "FIXED"))
+    coordinate_model = values.get("FIT_COORDINATES") or values.get("COORDINATE_MODEL")
+    predicates = _initial_geometry_predicate_spec(values)
+    return MorpheusInputConfig(
+        coordinate_model=_blank_to_none(coordinate_model),
+        observable=_blank_to_none(values.get("OBSERVABLE")),
+        components=_normalize_input_components(values.get("COMPONENTS")),
+        fixed_parameters=fixed,
+        initial_geometry_predicates=predicates,
+    )
+
+
 def write_morpheus_section(path: Path | str, section: MorpheusSection) -> None:
     replace_section(Path(path), "MORPHEUS", morpheus_section_lines(section))
 
@@ -298,6 +344,78 @@ def _text_tuple(raw: str) -> tuple[str, ...]:
     if not raw:
         return ()
     return tuple(item for item in raw.split(",") if item)
+
+
+def _multi_value_tuple(values: dict[str, str], keys: tuple[str, ...]) -> tuple[str, ...]:
+    result: list[str] = []
+    for key in keys:
+        raw = values.get(key)
+        if not raw:
+            continue
+        for item in raw.replace(";", ",").split(","):
+            text = item.strip()
+            if text and text not in result:
+                result.append(text)
+    return tuple(result)
+
+
+def _blank_to_none(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    text = raw.strip()
+    return text or None
+
+
+def _normalize_input_components(raw: str | None) -> str | None:
+    text = _blank_to_none(raw)
+    if text is None:
+        return None
+    low = text.lower().replace(" ", "")
+    if low in {"ia,ib,ic", "iaibic"}:
+        return "ABC"
+    if low in {"ia,ib", "iaib"}:
+        return "AB"
+    if low in {"ia,ic", "iaic"}:
+        return "AC"
+    if low in {"ib,ic", "ibic"}:
+        return "BC"
+    return text
+
+
+def _initial_geometry_predicate_spec(values: dict[str, str]) -> InitialGeometryPredicateSpec:
+    raw = values.get("PREDICATES") or values.get("PREDICATE")
+    if not raw:
+        return InitialGeometryPredicateSpec(enabled=False)
+    tokens = shlex.split(raw)
+    if not tokens:
+        return InitialGeometryPredicateSpec(enabled=False)
+    mode = tokens[0].strip().upper()
+    if mode in {"NONE", "OFF", "FALSE", "0"}:
+        return InitialGeometryPredicateSpec(enabled=False)
+    if mode != "INITIAL_GEOMETRY":
+        raise ValueError(
+            "#MORPHEUS PREDICATES currently supports INITIAL_GEOMETRY, NONE or OFF"
+        )
+    assignments = _assignment_dict(tokens[1:])
+    scope_raw = values.get("PREDICATE_SCOPE") or assignments.get("SCOPE", "")
+    scope = tuple(item.strip().lower() for item in scope_raw.split(",") if item.strip())
+    return InitialGeometryPredicateSpec(
+        distance_sigma_angstrom=_float_value(assignments.get("DISTANCE_SIGMA"), 0.003),
+        angle_sigma_degree=_float_value(assignments.get("ANGLE_SIGMA"), 0.3),
+        dihedral_sigma_degree=_float_value(assignments.get("DIHEDRAL_SIGMA"), 0.5),
+        scope=scope or InitialGeometryPredicateSpec().scope,
+        enabled=True,
+    )
+
+
+def _assignment_dict(tokens: list[str] | tuple[str, ...]) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for token in tokens:
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        values[key.strip().upper()] = value.strip()
+    return values
 
 
 def _float_value(raw: str | None, default: float) -> float:

@@ -685,6 +685,15 @@ def build_parser(
         help="Comma/semicolon-separated fixed GIC patterns or Gaussian-style constraints",
     )
     semiexp.add_argument("--fix-hydrogens", action="store_true")
+    semiexp.add_argument(
+        "--no-auto-stabilize",
+        action="store_true",
+        help=(
+            "Disable MORPHEUS automatic stabilization. By default, an "
+            "underdetermined free GIC fit is stabilized by blocking X-H "
+            "coordinates before the fit is attempted."
+        ),
+    )
     semiexp.add_argument("--max-iter", type=int, default=None)
     semiexp.add_argument("--step", type=float, default=1.0e-4)
     semiexp.add_argument("--damping", type=float, default=1.0e-8)
@@ -719,6 +728,31 @@ def build_parser(
         action="append",
         default=[],
         help="QM prior as label_pattern:value:sigma[:source]; can be repeated",
+    )
+    semiexp.add_argument(
+        "--kraitchman-predicates",
+        action="store_true",
+        help="Add distance/angle predicates derived from single-substitution Kraitchman coordinates",
+    )
+    semiexp.add_argument(
+        "--kraitchman-distance-sigma",
+        type=float,
+        default=0.01,
+        help="Distance sigma in Angstrom for Kraitchman-derived predicates",
+    )
+    semiexp.add_argument(
+        "--kraitchman-angle-sigma",
+        type=float,
+        default=1.0,
+        help="Angle sigma in degrees for Kraitchman-derived predicates",
+    )
+    semiexp.add_argument(
+        "--kraitchman-partial-predicates",
+        action="store_true",
+        help=(
+            "Also create Kraitchman predicates for primitives containing only some "
+            "Kraitchman-seeded atoms; conservative default requires all atoms seeded"
+        ),
     )
     semiexp.add_argument(
         "--parameter-class",
@@ -2158,10 +2192,14 @@ def main(
             SemiexperimentalFitRequest,
             derive_primitive_class_plan,
             fit_semiexperimental_geometry,
+            initial_geometry_predicates,
             is_msr_legacy_file,
+            kraitchman_seed_predicates,
             parse_primitive_class_spec,
             prepare_semiexperimental_xyzin,
             preview_semiexperimental_gics,
+            read_geometry_input,
+            read_morpheus_input_config,
             read_observations,
             read_semiexperimental_job,
             semiexperimental_latex_tables,
@@ -2171,21 +2209,22 @@ def main(
 
         legacy_msr_job = bool(args.job and is_msr_legacy_file(args.job))
         job = None if legacy_msr_job or not args.job else read_semiexperimental_job(args.job)
-        geometry_path = args.xyz or (job.path if job is not None else None)
+        xyzin_config = read_morpheus_input_config(args.xyzin) if args.xyzin is not None else None
+        geometry_path = args.xyz or (job.path if job is not None else None) or args.xyzin
         observations_inline = job.observations_inline if job is not None else ()
         observations_path = args.observations or (
             None if observations_inline else (job.observations if job is not None else None)
-        )
+        ) or args.xyzin
         if legacy_msr_job:
             geometry_path = args.xyz or args.job
             observations_path = args.observations or args.job
             observations_inline = ()
         if geometry_path is None:
-            raise ValueError("semiexp needs --geometry or --job")
+            raise ValueError("semiexp needs --geometry, --job or --xyzin")
         if observations_path is None and not observations_inline:
             raise ValueError(
                 "semiexp needs --observations, inline [[isotopologues]], "
-                "or a [files].observations entry in --job"
+                "a [files].observations entry in --job, or --xyzin"
             )
         preprocess = prepare_semiexperimental_xyzin(
             Path(geometry_path),
@@ -2204,28 +2243,75 @@ def main(
         fixed = _merge_unique(
             preprocess.source_fixed_parameters, job.fixed_parameters if job else ()
         )
+        if xyzin_config is not None:
+            fixed = _merge_unique(fixed, xyzin_config.fixed_parameters)
         fixed = _merge_unique(fixed, _parse_fixed_parameters(args.fixed))
         if args.fix_hydrogens:
             fixed = _merge_unique(fixed, (HYDROGEN_PARAMETER_CONSTRAINT,))
+        xyzin_observable = xyzin_config.observable if xyzin_config is not None else None
         observable = _job_default(
             args.observable,
             DEFAULT_SEMIEXP_OBSERVABLE,
-            job.observable if job else None,
+            job.observable if job else xyzin_observable,
+        )
+        xyzin_coordinate_model = (
+            xyzin_config.coordinate_model if xyzin_config is not None else None
         )
         coordinate_model = _job_default(
             args.coordinate_model,
             "gic",
-            job.coordinate_model if job else None,
+            job.coordinate_model if job else xyzin_coordinate_model,
         )
+        xyzin_rotational_components = xyzin_config.components if xyzin_config is not None else None
         rotational_components = _job_default(
             args.rotational_components,
             DEFAULT_SEMIEXP_ROTATIONAL_COMPONENTS,
-            job.rotational_components if job else None,
+            job.rotational_components if job else xyzin_rotational_components,
         )
         qm_predicates = _merge_unique(
             job.qm_predicates if job else (),
             _parse_qm_predicates(args.qm_predicate, QMParameterPredicate),
         )
+        if (
+            xyzin_config is not None
+            and xyzin_config.initial_geometry_predicates.enabled
+            and not args.qm_predicate
+        ):
+            geometry_input_for_predicates = read_geometry_input(Path(geometry_path))
+            spec = xyzin_config.initial_geometry_predicates
+            generated_predicates = initial_geometry_predicates(
+                tuple(geometry_input_for_predicates.atoms),
+                geometry_input_for_predicates.coordinates_angstrom,
+                distance_sigma_angstrom=spec.distance_sigma_angstrom,
+                angle_sigma_degree=spec.angle_sigma_degree,
+                dihedral_sigma_degree=spec.dihedral_sigma_degree,
+                scope=spec.scope,
+            )
+            qm_predicates = _merge_unique(qm_predicates, generated_predicates)
+            print(
+                "xyzin_initial_geometry_predicates: "
+                f"count={len(generated_predicates)} "
+                f"sigma_R={spec.distance_sigma_angstrom:g} "
+                f"sigma_A={spec.angle_sigma_degree:g} "
+                f"sigma_D={spec.dihedral_sigma_degree:g}"
+            )
+        if args.kraitchman_predicates:
+            geometry_input_for_kraitchman = read_geometry_input(Path(geometry_path))
+            kraitchman_predicates = kraitchman_seed_predicates(
+                tuple(geometry_input_for_kraitchman.atoms),
+                geometry_input_for_kraitchman.coordinates_angstrom,
+                observations,
+                sigma_distance_angstrom=args.kraitchman_distance_sigma,
+                sigma_angle_degree=args.kraitchman_angle_sigma,
+                require_all_atoms_seeded=not args.kraitchman_partial_predicates,
+            )
+            qm_predicates = _merge_unique(qm_predicates, kraitchman_predicates)
+            print(
+                "kraitchman_predicates: "
+                f"count={len(kraitchman_predicates)} "
+                f"sigma_R={args.kraitchman_distance_sigma:g} "
+                f"sigma_A={args.kraitchman_angle_sigma:g}"
+            )
         parameter_classes = _merge_unique(
             job.parameter_classes if job else (),
             _parse_parameter_classes(args.parameter_class, ParameterClassConstraint),
@@ -2282,6 +2368,34 @@ def main(
                 print(
                     f"primitive_class: {item.name} "
                     f"gics={len(item.patterns)} patterns={'|'.join(item.patterns)}"
+                )
+        if (
+            coordinate_model == "gic"
+            and not args.no_auto_stabilize
+            and not qm_predicates
+            and not parameter_classes
+        ):
+            preview = preview_semiexperimental_gics(Path(geometry_path), observations)
+            if preview.suggested_classes:
+                parameter_classes = _merge_unique(parameter_classes, preview.suggested_classes)
+                print(
+                    "morpheus_auto_advisor: "
+                    f"parameter_classes={len(preview.suggested_classes)}"
+                )
+                for item in preview.suggested_classes:
+                    print(
+                        f"morpheus_auto_class: {item.name} "
+                        f"mode={item.mode} patterns={'|'.join(item.patterns)}"
+                    )
+            row_budget = len(observations) * len(
+                _semiexp_components_for_budget(rotational_components)
+            )
+            if len(preview.gic_labels) > row_budget and HYDROGEN_PARAMETER_CONSTRAINT not in fixed:
+                fixed = _merge_unique(fixed, (HYDROGEN_PARAMETER_CONSTRAINT,))
+                print(
+                    "morpheus_auto_stabilize: "
+                    f"free_gic_parameters={len(preview.gic_labels)} "
+                    f"fit_rows={row_budget}; action=fix_hydrogens"
                 )
         request = SemiexperimentalFitRequest(
             initial_geometry=geometry_path,

@@ -34,7 +34,7 @@ def parse_gaussian_style_constraints(
     tuple[GICExpressionConstraint, ...],
     tuple[GICExpressionDefinition, ...],
 ]:
-    """Parse ORACLE/Gaussian-style primitive, linear, and expression constraints."""
+    """Parse MATRIX/Gaussian-style primitive, linear, and expression constraints."""
     items = tuple(str(item) for item in records)
     definitions = _gic_expression_definitions_from_patterns(items)
     return (

@@ -46,46 +46,38 @@ spectroscopy, thermochemistry, force-field development, and the validation of
 electronic-structure methods.\cite{Demaison2011EquilibriumStructures,PuzzariniStanton2023}
 Despite decades of progress in semiexperimental refinement, model construction
 remains largely a manual activity. Structure determination from experimental
-observables is also a
-coordinate-dependent inverse problem: the data constrain a Cartesian geometry,
-but the fitted variables determine conditioning, constraints, correlations, and
-uncertainties. Rotational spectroscopy is a stringent example because
-rotational constants probe the molecular mass distribution with high precision,
-whereas semiexperimental ($r_e^{\mathrm{SE}}$) structures require vibrational
-and sometimes electronic corrections to convert ground-state constants into
-equilibrium information.\cite{Costain1958,Pawlowski2002,Piccardo2015B3LYP,Penocchio2015B2PLYP}
+observables is a coordinate-dependent inverse problem: the data constrain a
+Cartesian geometry, but the fitted variables determine conditioning,
+constraints, correlations, and uncertainties. Rotational spectroscopy is a
+stringent example because rotational constants probe the molecular mass
+distribution with high precision, whereas semiexperimental
+($r_e^{\mathrm{SE}}$) structures require vibrational and sometimes electronic
+corrections to convert ground-state constants into equilibrium
+information.\cite{Costain1958,Pawlowski2002,Piccardo2015B3LYP,Penocchio2015B2PLYP}
 
 Modern fitting programs and workflows\cite{Mendolicchio2017MSR,KisielPROSPE,Kanzow2025PCCP}
 have established robust statistical principles: fit well-conditioned
 observables, include theoretical predicates when experimental information is
 incomplete, and propagate covariance to derived structural
 parameters.\cite{Bartell1975Predicate} Their common prerequisite is that the
-refinement model has already been formulated. That prerequisite is not
-innocent, especially for rings, fused systems, and bridged frameworks. A
-molecular graph with cycles is not a tree; different reference paths can make
-one distance, angle, or torsion primary and an equivalent one derived. For
-such systems, construction of a symmetry-consistent non-redundant refinement
-model is itself a major part of the semiexperimental analysis. The target of
-the present work is therefore not a new least-squares observable or a
-molecule-specific improvement in residuals, but an algorithmic route from
-perceived topology to a reproducible statistical refinement model.
-Although semiexperimental structure refinement is the principal use case
-developed here, the same construction applies more generally to constrained
-refinement models in which topology, symmetry, rank, and external information
-must be combined before the numerical fit is solved.
+refinement model has already been formulated. This prerequisite is especially
+restrictive for rings, fused systems, and bridged frameworks, where equivalent
+paths through the molecular graph can make one internal coordinate primary and
+another derived. The target of the present work is therefore not a new
+least-squares observable or a molecule-specific improvement in residuals, but
+an algorithmic route from perceived topology to a reproducible statistical
+refinement model.
 
 Recent workflows have extended semiexperimental refinement by combining
 computed starting geometries, quantum chemical (QC) vibrational corrections, and
 reduced-dimensionality models.\cite{Mendolicchio2025FastDvib} The implementation
 developed here uses such data as upstream inputs while making the refinement
-model itself graph-defined rather than hand specified. Reference geometries from QC
-computations or from fragment libraries (e.g., LCB25\cite{Lazzari2025LCB25})
-enter only as chemically explicit constraints, predicates, or parameter
-classes; the fitted variables remain the algorithmically generated
-non-redundant active coordinates. This separation is important for larger
-molecules. Accurate QC equilibrium geometries and vibrational corrections are
-prerequisites for comparison with ground-state rotational constants; the
-framework adds the missing step of converting those ingredients into an
+model itself graph-defined rather than hand specified. Reference geometries
+from QC computations or from fragment libraries (e.g.,
+LCB25\cite{Lazzari2025LCB25}) enter only as chemically explicit constraints,
+predicates, or parameter classes; the fitted variables remain the
+algorithmically generated non-redundant active coordinates. The framework
+therefore converts accurate QC structures and vibrational corrections into an
 explicit, rank-audited refinement model without molecule-specific coordinate
 design.
 
@@ -101,14 +93,11 @@ the Wilson matrix or the corresponding derivative operator.\cite{Wilson1955}
 
 The rotational semiexperimental problem is used here as a demanding test
 because it exposes both rank deficiencies and chemically meaningful
-constraints. Glycolaldehyde is retained as a standard acyclic case.
-Cyclopentadiene, nitrobenzene, azulene, and norcamphor test ring closures,
-planar-component selection, fused topology, bridged topology, and
-hydrogen-frame constraints. The maleic, phthalic, and succinic anhydrides form
-a homologous literature-data series with different degrees of isotopic
-completeness and different auxiliary relations. Two glycine conformers test
-reduced-dimensionality constraints, and testosterone closes the study as a
-large-molecule scale demonstration.
+constraints. The validation set is organized so that each system probes a
+different failure mode of manual model formulation: acyclic references, ring
+closures, planar-component selection, fused and bridged topology, homologous
+series with different isotopic coverage, reduced-dimensionality constraints,
+and finally a large-molecule scale demonstration.
 
 
 \section{Theory and Method}
@@ -504,8 +493,9 @@ experimental part of the least-squares objective.
 
 \subsection{Least-Squares Refinement}
 
-As usual,\cite{Demaison2011EquilibriumStructures,Mendolicchio2017MSR} the semiexperimental
-refinement is formulated as a weighted nonlinear least-squares problem.
+As usual,\cite{Demaison2007EquilibriumReview,Demaison2011EquilibriumStructures,Mendolicchio2017MSR}
+the semiexperimental refinement is formulated as a weighted nonlinear
+least-squares problem.
 After hard constraints and parameter classes have been projected, the actual independent
 least-squares variables are collected in $\mathbf{p}$.
 
@@ -531,9 +521,15 @@ The weighted objective is
 \end{equation}
 
 where $\mathbf{W}$ contains the inverse variances of experimental and predicate
-observations. Robust fits reweight complete isotopologue blocks rather than
-individual rotational constants, while predicates retain their assigned
-statistical weights.
+observations. The assigned variances are treated as part of the statistical
+model, not merely as line-measurement errors. As emphasized in Demaison's
+analysis of spectroscopic structure determination,\cite{Demaison2007EquilibriumReview}
+model errors in vibrational corrections, electronic corrections, or missing
+structural information can dominate the experimental uncertainty of the
+rotational constants. MORPHEUS therefore propagates supplied correction
+uncertainties, allows conservative predicate variances, and can apply robust
+reweighting to complete isotopologue blocks rather than to individual
+rotational constants.
 
 The optimization is performed using a weighted Levenberg--Marquardt procedure,
 
@@ -579,7 +575,10 @@ variables is obtained from
 \right)^{-1},
 \end{equation}
 
-where $\sigma_r^2$ is the reduced residual variance.
+where $\sigma_r^2$ is the reduced residual variance. These formal standard
+errors are interpreted together with rank, SVD, leverage, and leave-one-out
+diagnostics, because scarce isotopologue data and non-random model errors can
+make least-squares uncertainties overoptimistic.\cite{Demaison2007EquilibriumReview}
 
 \subsection{Error Propagation}
 
@@ -695,21 +694,19 @@ Existing approaches automate the solution of a model; this work formalizes
 the generation of the model itself, and then solves it with the same
 statistical discipline.
 
-Z-matrices remain compact for tree-like molecules, as illustrated below by
-glycolaldehyde. Their limitations become visible for rings, fused systems, and
-bridged frameworks: a molecular graph with cycles cannot be represented by a
-single reference tree without making some chemically equivalent quantities
-primary and others derived. In a least-squares refinement this affects not
-only notation but also the covariance attached to reported parameters.
-
-GICS are a flexible alternative and are widely used in optimization and vibrational analysis.\cite{Wilson1955,PulayFogarasi1992,Peng1996Redundant,Baker1996Delocalized,BakkenHelgaker2002,Marenich2025GIC} In those workflows the GICS are redundant, or delocalized, or user-defined.
-Here, they are generated from topology-based primitive coordinates,
-reduced to a non-redundant space, assigned to irreducible representations, and
-accessed through primitive-coordinate constraints. Kisiel's
-\texttt{STRFIT}/PROSPE route\cite{KisielPROSPE} provides another important
-reference point for rotational-structure fitting, but the structural model is
-again supplied by the user and may leave derived ring quantities outside the
-primary fitted covariance matrix.\cite{Kanzow2025PCCP}
+Z-matrices remain compact for tree-like molecules, but rings, fused systems,
+and bridged frameworks expose their reference-tree dependence: equivalent
+distances, angles, or torsions can become primary or derived depending on the
+chosen path, with consequences for covariance propagation. GICs are a flexible
+alternative and are widely used in optimization and vibrational
+analysis,\cite{Wilson1955,PulayFogarasi1992,Peng1996Redundant,Baker1996Delocalized,BakkenHelgaker2002,Marenich2025GIC}
+but are usually redundant, delocalized, or user-defined. Here, they are
+generated from topology-based primitive coordinates, reduced to a
+non-redundant space, assigned to irreducible representations, and accessed
+through primitive-coordinate constraints. Kisiel's \texttt{STRFIT}/PROSPE
+route\cite{KisielPROSPE} remains an important reference point for
+rotational-structure fitting, but the structural model is again supplied by
+the user.\cite{Kanzow2025PCCP}
 
 The practical distinction is summarized in Table~\ref{tab:workflow-comparison}.
 The workflow retains the usual semiexperimental inputs and diagnostics while
@@ -724,8 +721,8 @@ what is removed is the need to hand-build the non-redundant refinement model.
 structure-refinement routes. The emphasis is model formulation rather than the
 statistical quality of a particular fit.}
 \label{tab:workflow-comparison}
-\scriptsize
-\setlength{\tabcolsep}{4pt}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
 \begin{tabular}{@{}llll@{}}
 \toprule
 Feature & Z-matrix & User GIC & \texttt{MORPHEUS} \\
@@ -766,16 +763,18 @@ corrections.
 
 The systems analyzed in this work are shown in Figure \ref{fig:studied-structures}
 and are discussed in the order in which  they test increasingly demanding parts of
-the same model-generation problem. Glycolaldehyde is
-the acyclic reference case; cyclopentadiene tests ring closure; nitrobenzene
-and azulene test planar-component selection and fused aromatic topology;
-norcamphor tests bridged graphs and hydrogen-frame constraints. The anhydride
-series then probes how published data sets with different isotopic
-completeness are converted into equivalent input models. Glycine I and II test
-reduced-dimensionality constraints. Testosterone is kept separate and last
-because it is a scale demonstration rather than an isotope-rich benchmark. In
-all cases the input is Cartesian and no molecule-specific coordinate code,
-manual reference tree, or manual active-space selection is used.
+the same model-generation problem. The results are therefore not independent
+case studies but a sequence of stress tests, each designed to validate one
+property of the framework. Glycolaldehyde establishes the acyclic baseline;
+cyclopentadiene tests ring closure; nitrobenzene tests planar-component
+selection; azulene tests fused aromatic topology; norcamphor tests bridged
+graphs and hydrogen-frame constraints. The anhydride series probes how
+published data sets with different isotopic completeness are converted into
+equivalent input models. Glycine I and II test reduced-dimensionality
+constraints. Testosterone is kept separate and last because it is a scale
+demonstration rather than an isotope-rich benchmark. In all cases the input is
+Cartesian and no molecule-specific coordinate code, manual reference tree, or
+manual active-space selection is used.
 
 \begin{figure*}
 \centering
@@ -854,7 +853,7 @@ Supporting Information.}
 \label{fig:benchmark-overview}
 \end{figure*}
 
-Figure~\ref{fig:benchmark-overview} is the central validation of the method:
+Figure~\ref{fig:benchmark-overview} is the central validation of this logic:
 it quantifies how topology perception, symmetry analysis,
 isotopic coverage, and reference information are transformed
 into the final refinement model. The figure is therefore a
@@ -901,44 +900,34 @@ reports the reproducible decision burden. The final column counts
 molecule-specific coordinate or constraint edits made by the user in the
 reported runs.}
 \label{tab:manual-vs-morpheus}
-\scriptsize
-\setlength{\tabcolsep}{3.5pt}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lllllll@{}}
+\footnotesize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lllll@{}}
 \toprule
-Case & Manual workflow would decide & Automated model decisions & Generated model & Constraints/classes & Result & Manual edits \\
+Case & Manual burden removed & Model & Constraints/classes & Outcome \\
 \midrule
 Azulene &
-fused-ring coordinates; symmetry; active variables; planar pair &
-4 &
-48 GICs; 17 symmetric; 10 variables &
-8 primitive constraints &
-0.073 MHz RMS &
-0 \\
+fused rings; symmetry; planar pair &
+48 GICs; 17 sym.; 10 var. &
+8 primitive constr. &
+0.073 MHz RMS; 0 edits \\
 Norcamphor &
-bridged coordinates; active variables; H-frame constraints; covariance targets &
-4 &
-48 GICs; 48 active; 18 variables &
-30 H-frame constraints &
-0.071 MHz RMS &
-0 \\
+bridged graph; H frames; covariance &
+48 GICs; 48 active; 18 var. &
+30 H-frame constr. &
+0.071 MHz RMS; 0 edits \\
 Glycine I &
-symmetry; unsupported H-frame directions; active variables &
-3 &
-24 GICs; 15 $A'$; 11 variables &
-4 QC constraints &
-0.0269 MHz RMS &
-0 \\
+symmetry; unsupported H directions &
+24 GICs; 15 $A'$; 11 var. &
+4 QC constr. &
+0.0269 MHz RMS; 0 edits \\
 Glycine II &
-low-symmetry active space; coupled descriptors; unsupported directions &
-3 &
-24 GICs; 19 variables &
-5 QC constraints; coupled classes &
-0.249 MHz RMS &
-0 \\
+low symmetry; coupled descriptors &
+24 GICs; 19 var. &
+5 QC constr.; classes &
+0.249 MHz RMS; 0 edits \\
 \bottomrule
-\end{tabular}
-}
+\end{tabular*}
 \end{table*}
 
 The agreement with reference-quality refinements is therefore obtained after
@@ -1173,9 +1162,9 @@ reduced-dimensionality benchmarks. ``Active variables'' are the
 independent least-squares coordinates after symmetry selection and projection
 of hard primitive-coordinate constraints.}
 \label{tab:advisor-decisions}
-\scriptsize
-\setlength{\tabcolsep}{2.5pt}
-\begin{tabular}{lllll}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lllll@{}}
 \toprule
 System & GIC space & Variables & Generated constraints & Classes \\
 \midrule
@@ -1333,10 +1322,10 @@ full validation of the fit engine.
 \includegraphics[width=0.90\linewidth]{figures/testosterone_qc_cropped.jpg}
 
 \smallskip
-\scriptsize Testosterone large-molecule scale demonstration.
+\footnotesize Testosterone large-molecule scale demonstration.
 
 \medskip
-\scriptsize
+\footnotesize
 Residuals are relative to the corrected experimental equilibrium constants
 derived from the published $B_0$ and $\Delta B_\mathrm{vib}$ values.
 
@@ -1398,19 +1387,15 @@ refinement can be chained for a 49-atom fused-ring molecule in a
 reproducible calculation. This closes the loop from accurate
 large-molecule QC structures to algorithmically generated spectroscopic
 refinement models.
-The framework therefore performs two coupled tasks simultaneously: it
-constructs the refinement model algorithmically and refines the initial
-equilibrium geometry toward the semiexperimental solution. Model generation
-and structural refinement are integrated into a single workflow rather than
-being treated as separate steps.
+
 The essential shift is from expert-dependent model formulation to reproducible
-algorithmic model generation. The algorithm records and enforces chemical
-judgement in a reproducible form rather than replacing it with hidden manual
-choices.
-Although motivated by semiexperimental equilibrium structures, the underlying
-graph-driven model-construction strategy is applicable to any constrained
-refinement problem requiring simultaneous treatment of topology, symmetry, rank
-deficiency, and external structural information.
+algorithmic model generation integrated with the refinement itself. The
+algorithm records and enforces chemical judgement in an auditable form rather
+than replacing it with hidden manual choices. Although motivated by
+semiexperimental equilibrium structures, the underlying graph-driven strategy
+is applicable to any constrained refinement problem requiring simultaneous
+treatment of topology, symmetry, rank deficiency, and external structural
+information.
 
 \section*{Supporting Information Available}
 
