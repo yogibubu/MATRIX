@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from .definition import GICDefinition, read_gic_definition_from_xyzin
 
 
@@ -211,26 +213,62 @@ def _first_selected_difference(
 ) -> str:
     if len(expected) != len(current):
         return f"selected SALC count changed expected={len(expected)} current={len(current)}"
-    for index, (left, right) in enumerate(zip(expected, current), start=1):
-        for key in ("name", "family", "irrep"):
-            if left.get(key) != right.get(key):
-                return (
-                    f"first selected SALC difference at #{index}: "
-                    f"expected={left!r} current={right!r}"
-                )
-        left_coefficients = left.get("coefficients", ())
-        right_coefficients = right.get("coefficients", ())
-        if len(left_coefficients) != len(right_coefficients):
+    left_groups = _selected_subspace_groups(expected)
+    right_groups = _selected_subspace_groups(current)
+    if set(left_groups) != set(right_groups):
+        return (
+            "selected SALC family/irrep groups changed "
+            f"expected={sorted(left_groups)} current={sorted(right_groups)}"
+        )
+    for key in sorted(left_groups):
+        left_records = left_groups[key]
+        right_records = right_groups[key]
+        if len(left_records) != len(right_records):
             return (
-                f"first selected SALC difference at #{index}: "
-                f"expected={left!r} current={right!r}"
+                f"selected SALC count changed for {key}: "
+                f"expected={len(left_records)} current={len(right_records)}"
             )
-        for (left_id, left_value), (right_id, right_value) in zip(
-            left_coefficients, right_coefficients
+        left_ids, left_projector = _selected_subspace_projector(left_records)
+        right_ids, right_projector = _selected_subspace_projector(right_records)
+        if left_ids != right_ids or not np.allclose(
+            left_projector,
+            right_projector,
+            atol=SALC_COEFFICIENT_TOLERANCE,
+            rtol=0.0,
         ):
-            if left_id != right_id or abs(left_value - right_value) > SALC_COEFFICIENT_TOLERANCE:
-                return (
-                    f"first selected SALC difference at #{index}: "
-                    f"expected={left!r} current={right!r}"
-                )
+            return (
+                f"selected SALC subspace changed for family={key[0]} irrep={key[1]}: "
+                f"expected={left_records!r} current={right_records!r}"
+            )
     return ""
+
+
+def _selected_subspace_groups(records: tuple[Any, ...]) -> dict[tuple[str, str], tuple[Any, ...]]:
+    groups: dict[tuple[str, str], list[Any]] = {}
+    for record in records:
+        key = (str(record.get("family", "")), str(record.get("irrep", "")))
+        groups.setdefault(key, []).append(record)
+    return {key: tuple(value) for key, value in groups.items()}
+
+
+def _selected_subspace_projector(records: tuple[Any, ...]) -> tuple[tuple[str, ...], np.ndarray]:
+    primitive_ids = tuple(
+        sorted(
+            {
+                str(primitive_id)
+                for record in records
+                for primitive_id, _coefficient in record.get("coefficients", ())
+            }
+        )
+    )
+    primitive_index = {primitive_id: index for index, primitive_id in enumerate(primitive_ids)}
+    vectors = np.zeros((len(primitive_ids), len(records)), dtype=float)
+    for column, record in enumerate(records):
+        for primitive_id, coefficient in record.get("coefficients", ()):
+            vectors[primitive_index[str(primitive_id)], column] = float(coefficient)
+    if vectors.size == 0:
+        return primitive_ids, np.zeros((0, 0), dtype=float)
+    left, singular_values, _right_t = np.linalg.svd(vectors, full_matrices=False)
+    rank = int(np.count_nonzero(singular_values > SALC_COEFFICIENT_TOLERANCE))
+    basis = left[:, :rank]
+    return primitive_ids, basis @ basis.T
