@@ -140,6 +140,29 @@ reported run adds 58 Kraitchman-derived soft predicates with
 $\sigma_R=0.003$~\AA{} and $\sigma_A=0.3^\circ$; the same predicate set gives
 the same residual with GIC and symmetry-adapted Cartesian working coordinates.
 
+\begin{table}
+\caption{Legacy MSR/MSROT compatibility checks. For systems where manually
+constructed legacy inputs are available with the same active information,
+MORPHEUS reproduces the MSR/MSROT numerical model while generating the
+coordinate basis and projection operators automatically. Residuals are
+RMS/maximum absolute rotational residuals in MHz.}
+\label{tab:si-msrot-checks}
+\footnotesize
+\begin{tabular}{llll}
+\toprule
+System & Legacy comparison & Active information & Residuals \\
+\midrule
+Cyclopentadiene & MSR/MSROT input & same active GIC space & 0.0635/0.2289 \\
+Azulene & MSR-comparable subset & fixed C--H data; $AB$ pair & 0.0731/0.2900 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These checks are not additional fitted models: they verify that, at fixed
+active coordinates and fixed experimental input, the algorithmically generated
+MORPHEUS model reaches the same numerical result as the corresponding
+manually prepared MSR/MSROT setup.
+
 \section{\texorpdfstring{Glycine I C$_s$ Constraint Benchmark}{Glycine I Cs Constraint Benchmark}}
 
 Table~\ref{tab:si-glycine-I-rotconstants} reports the Gly-I benchmark run from
@@ -836,7 +859,10 @@ using the published data of Uribe et al. for the detected T1-H2$^{-}$-gp
 conformer. Its purpose is to document the full large-molecule chain: the
 QC protocol provides an accurate equilibrium reference geometry, the
 accelerated $\Delta B_\mathrm{vib}$ workflow makes vibrational corrections
-	available at this size, and MORPHEUS adds the algorithmic refinement-model layer.
+available at this size, and MORPHEUS adds the algorithmic refinement-model layer.
+The vibrational corrections used here were generated with the
+finite-difference-of-gradients protocol of Mendolicchio et al. (PCCP 2025);
+the algorithmic details of that protocol are not rederived in the present work.
 The only experimental input is the parent ground-state rotational constant
 set. The semiexperimental target is obtained by subtracting the B3 vibrational
 corrections reported in the same table:

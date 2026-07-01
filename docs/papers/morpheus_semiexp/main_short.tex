@@ -777,7 +777,11 @@ The vibrational contributions to the rotational constants
 ($\Delta B_\mathrm{vib}$) were evaluated with the recently introduced
 finite-difference-of-gradients approach along normal modes, which enables
 efficient and accurate calculations also for medium-sized and large molecular
-systems.\cite{Mendolicchio2025FastDvib}
+systems.\cite{Mendolicchio2025FastDvib} For the literature benchmarks, the
+actual $\Delta B_\mathrm{vib}$ values are taken from the cited experimental or
+semiexperimental data sets; the finite-difference-of-gradients protocol is used
+here as new large-molecule input for testosterone, with the computational
+recipe and convergence details documented in Ref.~\citenum{Mendolicchio2025FastDvib}.
 
 The only exception is conformer I of glycine, where the best available reference structure was used: PCS4, based on explicitly correlated CCSD(T)-F12 calculations close to the complete-basis-set limit with an additive core--valence correction. Outside this role as reference information, the electronic-structure
 data do not define the fitted coordinates; they enter only through explicit
@@ -1370,7 +1374,11 @@ T1-H2$^{-}$-gp conformer.\cite{Uribe2024SteroidHormones} This is a useful large
 molecule test because this level of treatment is rarely available for systems
 of this size: an accurate QC equilibrium geometry, accelerated
 $\Delta B_\mathrm{vib}$ corrections, and algorithmic model generation are
-combined in one reproducible protocol.
+combined in one reproducible protocol. The $\Delta B_\mathrm{vib}$ terms for
+this case were generated with the finite-difference-of-gradients workflow of
+Ref.~\citenum{Mendolicchio2025FastDvib}; the present work uses them as
+documented external reference data rather than introducing a new vibrational
+correction protocol.
 
 The unrefined QC+$\Delta B_\mathrm{vib}$ residuals with respect to the corrected
 experimental constants are $4.638$, $0.674$, and $0.563$ MHz for $A$, $B$, and
