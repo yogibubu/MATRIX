@@ -88,8 +88,9 @@ DEFAULT_COORDINATE_GENERATOR_REGISTRY: tuple[CoordinateGeneratorSpec, ...] = (
         implemented_by="matrix_neo.runtime.gicforge_python local-angle paths",
         status=STATUS_REFACTOR_BOUNDARY,
         notes=(
-            "Extraction boundary for Merlino local angle/SALC logic; must support "
-            "coordination numbers through 9 before replacing the legacy path."
+            "Extraction boundary for Merlino local angle/SALC logic; high coordination "
+            "5-9 uses polyhedron templates when recognized, otherwise "
+            "ligand-equivalence classes before local SVD."
         ),
     ),
     CoordinateGeneratorSpec(

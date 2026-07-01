@@ -56,6 +56,14 @@ from matrix_neo.definition import (
     _select_ranked_primitives,
     _topology_bonds,
 )
+from matrix_neo.runtime.gicforge_python import (
+    _LOCAL_COORDINATION_TEMPLATES,
+    _high_coord_angle_coordinates,
+    _high_coord_angle_primitives_by_ligand_equivalence,
+    _high_coord_angle_primitives_by_template_or_equivalence,
+    _local_ligand_equivalence_classes,
+    _recognize_local_coordination_template,
+)
 
 
 def _tetrahedral_methane_coordinates() -> np.ndarray:
@@ -86,6 +94,17 @@ def _skip_if_smiles_requires_rdkit(path: Path) -> None:
     header = "\n".join(path.read_text(encoding="utf-8").splitlines()[:3]).upper()
     if "SMILES" in header:
         pytest.importorskip("rdkit")
+
+
+def _local_coordination_geometry(coordination: int) -> np.ndarray:
+    coords = [(0.0, 0.0, 0.0)]
+    golden_angle = np.pi * (3.0 - np.sqrt(5.0))
+    for index in range(coordination):
+        z_coord = 1.0 - 2.0 * (index + 0.5) / coordination
+        radius = np.sqrt(max(0.0, 1.0 - z_coord * z_coord))
+        theta = index * golden_angle + 0.17
+        coords.append((radius * np.cos(theta), radius * np.sin(theta), z_coord))
+    return np.array(coords, dtype=float)
 
 
 def _symmetry_operation_records(
@@ -368,7 +387,129 @@ def test_coordinate_generator_registry_is_deterministic_and_stage_separated():
     assert by_family["LOCAL_XH_STRETCH"].implemented_by == (
         "matrix_neo.generators.generate_stretch_coordinates"
     )
-    assert "through 9" in by_family["LOCAL_ANGLE_SALC"].notes
+    assert "5-9" in by_family["LOCAL_ANGLE_SALC"].notes
+    assert "ligand-equivalence" in by_family["LOCAL_ANGLE_SALC"].notes
+
+
+def test_local_ligand_equivalence_uses_atom_type_and_radial_shell():
+    coords = np.array(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (-1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (0.0, -1.0, 0.0),
+            (0.0, 0.0, 1.2),
+            (0.0, 0.0, -1.2),
+        ],
+        dtype=float,
+    )
+    classes = _local_ligand_equivalence_classes(
+        0,
+        [1, 2, 3, 4, 5, 6],
+        effective_atomic_numbers=(26.0, 6.0, 6.0, 6.0, 6.0, 8.0, 8.0),
+        coords=coords,
+    )
+
+    assert classes == ((1, 2, 3, 4), (5, 6))
+
+
+def test_high_coord_angle_primitives_do_not_mix_ligand_equivalence_classes():
+    coords = np.array(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (-1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (0.0, -1.0, 0.0),
+            (0.0, 0.0, 1.2),
+            (0.0, 0.0, -1.2),
+        ],
+        dtype=float,
+    )
+    grouped = _high_coord_angle_primitives_by_ligand_equivalence(
+        0,
+        [1, 2, 3, 4, 5, 6],
+        effective_atomic_numbers=(26.0, 6.0, 6.0, 6.0, 6.0, 8.0, 8.0),
+        coords=coords,
+        linear_threshold=np.deg2rad(181.0),
+    )
+
+    assert tuple(len(group) for group in grouped) == (6, 8, 1)
+
+
+@pytest.mark.parametrize("coordination", range(5, 10))
+def test_high_coordination_templates_are_recognized_for_ideal_polyhedra(coordination):
+    for template in _LOCAL_COORDINATION_TEMPLATES[coordination]:
+        coords = np.array([(0.0, 0.0, 0.0), *template.directions], dtype=float)
+        recognized, score = _recognize_local_coordination_template(
+            0,
+            list(range(1, coordination + 1)),
+            coords=coords,
+        )
+
+        assert recognized == template
+        assert score < 1.0e-12
+
+
+def test_high_coordination_template_grouping_falls_back_when_unrecognized():
+    coords = _local_coordination_geometry(6)
+    grouped_by_fallback = _high_coord_angle_primitives_by_ligand_equivalence(
+        0,
+        [1, 2, 3, 4, 5, 6],
+        effective_atomic_numbers=(26.0, 6.0, 6.0, 6.0, 6.0, 8.0, 8.0),
+        coords=coords,
+        linear_threshold=np.deg2rad(179.0),
+    )
+    grouped_by_hybrid = _high_coord_angle_primitives_by_template_or_equivalence(
+        0,
+        [1, 2, 3, 4, 5, 6],
+        effective_atomic_numbers=(26.0, 6.0, 6.0, 6.0, 6.0, 8.0, 8.0),
+        coords=coords,
+        linear_threshold=np.deg2rad(179.0),
+    )
+
+    assert _recognize_local_coordination_template(
+        0,
+        [1, 2, 3, 4, 5, 6],
+        coords=coords,
+    )[0] is None
+    assert grouped_by_hybrid == grouped_by_fallback
+
+
+def test_high_coordination_template_grouping_keeps_angle_classes_separate():
+    template = _LOCAL_COORDINATION_TEMPLATES[6][0]
+    coords = np.array([(0.0, 0.0, 0.0), *template.directions], dtype=float)
+    grouped = _high_coord_angle_primitives_by_template_or_equivalence(
+        0,
+        [1, 2, 3, 4, 5, 6],
+        effective_atomic_numbers=tuple([26.0] + [6.0] * 6),
+        coords=coords,
+        linear_threshold=np.deg2rad(181.0),
+    )
+
+    assert tuple(len(group) for group in grouped) == (3, 12)
+
+
+@pytest.mark.parametrize("coordination", range(5, 10))
+def test_high_coord_angle_salc_generation_covers_coordination_five_to_nine(coordination):
+    coords = _local_coordination_geometry(coordination)
+    bends, linears = _high_coord_angle_coordinates(
+        0,
+        list(range(1, coordination + 1)),
+        effective_atomic_numbers=tuple([26.0] + [6.0] * coordination),
+        coords=coords,
+        linear_threshold=np.deg2rad(179.0),
+        angle_start=1,
+        linear_start=1,
+    )
+
+    assert linears == []
+    assert bends
+    assert all(coordinate.block == "HCAn" for coordinate in bends)
+    assert all(coordinate.dominant_kind == "angle" for coordinate in bends)
+    assert len({coordinate.name for coordinate in bends}) == len(bends)
+    assert max(int(coordinate.name.removeprefix("HCAn")) for coordinate in bends) == len(bends)
 
 
 def _stretch_generator_signature(records):

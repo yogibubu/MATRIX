@@ -41,6 +41,12 @@ class GICForgePythonCoordinate:
 
 
 @dataclass(frozen=True)
+class LocalCoordinationTemplate:
+    name: str
+    directions: tuple[tuple[float, float, float], ...]
+
+
+@dataclass(frozen=True)
 class GICForgePythonModel:
     atom_symbols: tuple[str, ...]
     atomic_numbers: tuple[int, ...]
@@ -425,6 +431,7 @@ def _fortran_like_primitive_blocks(
                     effective_atomic_numbers=effective_atomic_numbers,
                     neighbors=neighbors,
                     atom_ring=atom_ring,
+                    coords=coords,
                     start=len(bends) + 1,
                 )
             )
@@ -457,6 +464,7 @@ def _fortran_like_primitive_blocks(
                 high_bends, high_linears = _high_coord_angle_coordinates(
                     center,
                     neigh,
+                    effective_atomic_numbers=effective_atomic_numbers,
                     coords=coords,
                     linear_threshold=linear_threshold,
                     angle_start=len(bends) + 1,
@@ -1395,14 +1403,21 @@ def _c2v3_angle_coordinates(
     effective_atomic_numbers: tuple[float, ...],
     neighbors: list[list[int]],
     atom_ring: list[int],
+    coords: np.ndarray,
     start: int,
 ) -> list[GICForgePythonCoordinate]:
     first, second, third = neigh
-    threshold = 5.0e-4
-    eq12 = abs(effective_atomic_numbers[first] - effective_atomic_numbers[second]) < threshold
-    eq13 = abs(effective_atomic_numbers[first] - effective_atomic_numbers[third]) < threshold
-    eq23 = abs(effective_atomic_numbers[second] - effective_atomic_numbers[third]) < threshold
-    if not eq12 and not eq13 and not eq23:
+    classes = _local_ligand_equivalence_classes(
+        center,
+        neigh,
+        effective_atomic_numbers=effective_atomic_numbers,
+        coords=coords,
+    )
+    class_sizes = {atom: len(group) for group in classes for atom in group}
+    singleton_atoms = [atom for atom in neigh if class_sizes[atom] == 1]
+    if len(singleton_atoms) == 1:
+        different = singleton_atoms[0]
+    elif len(singleton_atoms) == 3:
         different = first
         if atomic_numbers[second] == 1:
             different = second
@@ -1412,14 +1427,10 @@ def _c2v3_angle_coordinates(
             different = second
         elif len(neighbors[third]) == 1:
             different = third
-    elif eq12 and eq13:
+    elif not singleton_atoms:
         different = first
-    elif eq12 and not eq13:
-        different = third
-    elif eq13 and not eq12:
-        different = second
     else:
-        different = first
+        different = singleton_atoms[0]
 
     if atom_ring[center] != 0:
         if atom_ring[first] != 0 and atom_ring[second] != 0:
@@ -1484,6 +1495,7 @@ def _four_atom_angle_coordinates(
         center=center,
         effective_atomic_numbers=effective_atomic_numbers,
         atom_ring=atom_ring,
+        coords=coords,
     )
     frozen = {
         atom: atom_ring[atom] != 0 and atom_ring[center] != 0
@@ -1529,38 +1541,37 @@ def _order_four_atom_neighbors(
     center: int,
     effective_atomic_numbers: tuple[float, ...],
     atom_ring: list[int],
+    coords: np.ndarray,
 ) -> tuple[int, int, int, int]:
     jat, kat, lat, mat = atoms
-    j1, k1, l1, m1 = atoms
     threshold = 5.0e-4
-
-    def equivalent(first: int, second: int) -> bool:
-        return abs(effective_atomic_numbers[first] - effective_atomic_numbers[second]) < threshold
-
-    if equivalent(j1, k1):
-        if equivalent(j1, l1):
-            if not equivalent(j1, m1):
-                pass
-        elif equivalent(j1, m1):
-            lat, mat = m1, l1
-        elif equivalent(l1, m1):
-            pass
-    elif equivalent(j1, l1):
-        jat, kat, lat, mat = j1, l1, k1, m1
-        if equivalent(j1, m1):
-            jat, kat, lat, mat = j1, l1, m1, k1
-        elif equivalent(k1, m1):
-            jat, kat, lat, mat = j1, l1, k1, m1
-    elif equivalent(j1, m1):
-        jat, kat, lat, mat = j1, m1, k1, l1
-    elif equivalent(k1, l1):
-        jat, kat, lat, mat = k1, l1, j1, m1
-        if equivalent(l1, m1):
-            jat, kat, lat, mat = k1, l1, m1, j1
-    elif equivalent(k1, m1):
-        jat, kat, lat, mat = k1, m1, j1, l1
-    elif equivalent(l1, m1):
-        jat, kat, lat, mat = l1, m1, j1, k1
+    classes = _local_ligand_equivalence_classes(
+        center,
+        list(atoms),
+        effective_atomic_numbers=effective_atomic_numbers,
+        coords=coords,
+    )
+    ordered_classes = sorted(classes, key=lambda group: (-len(group), group))
+    if len(ordered_classes) == 1:
+        jat, kat, lat, mat = ordered_classes[0]
+    elif len(ordered_classes) == 2:
+        first_class, second_class = ordered_classes
+        if len(first_class) == 3:
+            kat, lat, mat = first_class
+            jat = second_class[0]
+        elif len(first_class) == 2 and len(second_class) == 2:
+            jat, kat = first_class
+            lat, mat = second_class
+        else:
+            jat, kat, lat = first_class
+            mat = second_class[0]
+    elif len(ordered_classes) == 3:
+        pair = next(group for group in ordered_classes if len(group) == 2)
+        singles = [atom for group in ordered_classes if len(group) == 1 for atom in group]
+        jat, kat = pair
+        lat, mat = singles
+    else:
+        jat, kat, lat, mat = atoms
 
     pivot_count = 0
     if atom_ring[center] != 0:
@@ -1903,24 +1914,18 @@ def _high_coord_angle_coordinates(
     center: int,
     neigh: list[int],
     *,
+    effective_atomic_numbers: tuple[float, ...],
     coords: np.ndarray,
     linear_threshold: float,
     angle_start: int,
     linear_start: int,
 ) -> tuple[list[GICForgePythonCoordinate], list[GICForgePythonCoordinate]]:
-    coordinates: list[GICForgePythonCoordinate] = []
+    angle_primitives: list[Primitive] = []
     linears: list[GICForgePythonCoordinate] = []
     for ib, first in enumerate(neigh[:-1]):
         for second in neigh[ib + 1 :]:
             left, right = sorted((first, second))
             value = angle(left, center, right, coords)
-            coordinates.append(
-                _primitive_coordinate(
-                    "HCAn",
-                    angle_start + len(coordinates),
-                    Primitive("angle", (left, center, right)),
-                )
-            )
             if value >= linear_threshold:
                 linears.append(
                     _primitive_coordinate(
@@ -1936,7 +1941,345 @@ def _high_coord_angle_coordinates(
                         Primitive("linear_bend", (left, center, right), mode=-2),
                     )
                 )
+            else:
+                angle_primitives.append(Primitive("angle", (left, center, right)))
+    coordinates: list[GICForgePythonCoordinate] = []
+    if 5 <= len(neigh) <= 9:
+        angle_primitives_by_class = _high_coord_angle_primitives_by_template_or_equivalence(
+            center,
+            neigh,
+            effective_atomic_numbers=effective_atomic_numbers,
+            coords=coords,
+            linear_threshold=linear_threshold,
+        )
+        for primitives in angle_primitives_by_class:
+            coordinates.extend(
+                _svd_local_coordinates(
+                    primitives,
+                    coords=coords,
+                    prefix="HCAn",
+                    start=angle_start + len(coordinates),
+                    kind_type_index=17,
+                )
+            )
+    else:
+        for primitive in angle_primitives:
+            coordinates.append(
+                _primitive_coordinate("HCAn", angle_start + len(coordinates), primitive)
+            )
     return coordinates, linears
+
+
+def _high_coord_angle_primitives_by_template_or_equivalence(
+    center: int,
+    neigh: list[int],
+    *,
+    effective_atomic_numbers: tuple[float, ...],
+    coords: np.ndarray,
+    linear_threshold: float,
+) -> tuple[tuple[Primitive, ...], ...]:
+    template, _score = _recognize_local_coordination_template(center, neigh, coords=coords)
+    if template is None:
+        return _high_coord_angle_primitives_by_ligand_equivalence(
+            center,
+            neigh,
+            effective_atomic_numbers=effective_atomic_numbers,
+            coords=coords,
+            linear_threshold=linear_threshold,
+        )
+    return _high_coord_angle_primitives_by_template(
+        center,
+        neigh,
+        template=template,
+        effective_atomic_numbers=effective_atomic_numbers,
+        coords=coords,
+        linear_threshold=linear_threshold,
+    )
+
+
+def _high_coord_angle_primitives_by_template(
+    center: int,
+    neigh: list[int],
+    *,
+    template: LocalCoordinationTemplate,
+    effective_atomic_numbers: tuple[float, ...],
+    coords: np.ndarray,
+    linear_threshold: float,
+) -> tuple[tuple[Primitive, ...], ...]:
+    classes = _local_ligand_equivalence_classes(
+        center,
+        neigh,
+        effective_atomic_numbers=effective_atomic_numbers,
+        coords=coords,
+    )
+    class_by_atom = {
+        atom: class_index for class_index, atoms in enumerate(classes) for atom in atoms
+    }
+    ideal_cosines = _template_pair_cosine_classes(template)
+    grouped: dict[tuple[int, int, int], list[Primitive]] = {}
+    for ib, first in enumerate(neigh[:-1]):
+        for second in neigh[ib + 1 :]:
+            left, right = sorted((first, second))
+            if angle(left, center, right, coords) >= linear_threshold:
+                continue
+            first_class = class_by_atom[first]
+            second_class = class_by_atom[second]
+            angle_class = _nearest_cosine_class(
+                _ligand_pair_cosine(center, left, right, coords),
+                ideal_cosines,
+            )
+            key = (*sorted((first_class, second_class)), angle_class)
+            grouped.setdefault(key, []).append(Primitive("angle", (left, center, right)))
+    return tuple(tuple(grouped[key]) for key in sorted(grouped))
+
+
+def _high_coord_angle_primitives_by_ligand_equivalence(
+    center: int,
+    neigh: list[int],
+    *,
+    effective_atomic_numbers: tuple[float, ...],
+    coords: np.ndarray,
+    linear_threshold: float,
+) -> tuple[tuple[Primitive, ...], ...]:
+    classes = _local_ligand_equivalence_classes(
+        center,
+        neigh,
+        effective_atomic_numbers=effective_atomic_numbers,
+        coords=coords,
+    )
+    class_by_atom = {
+        atom: class_index for class_index, atoms in enumerate(classes) for atom in atoms
+    }
+    grouped: dict[tuple[int, int], list[Primitive]] = {}
+    for ib, first in enumerate(neigh[:-1]):
+        for second in neigh[ib + 1 :]:
+            left, right = sorted((first, second))
+            if angle(left, center, right, coords) >= linear_threshold:
+                continue
+            first_class = class_by_atom[first]
+            second_class = class_by_atom[second]
+            key = tuple(sorted((first_class, second_class)))
+            grouped.setdefault(key, []).append(Primitive("angle", (left, center, right)))
+    return tuple(tuple(grouped[key]) for key in sorted(grouped))
+
+
+def _local_ligand_equivalence_classes(
+    center: int,
+    neigh: list[int],
+    *,
+    effective_atomic_numbers: tuple[float, ...],
+    coords: np.ndarray,
+    zeff_tolerance: float = 5.0e-4,
+    distance_tolerance: float = 1.0e-3,
+) -> tuple[tuple[int, ...], ...]:
+    groups: list[list[int]] = []
+    keys: list[tuple[float, float]] = []
+    for atom in sorted(neigh):
+        distance = float(np.linalg.norm(coords[int(atom)] - coords[int(center)]))
+        key = (float(effective_atomic_numbers[int(atom)]), distance)
+        match = next(
+            (
+                index
+                for index, other in enumerate(keys)
+                if abs(key[0] - other[0]) <= zeff_tolerance
+                and abs(key[1] - other[1]) <= distance_tolerance
+            ),
+            None,
+        )
+        if match is None:
+            keys.append(key)
+            groups.append([int(atom)])
+            continue
+        groups[match].append(int(atom))
+    return tuple(tuple(group) for _key, group in sorted(zip(keys, groups)))
+
+
+def _recognize_local_coordination_template(
+    center: int,
+    neigh: list[int],
+    *,
+    coords: np.ndarray,
+    max_rms_cosine_error: float = 0.12,
+) -> tuple[LocalCoordinationTemplate | None, float]:
+    actual = _sorted_pair_cosines(_local_ligand_unit_vectors(center, neigh, coords))
+    best_template: LocalCoordinationTemplate | None = None
+    best_score = float("inf")
+    for template in _local_coordination_templates(len(neigh)):
+        ideal = _sorted_pair_cosines(np.array(template.directions, dtype=float))
+        if len(ideal) != len(actual):
+            continue
+        score = float(np.sqrt(np.mean((actual - ideal) ** 2)))
+        if score < best_score:
+            best_template = template
+            best_score = score
+    if best_template is None or best_score > max_rms_cosine_error:
+        return None, best_score
+    return best_template, best_score
+
+
+def _local_coordination_templates(coordination: int) -> tuple[LocalCoordinationTemplate, ...]:
+    return _LOCAL_COORDINATION_TEMPLATES.get(int(coordination), ())
+
+
+def _template_pair_cosine_classes(
+    template: LocalCoordinationTemplate,
+    tolerance: float = 2.0e-2,
+) -> tuple[float, ...]:
+    cosines = _sorted_pair_cosines(np.array(template.directions, dtype=float))
+    classes: list[float] = []
+    for value in cosines:
+        if not classes or abs(float(value) - classes[-1]) > tolerance:
+            classes.append(float(value))
+            continue
+        classes[-1] = 0.5 * (classes[-1] + float(value))
+    return tuple(classes)
+
+
+def _nearest_cosine_class(value: float, classes: tuple[float, ...]) -> int:
+    if not classes:
+        return 0
+    return min(range(len(classes)), key=lambda index: abs(float(value) - classes[index]))
+
+
+def _ligand_pair_cosine(center: int, first: int, second: int, coords: np.ndarray) -> float:
+    first_vector = coords[int(first)] - coords[int(center)]
+    second_vector = coords[int(second)] - coords[int(center)]
+    first_norm = float(np.linalg.norm(first_vector))
+    second_norm = float(np.linalg.norm(second_vector))
+    if first_norm == 0.0 or second_norm == 0.0:
+        return 1.0
+    return float(np.dot(first_vector, second_vector) / (first_norm * second_norm))
+
+
+def _local_ligand_unit_vectors(center: int, neigh: list[int], coords: np.ndarray) -> np.ndarray:
+    vectors = []
+    for atom in neigh:
+        vector = coords[int(atom)] - coords[int(center)]
+        norm = float(np.linalg.norm(vector))
+        if norm == 0.0:
+            vectors.append(np.zeros(3, dtype=float))
+        else:
+            vectors.append(vector / norm)
+    return np.array(vectors, dtype=float)
+
+
+def _sorted_pair_cosines(vectors: np.ndarray) -> np.ndarray:
+    normalized = []
+    for vector in vectors:
+        norm = float(np.linalg.norm(vector))
+        normalized.append(vector / norm if norm else vector)
+    values = [
+        float(np.dot(normalized[first], normalized[second]))
+        for first in range(len(normalized) - 1)
+        for second in range(first + 1, len(normalized))
+    ]
+    return np.array(sorted(values), dtype=float)
+
+
+def _regular_polygon_directions(count: int, *, z: float = 0.0, phase: float = 0.0):
+    radius = float(np.sqrt(max(0.0, 1.0 - z * z)))
+    return tuple(
+        (
+            radius * np.cos(phase + 2.0 * np.pi * index / count),
+            radius * np.sin(phase + 2.0 * np.pi * index / count),
+            z,
+        )
+        for index in range(count)
+    )
+
+
+def _normalized_directions(*directions: tuple[float, float, float]):
+    normalized = []
+    for direction in directions:
+        vector = np.array(direction, dtype=float)
+        norm = float(np.linalg.norm(vector))
+        normalized.append(tuple((vector / norm).tolist()) if norm else tuple(vector.tolist()))
+    return tuple(normalized)
+
+
+_LOCAL_COORDINATION_TEMPLATES: dict[int, tuple[LocalCoordinationTemplate, ...]] = {
+    5: (
+        LocalCoordinationTemplate(
+            "TRIGONAL_BIPYRAMIDAL",
+            _regular_polygon_directions(3) + ((0.0, 0.0, 1.0), (0.0, 0.0, -1.0)),
+        ),
+        LocalCoordinationTemplate(
+            "SQUARE_PYRAMIDAL",
+            _regular_polygon_directions(4, z=-0.35, phase=np.pi / 4.0)
+            + ((0.0, 0.0, 1.0),),
+        ),
+    ),
+    6: (
+        LocalCoordinationTemplate(
+            "OCTAHEDRAL",
+            (
+                (1.0, 0.0, 0.0),
+                (-1.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0),
+                (0.0, -1.0, 0.0),
+                (0.0, 0.0, 1.0),
+                (0.0, 0.0, -1.0),
+            ),
+        ),
+        LocalCoordinationTemplate(
+            "TRIGONAL_PRISMATIC",
+            _regular_polygon_directions(3, z=0.55)
+            + _regular_polygon_directions(3, z=-0.55),
+        ),
+    ),
+    7: (
+        LocalCoordinationTemplate(
+            "PENTAGONAL_BIPYRAMIDAL",
+            _regular_polygon_directions(5) + ((0.0, 0.0, 1.0), (0.0, 0.0, -1.0)),
+        ),
+        LocalCoordinationTemplate(
+            "CAPPED_OCTAHEDRAL",
+            (
+                (1.0, 0.0, 0.0),
+                (-1.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0),
+                (0.0, -1.0, 0.0),
+                (0.0, 0.0, 1.0),
+                (0.0, 0.0, -1.0),
+                (1.0, 1.0, 1.0),
+            ),
+        ),
+    ),
+    8: (
+        LocalCoordinationTemplate(
+            "SQUARE_ANTIPRISMATIC",
+            _regular_polygon_directions(4, z=0.45)
+            + _regular_polygon_directions(4, z=-0.45, phase=np.pi / 4.0),
+        ),
+        LocalCoordinationTemplate(
+            "DODECAHEDRAL_LIKE",
+            _normalized_directions(
+                (1.0, 1.0, 1.0),
+                (1.0, 1.0, -1.0),
+                (1.0, -1.0, 1.0),
+                (1.0, -1.0, -1.0),
+                (-1.0, 1.0, 1.0),
+                (-1.0, 1.0, -1.0),
+                (-1.0, -1.0, 1.0),
+                (-1.0, -1.0, -1.0),
+            ),
+        ),
+    ),
+    9: (
+        LocalCoordinationTemplate(
+            "TRICAPPED_TRIGONAL_PRISMATIC",
+            _regular_polygon_directions(3, z=0.58)
+            + _regular_polygon_directions(3, z=-0.58)
+            + _regular_polygon_directions(3, z=0.0, phase=np.pi / 3.0),
+        ),
+        LocalCoordinationTemplate(
+            "CAPPED_SQUARE_ANTIPRISMATIC",
+            _regular_polygon_directions(4, z=0.42)
+            + _regular_polygon_directions(4, z=-0.42, phase=np.pi / 4.0)
+            + ((0.0, 0.0, 1.0),),
+        ),
+    ),
+}
 
 
 def _atom_ring_map_from_rings(rings: list[tuple[int, ...]], natoms: int) -> list[int]:
