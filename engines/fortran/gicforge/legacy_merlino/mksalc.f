@@ -313,8 +313,8 @@ C Build Valence Angles
      $  IAtomB,IAtomD,IBr,NAtC,ICAt,IAtCyc,ITVD,IPerD,NEqAt,CoefD,C,EAN,
      $  TreshL,DoNorm)
       Implicit Real*8 (A-H,O-Z)
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
-      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,20),IBrA(5,20),IBrD(6,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
+      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,100),IBrA(5,100),IBrD(6,100)
       Dimension IAn(*),NBond(*),IBond(MxBnd,*)
       Dimension NTermD(*),IAtomD(MxAtD,MxTrmD,*)
       Dimension IAtomB(MxAtB,MxTrmB,*),IBr(2,*),ITVD(*),IPerD(*)
@@ -397,7 +397,7 @@ CENZO
       Integer JJ,KK,ICand,LCand,NBJB,NBKB,IC
       Dimension EAn(*),C(3,*)
       Logical Join2C,Better
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
       Real*8 BJ,BK,BestJ,BestK,Tresh
 
       Tresh=5.0d-4
@@ -542,7 +542,7 @@ C Stable tie-breakers: prefer more substituted ends, then lower atom labels.
      $  C,TreshL,DoNorm)
       Implicit Real*8 (A-H,O-Z)
       Logical DoNorm,Join2C
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
       Dimension NBond(*),IBond(MxBnd,*),NTermD(*),IAtomD(MxAtD,MxTrmD,*)
       Dimension ITVD(*),NatC(*),ICAt(MxAtCy,*),IAtCyc(*)
       Dimension CoefD(MxTrmD,*),C(3,*)
@@ -589,7 +589,7 @@ C Stable tie-breakers: prefer more substituted ends, then lower atom labels.
      $  NBond,IBond,ITVD,NTermD,IAtomD,CoefD,C,TreshL,DoNorm)
       Implicit Real*8 (A-H,O-Z)
       Logical DoNorm,Join2C
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
       Dimension NBond(*),IBond(MxBnd,*),NTermD(*),IAtomD(MxAtD,MxTrmD,*)
       Dimension ITVD(*)
       Dimension CoefD(MxTrmD,*),C(3,*)
@@ -1673,7 +1673,7 @@ C       Value1=OutAngOLd(C(1,IAt2),C(1,IAt1),C(1,IAt3),C(1,IAt4))*ToDeg
 *Deck PrtPckQP
       Subroutine PrtPckQP(IOut,NVar,ITPV,ValTot,PrtVal)
       Implicit Real*8 (A-H,O-Z)
-      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,20),IBrA(5,20),IBrD(6,20)
+      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,100),IBrA(5,100),IBrD(6,100)
       Integer IOut,NVar,ITPV(*),IPair,IVar,JVar
       Integer NBrL,NBrA,NBrD,IBrL,IBrA,IBrD
       Logical PrtVal

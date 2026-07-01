@@ -2399,7 +2399,7 @@ C
 C
 C     Set all elements of logical array Log to .False.
 C
-      Logical Log(1)
+      Logical Log(*)
 C
       If(N.lt.1) Return
       Do 10 I = 1, N
@@ -3169,7 +3169,7 @@ C
         Stop
       EndIf
       Call AMove(LenDat,PhyDat(1,ICon),PhyCon)
-      Call AClear(LenPhy-LenDat,PhyCon(LenDat+1))
+      If(LenPhy.gt.LenDat) Call AClear(LenPhy-LenDat,PhyCon(LenDat+1))
 C
 C     Set some values derived from other constants
       PhyCon(ToE) = PhyCon(ToE)*PhyCon(SLight)/Ten

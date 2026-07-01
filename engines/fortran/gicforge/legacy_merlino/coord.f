@@ -277,7 +277,7 @@ C find atomic number or atomic symbol and isotope (separate by -)
        IAn=1
        Isotp=2
        goto 10
-      ElseIf(CLine(ICur:ICuri+1).eq.'T') then
+      ElseIf(CLine(ICur:ICur+1).eq.'T ') then
        IAn=1
        Isotp=3
        goto 10
@@ -793,6 +793,14 @@ C Build EAN
        if(NValJ.eq.1) then
         NEffJ=1
         t0j=teta0(3)
+       else if(NEffJ.lt.1.or.NEffJ.gt.3) then
+        if(NBond(JAt).le.2) then
+         t0j=teta0(3)
+        else if(NBond(JAt).eq.3) then
+         t0j=teta0(2)
+        else
+         t0j=teta0(1)
+        endif
        else
         t0j=teta0(NEffJ)
        endif

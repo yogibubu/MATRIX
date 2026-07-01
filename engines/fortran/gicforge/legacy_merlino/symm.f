@@ -152,7 +152,13 @@ C           salva il gruppo ORIGINALE (non alterato)
       START = 1
 
       DO 300 I = 1, LENL+1
-         IF (I .GT. LENL .OR. LINE(I:I) .EQ. ' ') THEN
+         IF (I .GT. LENL) THEN
+            IF (I .GT. START) THEN
+               NTOK = NTOK + 1
+               TOK(NTOK) = LINE(START:I-1)
+            END IF
+            START = I + 1
+         ELSE IF (LINE(I:I) .EQ. ' ') THEN
             IF (I .GT. START) THEN
                NTOK = NTOK + 1
                TOK(NTOK) = LINE(START:I-1)

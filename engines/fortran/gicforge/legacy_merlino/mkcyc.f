@@ -4,8 +4,8 @@
      $  NCyc,NatC,ICAt,IAtCyc,IBr,IAn,EAN)
       Implicit Real*8 (A-H,O-Z)
       Common/onec/N1Cyc,IAt1C(2,100)
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
-      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,20),IBrA(5,20),IBrD(6,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
+      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,100),IBrA(5,100),IBrD(6,100)
       Dimension NBond(*),IBond(MxBnd,*)
       Dimension IAtomB(MxAtG,MxTrm,*),IAtomA(MxAtG,MxTrm,*)
       Dimension IAtomD(MxAtG,MxTrm,*)
@@ -376,7 +376,7 @@ C
       Subroutine BrCyc(IOut,IPrint,MxAtCy,NCyc,NAtC,ICAt,ICyc,JCyc,
      *  NAtIdC)
       Implicit None
-      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,20),IBrA(5,20),IBrD(6,20)
+      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,100),IBrA(5,100),IBrD(6,100)
       Integer NAtC(*),ICAt(MxAtCy,*)
       Integer MxAtCy,NCyc,ICyc,JCyc,I,J,IAt,JAt,NCI,NCJ,IOut,IPrint
       Integer NBrL,NBrA,NBrD,IBrL,IBrA,IBrD,NAtIdC,ii
@@ -654,8 +654,8 @@ C the final deterministic tie-break.  This mirrors the Python generator.
      $  NAtC,NAng,ICyc,IAtomC,NTermA,IAtomA,ITVA,CoefA,DoLocSVD,
      $  NAtoms,C)
       Implicit None 
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
-      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,20),IBrA(5,20),IBrD(6,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
+      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,100),IBrA(5,100),IBrD(6,100)
 C Input
       Integer NAtC(*),IAtomC(MxAtCy,*),NBond(*)
       Integer IOut,IPrint,MxAtCy,MaxAtA,MxTrmA,NAng,ICyc,NAtoms
@@ -712,8 +712,8 @@ C
      $  NDih,ICyc,IAtomC,NTermD,IAtomD,ITVD,CoefD,DoLocSVD,
      $  NAtoms,C)
       Implicit none 
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
-      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,20),IBrA(5,20),IBrD(6,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
+      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,100),IBrA(5,100),IBrD(6,100)
 C Input
       Integer NAtC(*),IAtomC(MxAtCy,*)
       Integer IOut,IPrint,MxAtCy,MaxAtD,MxTrmD,NDih,ICyc,NAtoms
@@ -1055,9 +1055,10 @@ C
       Subroutine At3Cyc(IOut,IPrint,MxAtCy,MxBnd,NCyc,NAtC,ICAt,
      $  NBond,IBond)
       Implicit Real*8 (A-H,O-Z)
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
       Dimension NatC(*),ICAt(MxAtCy,*)
       Dimension NBond(*),IBond(MxBnd,*)
+      Logical Known3
       N3Cyc=0
 C     write(IOut,'(''Entering At3Cyc'')')
       do 10 ICyc=3,NCyc
@@ -1074,7 +1075,18 @@ C     write(IOut,'(''Entering At3Cyc'')')
            do 60 K1=1,NAtCK
             KAt=ICAt(K1,KCyc)
             If(KAt.ne.JAt) go to 60
+            Known3=.false.
+            If(N3Cyc.gt.0) then
+             Do 70 I3=1,N3Cyc
+              If(IAt3C(1,I3).eq.IAt) Known3=.true.
+   70        Continue
+            EndIf
+            If(Known3) go to 60
             N3Cyc=N3Cyc+1
+            If(N3Cyc.gt.100) then
+             Write(IOut,'('' Too many atoms shared by 3 cycles'')')
+             Stop
+            EndIf
             iat3c(1,n3cyc)=IAt
             iat3c(2,n3cyc)=KCyc
             iat3c(3,n3cyc)=JCyc
@@ -1091,7 +1103,7 @@ C     write(IOut,'(''Entering At3Cyc'')')
       Subroutine At2Cyc(IOut,IPrint,MxAtCy,MxBnd,NCyc,NAtC,ICAt,
      $  NBond,IBond)
       Implicit Real*8 (A-H,O-Z)
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
       Dimension NatC(*),ICAt(MxAtCy,*)
       Dimension NBond(*),IBond(MxBnd,*)
       Logical Also3
@@ -1128,7 +1140,7 @@ C     write(IOut,'(''Entering At3Cyc'')')
       Subroutine At1Cyc(IOut,IPrint,MxAtCy,MxBnd,NCyc,NAtC,ICAt,
      $  NBond,IBond)
       Implicit Real*8 (A-H,O-Z)
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
       Common/onec/N1Cyc,IAt1C(2,100)
       Dimension NatC(*),ICAt(MxAtCy,*)
       Dimension NBond(*),IBond(MxBnd,*)

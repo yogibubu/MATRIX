@@ -31,8 +31,8 @@ CENZO
       Character*16 Group
       Common/IO/In,IOut,IPunch
       Common/PhyCon/PhyCon(30)
-      Common/bic/N2Cyc,N3Cyc,IAt2C(3,20),Iat3C(4,20)
-      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,20),IBrA(5,20),IBrD(6,20)
+      Common/bic/N2Cyc,N3Cyc,IAt2C(3,100),Iat3C(4,100)
+      Common/bic1/NBrL,NBrA,NBrD,IBrL(4,100),IBrA(5,100),IBrD(6,100)
       Integer St2Int,El2IAn,Istart(100)
       Logical Kwd(MxKwd),Loose
       Logical Linear,ImpDih,DoGDV,PrtPic,SyGNIC,DoBPCS,Clean

@@ -149,6 +149,8 @@ def test_default_fortran_audit_covers_official_golden_parity_roles():
         "thujone.inp",
         "ribose.inp",
         "cubane.inp",
+        "ferrocene.inp",
+        "progly1_nohbond.inp",
         "sf6_octahedral.inp",
         "spiro.inp",
         "cyclottane.inp",

@@ -126,11 +126,14 @@ Current required gate:
   point group `Oh`, keep the Merlino-equivalent final rank 42, use the full
   point-group projector, keep `BUTTERFLY` and `CYCLIC_BEND` as separate
   homogeneous blocks, and preserve Wilson-B rank 42 after symmetrization.
-- Ferrocene is an explicit metal-center projector regression in the Python
-  corpus: eclipsed `ferrocene.inp` must detect `D5h`, staggered
-  `ferrocene_staggered.inp` must detect `D5d`, both must serialize 20 closed
-  finite operations, protect the two Fe-to-Cp-ring-center coordinates, keep the
-  full point-group projector active, and preserve Wilson-B rank 57.
+- Ferrocene is an explicit metal-center projector regression. Eclipsed
+  `ferrocene.inp` is part of the Python/Fortran parity audit: it must detect
+  `D5h`, keep the full point-group projector active, preserve Wilson-B rank 57
+  and match the Fortran Wilson-B row space. Staggered
+  `ferrocene_staggered.inp` remains a Python projector regression for `D5d`
+  closure and finite-operation serialization, but is not yet a Fortran B-row
+  parity gate because the strict Fortran high-coordination bending block is not
+  Merlino/MATRIX-equivalent for the staggered metallocene topology.
 - Cyclottane is an explicit large noncondensed ring regression: `cyclottane.inp`
   must detect point group `D2`, keep the Merlino-equivalent final rank 66, use
   the full point-group projector, preserve five `RDef`/`RPck` components, and
@@ -152,5 +155,9 @@ Open GIC parity triage:
 - `9cyanophenantrene.inp` and `cyanopyridine.inp`: rank matches, but the
   Python nonredundant space differs from Merlino because the ring-puckering /
   polar `QPck/PhiP` selection is not yet Merlino-equivalent.
+- `ferrocene_staggered.inp`: point group `D5d`, final rank 57 and projector
+  diagnostics match, but the Python/Fortran Wilson-B row-space residual remains
+  finite in the high-coordination bending block. This is the active regression
+  for the next metallocene special-coordinate pass.
 - The remaining residual-only cases near the tolerance boundary must be
   reviewed after the structural mismatches above are fixed.

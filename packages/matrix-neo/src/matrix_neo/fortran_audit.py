@@ -43,6 +43,8 @@ DEFAULT_FORTRAN_AUDIT_MOLECULES = (
     "ribose.inp",
     "cubane.inp",
     "sf6_octahedral.inp",
+    "ferrocene.inp",
+    "progly1_nohbond.inp",
     "cyclottane.inp",
 )
 
