@@ -1,21 +1,22 @@
 *Deck MkGNCB
       Subroutine MkGNCB(IOut,IPrint,DoSymm,InvDst,MxBnd,MxTrm,MxAtP,
-     $  NAtoms,IAn,NBond,ILen,IBond,NTermB,IAtomB,ITVB,IAtCyc,CoefB,C)
+     $  NAtoms,IAn,NBond,ILen,IBond,NTermB,IAtomB,ITVB,IAtCyc,CoefB,C,
+     $  EAN)
       Implicit Real*8 (A-H,O-Z)
       Logical DoSymm,InvDst
       Dimension IAn(*),NBond(*),IBond(MxBnd,*),IAtCyc(*)
       Dimension IAtomB(MxAtP,MxTrm,*),NTermB(*),ITVB(*)
-      Dimension CoefB(MxTrm,*),C(3,*)
+      Dimension CoefB(MxTrm,*),C(3,*),EAN(*)
 C Local
-      Dimension ITest(4),IAnT(4)
+      Dimension ITest(10),IAnT(10),ICls(10)
 C Build Stretchings
       ILen=0
       Do 10 JAt=1,NAtoms
        NBJ=NBond(JAt)
        If(NBJ.eq.1.and.DoSymm) go to 10
        It=0
-       call IClear(4,ITest)
-       call IClear(4,IAnT)
+       call IClear(10,ITest)
+       call IClear(10,IAnT)
        Do 20 IB=1,NBond(JAt)
         IAt=IBond(IB,JAt)
         NBI=NBond(IAt)
@@ -56,9 +57,16 @@ C     write(IOut,'(''Atom'',I3,'' Term.Atoms.'',I2)')JAt,IT
         IAtomB(2,1,ILen)=Max0(JAt,ITest(1))
         CoefB(1,ILen)=1.0d0
        ElseIf(It.eq.2) then
+        Call ORCLLIG(JAt,It,ITest,C,EAN,ICls,NClass)
+        IAnT(1)=ICls(1)
+        IAnT(2)=ICls(2)
         Call BLAX2(MxAtP,MxTrm,InvDst,JAt,ILen,ITest,IAnT,IAtomB,NTermB,
      $    ITVB,CoefB)
        ElseIf(It.eq.3) then
+        Call ORCLLIG(JAt,It,ITest,C,EAN,ICls,NClass)
+        IAnT(1)=ICls(1)
+        IAnT(2)=ICls(2)
+        IAnT(3)=ICls(3)
         Call BLAX3(MxAtP,MxTrm,InvDst,JAt,ILen,ITest,IAnT,IAtomB,NTermB,
      $    ITVB,CoefB)
        EndIf

@@ -780,3 +780,18 @@ def test_legacy_gicforge_build_links_local_equivalence_kernel():
         text=True,
     )
     assert layout.legacy_executable.is_file()
+
+
+def test_legacy_gicforge_calls_matrix_local_equivalence_kernel():
+    root = Path(__file__).resolve().parents[1]
+    legacy = root / "engines" / "fortran" / "gicforge" / "legacy_merlino"
+    dina25 = (legacy / "dina25.f").read_text(encoding="utf-8")
+    mksalc = (legacy / "mksalc.f").read_text(encoding="utf-8")
+    symang = (legacy / "symang.f").read_text(encoding="utf-8")
+
+    assert "Call ORCLBND" in dina25
+    assert "Call ORCLLIG" in mksalc
+    assert "Call ORCLLIG" in symang
+    assert "Call ORCLTPL" in symang
+    assert "PCls1" in symang
+    assert "LocSVDJacobi(MxLoc,NBlock" in symang

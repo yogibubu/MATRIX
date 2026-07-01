@@ -96,6 +96,7 @@ C Dimensions for primitives
       Dimension IAtmLR(MxAtP,MxTrm,MxGNIC),IPrimL(MxTrm,MxGNIC)
       Dimension IAtmDR(MxAtP,MxTrm,MxGNIC),IPrimD(MxTrm,MxGNIC)
       Dimension IAtmOR(MxAtP,MxTrm,MxGNIC),IPrimO(MxTrm,MxGNIC)
+      Dimension LEBI(MxGNIC),LEBJ(MxGNIC),LEClass(MxGNIC)
 C Dimension for B and DB matrices
       Dimension BMat(3*MxAtB,MxGNIC)
 C Dimensions for BDPCS3
@@ -249,6 +250,15 @@ C Make primitive bond lengths and valence angles including linear ones
       call MkBAL(IOut,IPrint,MxBnd,MxAtP,MxTrm,NAtoms,NLenR,NAngR,
      $  NLAngR,IAn,NBond,IBond,NTermB,NTermA,NTermL,IAtmBR,IAtmAR,
      $  IAtmLR,CoefB,CoefA,CoefL,C,TreshL)
+      If(NLenR.gt.0) then
+       Do 12 IL=1,NLenR
+        LEBI(IL)=IAtmBR(1,1,IL)
+        LEBJ(IL)=IAtmBR(2,1,IL)
+   12  Continue
+       Call ORCLBND(NLenR,LEBI,LEBJ,C,EAN,LEClass,NLEClass)
+       Write(IOut,'(/,'' MATRIX local-equivalence stretch classes:'',
+     $  I5)') NLEClass
+      EndIf
       NTotR=NLenR+NAngR+NLAngR
       if(NLenR.ne.0.and.DoBPCS) then
       write(IOut,'(/,'' Bonded Atoms  rDSD Distance BDPCS3 distance'')')
@@ -357,7 +367,7 @@ C no local SALC or redundancy reduction is applied at this stage.
       NLen=0
       IPrBnd=0
       Call MkGNCB(IOut,IPrBnd,.False.,InvDst,MxBnd,MxTrm,MxAtP,NAtoms,
-     $  IAn,NBond,NLen,IBond,NTermB,IAtomB,ITVB,IAtCyc,CoefB,C)
+     $  IAn,NBond,NLen,IBond,NTermB,IAtomB,ITVB,IAtCyc,CoefB,C,EAN)
 C     If(NCyc.gt.0.and.DoSySt) then
 C      IPrtCB=0
 C Cycles NYI for stretchings

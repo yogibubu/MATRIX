@@ -87,7 +87,10 @@ NEO stretch/angle SALC policy.  It provides:
 - `ORCLTPL`: local high-coordination template recognition for coordination
   5-9 using the same cosine-pattern criterion as the Python NEO path.
 
-The vendored `legacy_merlino/` sources remain a frozen Merlino baseline.
-New Fortran generation paths should call `local_equiv.f` before the existing
-local SVD/Jacobi helper instead of duplicating local-class logic inside
-`mkprim.f`.
+The vendored `legacy_merlino/` sources remain the Merlino baseline, but the
+MATRIX build now calls this kernel explicitly at the generation boundary:
+`dina25.f` classifies primitive stretches with `ORCLBND`, `mksalc.f` uses
+`ORCLLIG` before local stretching SALCs, and `symang.f` uses `ORCLLIG`/`ORCLTPL`
+before angle `LocSVD`.  Angle `LocSVD` is performed separately for each local
+class-pair block, so non-equivalent ligand classes are not mixed in one local
+SVD block.

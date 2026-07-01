@@ -18,7 +18,7 @@ C Build Valence Angles
       If(DoLocSVD) then
        Call MkGNCALocSVD(IOut,IPrint,MxBnd,MxGIcA,MxTerA,MaxAtA,
      $  NAtoms,NCyc,MxAtCy,NAtC,ICAt,NBond,NGICA,IBond,NTermA,IAtomA,
-     $  IAtCyc,ITVA,CoefA,C,TreshL)
+     $  IAtCyc,ITVA,CoefA,C,EAN,TreshL)
        GoTo 80
       EndIf
       Do 30 JAt=1,NAtoms
@@ -92,17 +92,19 @@ C    $    NBond,IBond,IAtCyc,NTermA,IAtomA,CoefA)
 *Deck MkGNCALocSVD
       Subroutine MkGNCALocSVD(IOut,IPrint,MxBnd,MxGIcA,MxTerA,
      $ MaxAtA,NAtoms,NCyc,MxAtCy,NAtC,ICAt,NBond,NGICA,IBond,NTermA,
-     $ IAtomA,IAtCyc,ITVA,CoefA,C,TreshL)
+     $ IAtomA,IAtCyc,ITVA,CoefA,C,EAN,TreshL)
       Implicit Real*8 (A-H,O-Z)
       Parameter(MxLoc=45,MxCart=3000)
       Dimension NAtC(*),ICAt(MxAtCy,*)
       Dimension NBond(*),IBond(MxBnd,*),IAtCyc(*)
       Dimension NTermA(*),IAtomA(MaxAtA,MxTerA,*),ITVA(*)
-      Dimension CoefA(MxTerA,*),C(3,*)
+      Dimension CoefA(MxTerA,*),C(3,*),EAN(*)
       Dimension LAt1(MxLoc),LAt2(MxLoc),BLoc(MxCart,MxLoc)
       Dimension G(MxLoc,MxLoc),EVal(MxLoc),EVec(MxLoc,MxLoc)
       Dimension B(3,4),DB(3,4,3,4),IB(4)
-      Integer Rank
+      Dimension LNei(10),LCls(10),PCls1(MxLoc),PCls2(MxLoc)
+      Dimension Sel(MxLoc),Map(MxLoc)
+      Integer Rank,Class1,Class2
       Logical Endo,IsEndoAngleInCycles
 
       NCart=3*NAtoms
@@ -115,6 +117,22 @@ C    $    NBond,IBond,IAtCyc,NTermA,IAtomA,CoefA)
       Do 200 JAt=1,NAtoms
        NBJ=NBond(JAt)
        If(NBJ.le.1) GoTo 200
+       If(NBJ.gt.10) then
+        Write(IOut,'('' LOCSVD center skipped: high coord'',I6)') JAt
+        GoTo 200
+       EndIf
+       Do 205 IN=1,NBJ
+        LNei(IN)=IBond(IN,JAt)
+  205  Continue
+       Call ORCLLIG(JAt,NBJ,LNei,C,EAN,LCls,NClass)
+       Call ORCLTPL(JAt,NBJ,LNei,C,ITpl,STpl)
+       If(ITpl.gt.0) then
+        Write(IOut,'(I4,6X,''LOCEQ'',2X,''classes'',I3,2X,
+     $   ''template'',I3,2X,''score'',F8.4)') JAt,NClass,ITpl,STpl
+       Else
+        Write(IOut,'(I4,6X,''LOCEQ'',2X,''classes'',I3,2X,
+     $   ''template'',A3)') JAt,NClass,'GEN'
+       EndIf
        NPrim=0
        Do 220 II=1,NBJ-1
         IAt=IBond(II,JAt)
@@ -138,13 +156,31 @@ C    $    NBond,IBond,IAtCyc,NTermA,IAtomA,CoefA)
          EndIf
          LAt1(NPrim)=IAt
          LAt2(NPrim)=KAt
+         PCls1(NPrim)=Min0(LCls(II),LCls(KK))
+         PCls2(NPrim)=Max0(LCls(II),LCls(KK))
   230   Continue
   220  Continue
   240  Continue
        If(NPrim.eq.0) GoTo 200
 
+       Do 245 IP=1,NPrim
+        Sel(IP)=0
+  245  Continue
+       Do 390 IG=1,NPrim
+        If(Sel(IG).ne.0) GoTo 390
+        Class1=PCls1(IG)
+        Class2=PCls2(IG)
+        NBlock=0
+        Do 255 IP=1,NPrim
+         If(PCls1(IP).eq.Class1.and.PCls2(IP).eq.Class2) then
+          NBlock=NBlock+1
+          Map(NBlock)=IP
+          Sel(IP)=1
+         EndIf
+  255   Continue
        Call AClear(MxCart*MxLoc,BLoc)
-       Do 260 IP=1,NPrim
+       Do 260 JP=1,NBlock
+        IP=Map(JP)
         IAt=LAt1(IP)
         KAt=LAt2(IP)
         Call AClear(12,B)
@@ -154,14 +190,14 @@ C    $    NBond,IBond,IAtCyc,NTermA,IAtomA,CoefA)
         JXYZ=3*(JAt-1)
         KXYZ=3*(KAt-1)
         Do 250 IC=1,3
-         BLoc(IXYZ+IC,IP)=B(IC,1)
-         BLoc(JXYZ+IC,IP)=B(IC,2)
-         BLoc(KXYZ+IC,IP)=B(IC,3)
+         BLoc(IXYZ+IC,JP)=B(IC,1)
+         BLoc(JXYZ+IC,JP)=B(IC,2)
+         BLoc(KXYZ+IC,JP)=B(IC,3)
   250   Continue
   260  Continue
 
-       Do 290 IP=1,NPrim
-        Do 280 JP=1,NPrim
+       Do 290 IP=1,NBlock
+        Do 280 JP=1,NBlock
          Sum=0.0D0
          Do 270 IC=1,NCart
           Sum=Sum+BLoc(IC,IP)*BLoc(IC,JP)
@@ -170,7 +206,7 @@ C    $    NBond,IBond,IAtCyc,NTermA,IAtomA,CoefA)
   280   Continue
   290  Continue
 
-       Call LocSVDJacobi(MxLoc,NPrim,G,EVal,EVec,Rank)
+       Call LocSVDJacobi(MxLoc,NBlock,G,EVal,EVec,Rank)
        If(Rank.gt.0) write(IOut,'(I4,6X,A6,5X,I2)')
      $  JAt,'LOCSVD',Rank
        Do 330 IM=1,Rank
@@ -181,8 +217,9 @@ C    $    NBond,IBond,IAtCyc,NTermA,IAtomA,CoefA)
         NGICA=NGICA+1
         ITVA(NGICA)=0
         NTerm=0
-        Do 310 IP=1,NPrim
-         If(DAbs(EVec(IP,IM)).le.1.0D-12) GoTo 310
+        Do 310 JP=1,NBlock
+         If(DAbs(EVec(JP,IM)).le.1.0D-12) GoTo 310
+         IP=Map(JP)
          NTerm=NTerm+1
          If(NTerm.gt.MxTerA) then
           Write(IOut,'('' Too many LOCSVD angle terms at center'',I6)')
@@ -190,7 +227,7 @@ C    $    NBond,IBond,IAtCyc,NTermA,IAtomA,CoefA)
           NTerm=MxTerA
           GoTo 320
          EndIf
-         CoefA(NTerm,NGICA)=EVec(IP,IM)
+         CoefA(NTerm,NGICA)=EVec(JP,IM)
          IAtomA(1,NTerm,NGICA)=LAt1(IP)
          IAtomA(2,NTerm,NGICA)=JAt
          IAtomA(3,NTerm,NGICA)=LAt2(IP)
@@ -198,6 +235,7 @@ C    $    NBond,IBond,IAtCyc,NTermA,IAtomA,CoefA)
   320   Continue
         NTermA(NGICA)=NTerm
   330  Continue
+  390  Continue
   200 Continue
       Return
       End
