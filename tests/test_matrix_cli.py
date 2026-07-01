@@ -1640,7 +1640,26 @@ def test_gicforge_report_cli_calls_writer(tmp_path, monkeypatch, capsys):
 
     assert rc == 0
     assert calls == {"target": path, "output": output}
-    assert "Wrote GICForge report" in capsys.readouterr().out
+    assert "Wrote MATRIX NEO/GICForge report" in capsys.readouterr().out
+
+
+def test_gicforge_salc_snapshot_cli_calls_writer(tmp_path, monkeypatch, capsys):
+    calls = {}
+    path = tmp_path / "molecule.xyzin"
+    output = tmp_path / "salc_snapshot.json"
+
+    def fake_write(target, out):
+        calls["target"] = target
+        calls["output"] = out
+        return out
+
+    monkeypatch.setattr("matrix_neo.write_salc_snapshot_from_xyzin", fake_write)
+
+    rc = matrix_run.main(["gicforge", "salc-snapshot", str(path), str(output)])
+
+    assert rc == 0
+    assert calls == {"target": path, "output": output}
+    assert "Wrote MATRIX NEO SALC snapshot" in capsys.readouterr().out
 
 
 def test_gicforge_corpus_cli_prints_inventory(capsys):

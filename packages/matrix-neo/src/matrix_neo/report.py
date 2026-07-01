@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 from .definition import (
@@ -18,6 +19,25 @@ from .policy import (
     primitive_reduction_class,
 )
 from .symmetry import gic_symmetry_source_blocks
+
+
+@dataclass(frozen=True)
+class GICClosureSummary:
+    closed: bool
+    rank_complete: bool
+    rank: int
+    target_rank: int
+    symmetry_method: str
+    symmetry_status: str
+    total_symmetric_irrep: str
+    total_symmetric_count: int
+    protected_special_count: int
+    protected_special_families: tuple[str, ...]
+    ring_diagnostic_count: int
+    salc_coefficient_count: int
+    max_salc_norm_error: float
+    skipped_singular_count: int
+    skipped_dependent_count: int
 
 
 def gic_report_lines(definition: GICDefinition) -> list[str]:
@@ -45,8 +65,8 @@ def gic_report_lines(definition: GICDefinition) -> list[str]:
     primitive_by_id = {primitive.identifier: primitive for primitive in definition.primitives}
 
     lines = [
-        "ORACLE GICForge Report",
-        "======================",
+        "MATRIX NEO/GICForge Report",
+        "===========================",
         "",
         f"Backend: {definition.backend}",
         f"Point group: {definition.point_group}",
@@ -67,7 +87,7 @@ def gic_report_lines(definition: GICDefinition) -> list[str]:
         "",
         "Closure Summary",
         "---------------",
-        *_closure_summary_lines(definition),
+        *_closure_summary_lines(gic_closure_summary(definition)),
         "",
         "Fragment Mode Policy",
         "--------------------",
@@ -202,7 +222,7 @@ def _target_rank_rationale(definition: GICDefinition) -> str:
     return f"contract-specified rank {definition.target_rank} for N={natoms}"
 
 
-def _closure_summary_lines(definition: GICDefinition) -> list[str]:
+def gic_closure_summary(definition: GICDefinition) -> GICClosureSummary:
     symmetry = definition.symmetry_diagnostics
     salc_count = sum(1 for gic in definition.gics if len(gic.coefficients) > 1)
     salc_norm_error = _max_salc_norm_error(definition)
@@ -234,19 +254,41 @@ def _closure_summary_lines(definition: GICDefinition) -> list[str]:
         and (symmetry is None or symmetry.status in {"APPLIED", "NOT_REQUESTED", "NO_ELIGIBLE_GROUPS"})
         and salc_norm_error <= 1.0e-10
     )
+    return GICClosureSummary(
+        closed=closed,
+        rank_complete=rank_closed,
+        rank=definition.rank,
+        target_rank=definition.target_rank,
+        symmetry_method=symmetry_method,
+        symmetry_status=symmetry_status,
+        total_symmetric_irrep=total_irrep,
+        total_symmetric_count=total_count,
+        protected_special_count=special_count,
+        protected_special_families=protected_families,
+        ring_diagnostic_count=len(definition.ring_puckering_diagnostics),
+        salc_coefficient_count=salc_count,
+        max_salc_norm_error=salc_norm_error,
+        skipped_singular_count=len(skipped_singular),
+        skipped_dependent_count=len(skipped_dependent),
+    )
+
+
+def _closure_summary_lines(summary: GICClosureSummary) -> list[str]:
     return [
-        f"Closed: {'YES' if closed else 'NO'}",
-        f"Rank complete: {'YES' if rank_closed else 'NO'} ({definition.rank}/{definition.target_rank})",
-        f"Symmetry method: {symmetry_method}",
-        f"Symmetry status: {symmetry_status}",
-        f"Total-symmetric irrep/count: {total_irrep}/{total_count}",
-        f"Protected special coordinates: {special_count}",
-        f"Protected special families: {_list_or_none(protected_families)}",
-        f"Ring diagnostics: {len(definition.ring_puckering_diagnostics)}",
-        f"SALC coefficient vectors: {salc_count}",
-        f"Max SALC norm error: {salc_norm_error:.12g}",
-        f"Skipped singular rows: {len(skipped_singular)}",
-        f"Skipped dependent rows: {len(skipped_dependent)}",
+        f"Closed: {'YES' if summary.closed else 'NO'}",
+        f"Rank complete: {'YES' if summary.rank_complete else 'NO'} "
+        f"({summary.rank}/{summary.target_rank})",
+        f"Symmetry method: {summary.symmetry_method}",
+        f"Symmetry status: {summary.symmetry_status}",
+        f"Total-symmetric irrep/count: "
+        f"{summary.total_symmetric_irrep}/{summary.total_symmetric_count}",
+        f"Protected special coordinates: {summary.protected_special_count}",
+        f"Protected special families: {_list_or_none(summary.protected_special_families)}",
+        f"Ring diagnostics: {summary.ring_diagnostic_count}",
+        f"SALC coefficient vectors: {summary.salc_coefficient_count}",
+        f"Max SALC norm error: {summary.max_salc_norm_error:.12g}",
+        f"Skipped singular rows: {summary.skipped_singular_count}",
+        f"Skipped dependent rows: {summary.skipped_dependent_count}",
     ]
 
 

@@ -1893,7 +1893,7 @@ def test_gicforge_b_matrix_includes_fragment_coordinate_rows(tmp_path):
     }
 
     report_lines = gic_report_from_xyzin(xyzin)
-    assert "ORACLE GICForge Report" in report_lines
+    assert "MATRIX NEO/GICForge Report" in report_lines
     assert "Rank method: analytic_b_matrix_mgs_greedy" in report_lines
     assert any("SPECIAL_FRAGMENT_DISTANCE" in line for line in report_lines)
 

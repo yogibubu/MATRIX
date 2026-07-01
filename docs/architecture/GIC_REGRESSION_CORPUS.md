@@ -35,18 +35,30 @@ scientific role it protects: ring coordinates, fused/polycyclic behavior,
 bridged rings, special metal/ring-center coordinates, H-bond pseudo-bonds,
 fragment coordinates, symmetry projectors and Python/Fortran parity.
 
-Selected symmetry-adapted coefficient vectors are pinned separately:
+The explicit form of selected symmetry-adapted coordinates is pinned
+separately:
 
 ```text
 tests/fixtures/golden_corpus/neo_gic_salc_coefficients.json
 ```
 
-This snapshot stores the nontrivial SALC/GIC coefficient vectors for pyrrole,
-benzene, azulene, pyrene, spiro, cubane and ferrocene in the D5h/D5d forms.
-It complements the Fortran row-space audit: the row-space audit proves that the
-coordinate span is equivalent to Merlino/Fortran, while the coefficient
+This compact snapshot is the golden test for SALC form.  It stores a stable
+hash of every nontrivial SALC/GIC coefficient vector for pyrrole, benzene,
+azulene, pyrene, spiro, cubane and ferrocene in the D5h/D5d forms, plus a
+small readable subset of representative vectors.  It complements, but does not
+replace, the Fortran row-space audit: the row-space audit is the golden test
+for rank, Wilson-B span and Python/Fortran equivalence, while the coefficient
 snapshot catches unintended changes in the explicit symmetry-coordinate form
-used by Gaussian inputs, GF labels and human reports.
+used by Gaussian inputs, GF labels and human reports.  Gaussian ReadAllGIC
+fixtures are a third gate: they test compatibility of the exported coordinate
+text with an external optimizer and subsequent GF/PED analysis from the final
+log geometry.
+
+Create a compact snapshot from a frozen `xyzin` with:
+
+```bash
+python -m matrix gicforge salc-snapshot molecule.xyzin salc_snapshot.json
+```
 
 Inputs in the registry are deliberately versioned. Larger generated audit
 workdirs, numerical reports and run outputs are not committed; their provenance
@@ -92,16 +104,16 @@ Current required gate:
   `fused_ring`, `bridged_ring`, `spiro_ring` or `python_fortran_parity` must
   remain in `DEFAULT_FORTRAN_AUDIT_MOLECULES` unless the registry is explicitly
   reviewed.
-- This gate must pass with matching final rank, matching row-space rank,
+- This row-space gate must pass with matching final rank, matching row-space rank,
   Wilson-B row-space residual below the audit tolerance and normalized SALC
   coefficient vectors. The finite point-group projector must be active for
   every non-`C1`, non-linear molecule in the gate.
 - The audit summary reports projector status, symmetry block counts, mixed
   symmetry-family counts, total-symmetric GIC counts, nontrivial SALC
   coefficient counts and the largest SALC coefficient normalization residual.
-  Exact coefficient-vector comparison with executable Merlino is still a TODO
-  until the strict Fortran backend emits projector coefficients in a stable
-  machine-readable form.
+  Exact coefficient-vector comparison with executable Merlino remains separate
+  from the row-space audit because the strict Fortran backend does not yet emit
+  projector coefficients in a stable machine-readable form.
 - Pyrrole is an explicit regression: point group `C2v`, rank 24, retained ring
   coordinates, and symmetrized `A2RPck001`/`B1RPck001`; ring puckering and
   out-of-plane coordinates must not appear in the totally symmetric block.

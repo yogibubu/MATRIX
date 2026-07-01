@@ -9,6 +9,7 @@ from matrix_link import rdkit_available
 from matrix_neo import (
     DEFAULT_FORTRAN_AUDIT_MOLECULES,
     audit_gic_corpus_geometry,
+    compare_salc_snapshot_entry,
     discover_gic_corpus,
     summarize_gic_corpus,
     write_gicforge_build_sections,
@@ -111,8 +112,9 @@ def test_neo_gic_salc_coefficient_snapshots_are_stable(tmp_path):
     root = Path(__file__).resolve().parents[1]
     snapshot = json.loads(GOLDEN_SALC_COEFFICIENTS.read_text(encoding="utf-8"))
 
-    assert snapshot["schema"] == "matrix.neo.gic_salc_coefficients.v1"
+    assert snapshot["schema"] == "matrix.neo.gic_salc_snapshot.v2"
     assert snapshot["rounding_decimals"] == 12
+    assert snapshot["selected_per_family"] == 3
     assert len(snapshot["entries"]) >= 8
 
     for entry in snapshot["entries"]:
@@ -122,28 +124,14 @@ def test_neo_gic_salc_coefficient_snapshots_are_stable(tmp_path):
         if str(entry["id"]).startswith("ferrocene"):
             write_interaction_center_section(xyzin)
         definition = write_gicforge_build_sections(xyzin, symmetrize=True)
+        comparison = compare_salc_snapshot_entry(
+            entry,
+            definition,
+            rounding_decimals=snapshot["rounding_decimals"],
+            selected_per_family=snapshot["selected_per_family"],
+        )
 
-        current = [
-            {
-                "name": gic.name,
-                "family": gic.family,
-                "irrep": gic.irrep,
-                "coefficients": [
-                    [primitive_id, round(float(coefficient), snapshot["rounding_decimals"])]
-                    for primitive_id, coefficient in gic.coefficients
-                ],
-            }
-            for gic in definition.gics
-            if len(gic.coefficients) > 1
-        ]
-
-        assert definition.point_group == entry["point_group"], entry["id"]
-        assert definition.rank == entry["rank"], entry["id"]
-        assert definition.target_rank == entry["target_rank"], entry["id"]
-        assert definition.symmetry_diagnostics is not None
-        assert definition.symmetry_diagnostics.method == entry["symmetry_method"], entry["id"]
-        assert len(current) == entry["salc_count"], entry["id"]
-        assert current == entry["salcs"], entry["id"]
+        assert comparison.ok, "\n".join(comparison.messages)
 
 
 def test_gic_regression_corpus_keeps_qm_adapter_outputs():

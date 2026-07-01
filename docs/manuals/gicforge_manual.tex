@@ -337,6 +337,14 @@ factors.  This is the place to inspect whether a fused, spiro or bridged ring
 has been treated as intended before the same frozen GIC definition is used by
 Gaussian, GF or MORPHEUS.
 
+For regression work, \program{} also provides a compact SALC snapshot command:
+\texttt{matrix gicforge salc-snapshot molecule.xyzin salc\_snapshot.json}.  The
+snapshot stores a stable hash of the full nontrivial SALC coefficient list and
+a small readable subset of representative vectors.  It is the golden test for
+the explicit symmetry-coordinate form.  The Fortran audit remains the golden
+test for rank, Wilson-B row space and Python/Fortran equivalence, while
+Gaussian ReadAllGIC examples test external optimizer compatibility.
+
 \section{Coordinate Definition Format}
 
 Coordinate definitions are printed in a Gaussian ReadGIC-compatible form.  Each

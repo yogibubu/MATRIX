@@ -825,6 +825,12 @@ def build_parser(
     report = gicforge_sub.add_parser("report", help="Write a readable frozen-GIC report")
     report.add_argument("xyzin", type=Path)
     report.add_argument("output", type=Path, nargs="?")
+    salc_snapshot = gicforge_sub.add_parser(
+        "salc-snapshot",
+        help="Write a compact SALC coefficient snapshot for a frozen #GIC section",
+    )
+    salc_snapshot.add_argument("xyzin", type=Path)
+    salc_snapshot.add_argument("output", type=Path)
     corpus = gicforge_sub.add_parser(
         "corpus",
         help="List or summarize the demanding GIC regression corpus",
@@ -2455,7 +2461,13 @@ def main(
             print("\n".join(gic_report_from_xyzin(args.xyzin)))
             return 0
         output = write_gic_report(args.xyzin, args.output)
-        print(f"Wrote GICForge report: {output}")
+        print(f"Wrote MATRIX NEO/GICForge report: {output}")
+        return 0
+    if _is_neo_command(args) and args.gicforge_command == "salc-snapshot":
+        from matrix_neo import write_salc_snapshot_from_xyzin
+
+        output = write_salc_snapshot_from_xyzin(args.xyzin, args.output)
+        print(f"Wrote MATRIX NEO SALC snapshot: {output}")
         return 0
     if _is_neo_command(args) and args.gicforge_command == "corpus":
         from matrix_neo import (
