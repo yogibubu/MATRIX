@@ -771,6 +771,16 @@ def build_parser(
             "Without this flag the advisor is diagnostic only."
         ),
     )
+    semiexp.add_argument(
+        "--force-sensitivity-advisor",
+        action="store_true",
+        help="Apply sensitivity-advisor suggestions without the safety gate.",
+    )
+    semiexp.add_argument("--sensitivity-gate-rot-rel-tol", type=float, default=0.02)
+    semiexp.add_argument("--sensitivity-gate-rot-abs-tol", type=float, default=1.0e-3)
+    semiexp.add_argument("--sensitivity-gate-condition-factor", type=float, default=10.0)
+    semiexp.add_argument("--sensitivity-gate-max-bond-delta", type=float, default=0.01)
+    semiexp.add_argument("--sensitivity-gate-max-angle-delta", type=float, default=1.0)
     semiexp.add_argument("--sensitivity-fit-threshold", type=float, default=0.15)
     semiexp.add_argument("--sensitivity-fixed-threshold", type=float, default=1.0e-6)
     semiexp.add_argument(
@@ -2635,18 +2645,64 @@ def main(
                 null_predicate_scale=args.sensitivity_null_predicate_scale,
                 fit_regularization_scale=args.sensitivity_fit_regularization_scale,
             )
-            if args.apply_sensitivity_advisor:
-                fixed = _merge_unique(fixed, advisor.fixed_patterns)
-                qm_predicates = _merge_unique(qm_predicates, advisor.predicates)
             args.outdir.mkdir(parents=True, exist_ok=True)
             advisor_path = args.outdir / "semiexp_sensitivity_advisor.csv"
             advisor_path.write_text(advisor.csv, encoding="utf-8")
+            advisor_applied = False
+            if args.apply_sensitivity_advisor:
+                candidate_fixed = _merge_unique(fixed, advisor.fixed_patterns)
+                candidate_qm_predicates = _merge_unique(qm_predicates, advisor.predicates)
+                if args.force_sensitivity_advisor:
+                    fixed = candidate_fixed
+                    qm_predicates = candidate_qm_predicates
+                    advisor_applied = True
+                    _write_sensitivity_gate_summary(
+                        args.outdir / "semiexp_sensitivity_gate.json",
+                        {"accepted": True, "reason": "forced"},
+                    )
+                else:
+                    gate = _sensitivity_safe_apply_gate(
+                        base_request=advisor_request,
+                        candidate_request=SemiexperimentalFitRequest(
+                            initial_geometry=geometry_path,
+                            observations=observations,
+                            fixed_parameters=candidate_fixed,
+                            observable=observable,
+                            rotational_components=rotational_components,
+                            qm_predicates=candidate_qm_predicates,
+                            parameter_classes=parameter_classes,
+                            coordinate_model=coordinate_model,
+                            robust_loss=robust_loss,
+                            robust_scale=robust_scale,
+                            leave_one_out=leave_one_out,
+                        ),
+                        fit_semiexperimental_geometry=fit_semiexperimental_geometry,
+                        outdir=args.outdir / "_sensitivity_gate",
+                        max_iter=max_iter,
+                        step=step,
+                        damping=damping,
+                        max_step=max_step,
+                        prune_condition=prune_condition,
+                        rot_rel_tol=args.sensitivity_gate_rot_rel_tol,
+                        rot_abs_tol=args.sensitivity_gate_rot_abs_tol,
+                        condition_factor=args.sensitivity_gate_condition_factor,
+                        max_bond_delta=args.sensitivity_gate_max_bond_delta,
+                        max_angle_delta=args.sensitivity_gate_max_angle_delta,
+                    )
+                    _write_sensitivity_gate_summary(
+                        args.outdir / "semiexp_sensitivity_gate.json",
+                        gate,
+                    )
+                    if gate["accepted"]:
+                        fixed = candidate_fixed
+                        qm_predicates = candidate_qm_predicates
+                        advisor_applied = True
             print(
                 "morpheus_sensitivity_advisor: "
                 f"fit={advisor.fit_count} "
                 f"predicate={advisor.predicate_count} "
                 f"fixed={advisor.fixed_count} "
-                f"applied={bool(args.apply_sensitivity_advisor)} "
+                f"applied={advisor_applied} "
                 f"csv={advisor_path}"
             )
         if (
@@ -3438,6 +3494,144 @@ def _sensitivity_min_fit_count(raw: str) -> int | None:
     if value < 0:
         raise ValueError("--sensitivity-min-fit must be auto, none, or a non-negative integer")
     return value
+
+
+def _sensitivity_safe_apply_gate(
+    *,
+    base_request,
+    candidate_request,
+    fit_semiexperimental_geometry,
+    outdir: Path,
+    max_iter: int | None,
+    step: float,
+    damping: float,
+    max_step: float,
+    prune_condition: float,
+    rot_rel_tol: float,
+    rot_abs_tol: float,
+    condition_factor: float,
+    max_bond_delta: float,
+    max_angle_delta: float,
+) -> dict[str, object]:
+    root = Path(outdir)
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        base = fit_semiexperimental_geometry(
+            base_request,
+            max_iter=max_iter,
+            step=step,
+            damping=damping,
+            max_step=max_step,
+            prune_condition=prune_condition,
+            outdir=root / "chemical_model",
+        )
+    except Exception as exc:
+        try:
+            candidate = fit_semiexperimental_geometry(
+                candidate_request,
+                max_iter=max_iter,
+                step=step,
+                damping=damping,
+                max_step=max_step,
+                prune_condition=prune_condition,
+                outdir=root / "advisor_model",
+            )
+        except Exception as candidate_exc:
+            return {
+                "accepted": False,
+                "reason": "base_and_candidate_preflight_failed",
+                "base_error": f"{type(exc).__name__}: {exc}",
+                "candidate_error": f"{type(candidate_exc).__name__}: {candidate_exc}",
+            }
+        return {
+            "accepted": True,
+            "reason": "base_model_failed_candidate_runs",
+            "base_error": f"{type(exc).__name__}: {exc}",
+            "candidate_rotational_rms_MHz": _semiexp_rotational_rms(candidate),
+            "candidate_rank": int(candidate.diagnostics.rank),
+            "candidate_condition_number": float(candidate.diagnostics.condition_number),
+        }
+    try:
+        candidate = fit_semiexperimental_geometry(
+            candidate_request,
+            max_iter=max_iter,
+            step=step,
+            damping=damping,
+            max_step=max_step,
+            prune_condition=prune_condition,
+            outdir=root / "advisor_model",
+        )
+    except Exception as exc:
+        return {
+            "accepted": False,
+            "reason": "candidate_preflight_failed",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    base_rot = _semiexp_rotational_rms(base)
+    candidate_rot = _semiexp_rotational_rms(candidate)
+    max_dr, max_da = _semiexp_geometry_delta(base, candidate)
+    base_condition = float(base.diagnostics.condition_number)
+    candidate_condition = float(candidate.diagnostics.condition_number)
+    if not math.isfinite(base_condition):
+        base_condition = 1.0e99
+    if not math.isfinite(candidate_condition):
+        candidate_condition = 1.0e99
+    reasons: list[str] = []
+    rot_limit = base_rot * (1.0 + float(rot_rel_tol)) + float(rot_abs_tol)
+    if candidate_rot > rot_limit:
+        reasons.append("rotational_rms_worse")
+    if int(candidate.diagnostics.rank) < int(base.diagnostics.rank):
+        reasons.append("rank_lower")
+    if candidate_condition > max(base_condition * float(condition_factor), base_condition):
+        reasons.append("condition_worse")
+    if max_dr > float(max_bond_delta):
+        reasons.append("geometry_bond_drift")
+    if max_da > float(max_angle_delta):
+        reasons.append("geometry_angle_drift")
+    return {
+        "accepted": not reasons,
+        "reason": "accepted" if not reasons else ",".join(reasons),
+        "base_rotational_rms_MHz": base_rot,
+        "candidate_rotational_rms_MHz": candidate_rot,
+        "rotational_rms_limit_MHz": rot_limit,
+        "base_rank": int(base.diagnostics.rank),
+        "candidate_rank": int(candidate.diagnostics.rank),
+        "base_condition_number": base_condition,
+        "candidate_condition_number": candidate_condition,
+        "max_bond_delta_A": max_dr,
+        "max_angle_delta_deg": max_da,
+        "max_bond_delta_limit_A": float(max_bond_delta),
+        "max_angle_delta_limit_deg": float(max_angle_delta),
+    }
+
+
+def _semiexp_rotational_rms(result) -> float:
+    diffs = [float(row.difference_MHz) for row in result.rotational_constants]
+    return math.sqrt(sum(diff * diff for diff in diffs) / len(diffs)) if diffs else 0.0
+
+
+def _semiexp_geometry_delta(base, candidate) -> tuple[float, float]:
+    base_rows = {
+        (row.kind, row.label): row for row in getattr(base, "geometry_parameters", ())
+    }
+    max_bond = 0.0
+    max_angle = 0.0
+    for row in getattr(candidate, "geometry_parameters", ()):
+        base_row = base_rows.get((row.kind, row.label))
+        if base_row is None:
+            continue
+        if row.value_angstrom is not None and base_row.value_angstrom is not None:
+            max_bond = max(max_bond, abs(float(row.value_angstrom) - float(base_row.value_angstrom)))
+        if row.value_degree is not None and base_row.value_degree is not None:
+            delta = (float(row.value_degree) - float(base_row.value_degree) + 180.0) % 360.0 - 180.0
+            max_angle = max(max_angle, abs(delta))
+    return max_bond, max_angle
+
+
+def _write_sensitivity_gate_summary(path: Path, payload: dict[str, object]) -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _append_manifest_output(manifest_path: Path, name: str, path: Path) -> None:
