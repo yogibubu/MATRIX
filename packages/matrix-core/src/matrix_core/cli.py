@@ -765,6 +765,15 @@ def build_parser(
     )
     semiexp.add_argument("--sensitivity-fit-threshold", type=float, default=0.15)
     semiexp.add_argument("--sensitivity-fixed-threshold", type=float, default=1.0e-6)
+    semiexp.add_argument(
+        "--sensitivity-min-fit",
+        default="auto",
+        help=(
+            "Minimum number of sensitivity-ranked GICs to keep free: auto, none, "
+            "or an integer. Auto keeps enough coordinates when many isotopologues "
+            "are available."
+        ),
+    )
     semiexp.add_argument("--sensitivity-distance-sigma", type=float, default=0.003)
     semiexp.add_argument("--sensitivity-angle-sigma", type=float, default=0.3)
     semiexp.add_argument("--sensitivity-torsion-sigma", type=float, default=0.5)
@@ -2589,6 +2598,7 @@ def main(
                 step=step,
                 fit_relative_threshold=args.sensitivity_fit_threshold,
                 fixed_relative_threshold=args.sensitivity_fixed_threshold,
+                min_fit_count=_sensitivity_min_fit_count(args.sensitivity_min_fit),
                 distance_sigma_angstrom=args.sensitivity_distance_sigma,
                 angle_sigma_degree=args.sensitivity_angle_sigma,
                 torsion_sigma_degree=args.sensitivity_torsion_sigma,
@@ -3381,6 +3391,18 @@ def _merge_unique(left: tuple[_T, ...], right: tuple[_T, ...]) -> tuple[_T, ...]
 def _job_default(value: _T, default: _T, job_value: _T | None) -> _T:
     if job_value is not None and value == default:
         return job_value
+    return value
+
+
+def _sensitivity_min_fit_count(raw: str) -> int | None:
+    text = str(raw or "auto").strip().lower()
+    if text in {"auto", ""}:
+        return None
+    if text in {"none", "off", "threshold", "threshold-only"}:
+        return 0
+    value = int(text)
+    if value < 0:
+        raise ValueError("--sensitivity-min-fit must be auto, none, or a non-negative integer")
     return value
 
 

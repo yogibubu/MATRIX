@@ -494,6 +494,7 @@ def test_semiexp_sensitivity_advisor_generates_gic_predicates(tmp_path):
         request,
         fit_relative_threshold=1.1,
         fixed_relative_threshold=-1.0,
+        min_fit_count=0,
     )
     csv_path = tmp_path / "advisor.csv"
     csv_path.write_text(advisor.csv, encoding="utf-8")
@@ -502,6 +503,30 @@ def test_semiexp_sensitivity_advisor_generates_gic_predicates(tmp_path):
     assert advisor.fit_count == 0
     assert all(item.source == "morpheus_sensitivity_advisor" for item in advisor.predicates)
     assert "relative_sensitivity,decision" in csv_path.read_text(encoding="utf-8")
+
+
+def test_semiexp_sensitivity_advisor_keeps_isotopologue_coverage():
+    from matrix_morpheus import (
+        SemiexperimentalFitRequest,
+        advise_semiexperimental_gic_sensitivity,
+        read_observations_toml,
+    )
+
+    root = Path(__file__).resolve().parents[1]
+    geometry = root / "packages/matrix-morpheus/examples/semiexp/water/parent.xyz"
+    observations = read_observations_toml(
+        root / "packages/matrix-morpheus/examples/semiexp/water/isotopologues.toml"
+    )
+    expanded = observations * 12
+    request = SemiexperimentalFitRequest(geometry, expanded)
+
+    advisor = advise_semiexperimental_gic_sensitivity(
+        request,
+        fit_relative_threshold=2.0,
+    )
+
+    assert advisor.fit_count == 2
+    assert any(row.reason == "minimum_isotopologue_coverage" for row in advisor.rows)
 
 
 def test_oracle_semiexp_cli_runs_water_gic(tmp_path):
@@ -583,6 +608,8 @@ def test_semiexp_cli_writes_sensitivity_advisor_csv(tmp_path):
             "1.1",
             "--sensitivity-fixed-threshold",
             "-1.0",
+            "--sensitivity-min-fit",
+            "none",
             "--max-iter",
             "1",
         ],

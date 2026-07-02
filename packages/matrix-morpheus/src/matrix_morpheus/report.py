@@ -378,6 +378,7 @@ def advise_semiexperimental_gic_sensitivity(
     step: float = 1.0e-4,
     fit_relative_threshold: float = 0.15,
     fixed_relative_threshold: float = 1.0e-6,
+    min_fit_count: int | None = None,
     distance_sigma_angstrom: float = 0.003,
     angle_sigma_degree: float = 0.3,
     torsion_sigma_degree: float = 0.5,
@@ -386,9 +387,12 @@ def advise_semiexperimental_gic_sensitivity(
 
     Large-sensitivity coordinates are left free. Smaller but measurable
     coordinates receive QM predicates, and numerically null coordinates are
-    fixed. The sensitivities are computed with the same NEO GICs and MORPHEUS
-    measurement model used by the fit, but with any pre-existing predicates
-    removed so that the ranking is driven only by experiment.
+    fixed. The advisor also keeps a minimum number of ranked coordinates free
+    when several isotopologues are available, because low first-order
+    sensitivity does not imply that the coordinate is scientifically
+    disposable. The sensitivities are computed with the same NEO GICs and
+    MORPHEUS measurement model used by the fit, but with any pre-existing
+    predicates removed so that the ranking is driven only by experiment.
     """
 
     if request.coordinate_model != "gic":
@@ -468,6 +472,11 @@ def advise_semiexperimental_gic_sensitivity(
             )
     candidates.sort(key=lambda item: item[2], reverse=True)
     free_budget = max(1, int(measurement.n_experimental_rows))
+    required_fit = _sensitivity_min_fit_count(
+        min_fit_count,
+        n_active=len(candidates),
+        n_isotopologues=len(request.observations),
+    )
     fitted_so_far = 0
     rows: list[SemiexperimentalSensitivityAdvisorRow] = []
     predicates: list[QMParameterPredicate] = []
@@ -479,10 +488,17 @@ def advise_semiexperimental_gic_sensitivity(
             sigma = 0.0
             reason = fixed_reason
             fixed_patterns.append(label_id)
-        elif relative >= fit_relative_threshold and fitted_so_far < free_budget:
+        elif (
+            (relative >= fit_relative_threshold or fitted_so_far < required_fit)
+            and fitted_so_far < free_budget
+        ):
             decision = "fit"
             sigma = 0.0
-            reason = "experiment_sensitive"
+            reason = (
+                "experiment_sensitive"
+                if relative >= fit_relative_threshold
+                else "minimum_isotopologue_coverage"
+            )
             fitted_so_far += 1
         else:
             decision = "predicate"
@@ -519,6 +535,20 @@ def advise_semiexperimental_gic_sensitivity(
     return SemiexperimentalSensitivityAdvisor(
         tuple(rows), tuple(predicates), tuple(fixed_patterns), measurement.components
     )
+
+
+def _sensitivity_min_fit_count(
+    min_fit_count: int | None,
+    *,
+    n_active: int,
+    n_isotopologues: int,
+) -> int:
+    if n_active <= 0:
+        return 0
+    if min_fit_count is not None:
+        return max(0, min(int(min_fit_count), int(n_active)))
+    isotope_floor = max(int(n_isotopologues), 1)
+    return min(int(n_active), max(3, isotope_floor))
 
 
 def _sensitivity_predicate_sigma(
