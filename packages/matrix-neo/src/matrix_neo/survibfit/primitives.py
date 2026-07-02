@@ -11,7 +11,7 @@ from .bmat import bond_grad, angle_grad, dihedral_grad, oop_grad, linear_grad, f
 
 @dataclass(frozen=True)
 class Primitive:
-    kind: str  # bond, angle, dihedral, linear_bend, out_of_plane, frag_trans, frag_rot
+    kind: str  # bond, angle, dihedral, linear_bend, out_of_plane, frag_dist, frag_atom_dist, frag_trans, frag_rot
     atoms: Tuple[int, ...]
     mode: int = 0  # for linear_bend: -1 or -2 to distinguish components; for frag: axis index
     ref: Tuple[int, ...] = ()
@@ -95,6 +95,16 @@ def eval_primitive(p: Primitive, coords: np.ndarray):
         c_frag = coords[frag].mean(axis=0)
         c_ref = coords[ref].mean(axis=0)
         return (c_frag - c_ref)[p.mode]
+    if p.kind == "frag_dist":
+        frag = np.array(p.atoms, dtype=int)
+        ref = np.array(p.ref, dtype=int)
+        return float(np.linalg.norm(coords[frag].mean(axis=0) - coords[ref].mean(axis=0)))
+    if p.kind == "frag_atom_dist":
+        frag = np.array(p.atoms, dtype=int)
+        ref = np.array(p.ref, dtype=int)
+        if ref.size != 1:
+            raise ValueError("frag_atom_dist requires exactly one reference atom")
+        return float(np.linalg.norm(coords[frag].mean(axis=0) - coords[int(ref[0])]))
     if p.kind == "frag_rot":
         frag = np.array(p.atoms, dtype=int)
         ref = np.array(p.ref, dtype=int)
@@ -178,6 +188,6 @@ def grad_primitive(p: Primitive, coords: np.ndarray, fd_step=1e-4):
     if p.kind == "linear_bend":
         i, j, k = p.atoms
         return linear_grad(i, j, k, coords, mode=p.mode)
-    if p.kind in ("frag_trans", "frag_rot"):
+    if p.kind in ("frag_dist", "frag_atom_dist", "frag_trans", "frag_rot"):
         return finite_diff_grad(lambda x: eval_primitive(p, x), coords, h=fd_step)
     raise ValueError(f"Unknown primitive kind: {p.kind}")

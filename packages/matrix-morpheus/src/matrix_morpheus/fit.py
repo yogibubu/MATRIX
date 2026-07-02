@@ -318,12 +318,13 @@ class GICForgeSEBackend:
         self.counter += 1
         workdir = self.root / f"iter_{self.counter:04d}"
         workdir.mkdir(parents=True, exist_ok=True)
-        if self.fragment_mode == "pseudo-bonds":
+        if self.fragment_mode in {"pseudo-bonds", "special-coordinates"}:
             definition = _fragment_aware_gic_definition(
                 self.atoms,
                 coords,
                 workdir=workdir,
                 symmetrize=self.mode == "gicsym",
+                fragment_mode=self.fragment_mode,
             )
             point_group = definition.point_group
         else:
@@ -4157,8 +4158,12 @@ def _make_gicforge_backend(atoms: tuple[str, ...], outdir: Path | None) -> GICFo
     )
     if fragment_mode in {"pseudo", "pseudobonds", "hbond", "hbonds", "h-bonds"}:
         fragment_mode = "pseudo-bonds"
-    if fragment_mode not in {"none", "pseudo-bonds"}:
-        raise ValueError("MATRIX_MORPHEUS_FRAGMENT_MODE must be 'none' or 'pseudo-bonds'")
+    if fragment_mode in {"special", "special-coordinates", "specialcoordinates", "fragments"}:
+        fragment_mode = "special-coordinates"
+    if fragment_mode not in {"none", "pseudo-bonds", "special-coordinates"}:
+        raise ValueError(
+            "MATRIX_MORPHEUS_FRAGMENT_MODE must be 'none', 'pseudo-bonds', or 'special-coordinates'"
+        )
     if outdir is None:
         root = Path(tempfile.mkdtemp(prefix="matrix_se_gicforge_"))
     else:
@@ -4173,6 +4178,7 @@ def _fragment_aware_gic_definition(
     *,
     workdir: Path,
     symmetrize: bool,
+    fragment_mode: str,
 ) -> GICDefinition:
     source = workdir / "molecule.xyz"
     xyzin = workdir / "molecule.xyzin"
@@ -4193,7 +4199,7 @@ def _fragment_aware_gic_definition(
     neo_definition = write_gicforge_build_sections(
         xyzin,
         symmetrize=symmetrize,
-        fragment_mode="pseudo-bonds",
+        fragment_mode=fragment_mode,
     )
     primitive_by_id = {primitive.identifier: primitive for primitive in neo_definition.primitives}
     primitive_index: dict[tuple[str, int], int] = {}
@@ -4236,7 +4242,7 @@ def _fragment_aware_gic_definition(
         symmetry_source="matrix-neo-fragment-aware",
         gaussian_input="\n".join(gic.gaussian_expression for gic in neo_definition.gics),
         generation_workdir=str(workdir),
-        provenance={"xyzin": str(xyzin), "fragment_mode": "pseudo-bonds"},
+        provenance={"xyzin": str(xyzin), "fragment_mode": fragment_mode},
     )
 
 
@@ -4258,6 +4264,52 @@ def _survibfit_basis_terms_from_gic_primitive(source_primitive) -> tuple[tuple[P
                 arity=4,
                 function="RPCK",
             )
+        )
+    if source_primitive.function == "FC_DIST":
+        return (
+            (
+                Primitive(
+                    "frag_dist",
+                    tuple(atom - 1 for atom in source_primitive.atoms),
+                    ref=tuple(atom - 1 for atom in source_primitive.ref_atoms),
+                ),
+                1.0,
+            ),
+        )
+    if source_primitive.function in {"FCA_DIST", "CENTER_ATOM_DIST"}:
+        return (
+            (
+                Primitive(
+                    "frag_atom_dist",
+                    tuple(atom - 1 for atom in source_primitive.atoms),
+                    ref=tuple(atom - 1 for atom in source_primitive.ref_atoms),
+                ),
+                1.0,
+            ),
+        )
+    if source_primitive.function == "FTRANS":
+        return (
+            (
+                Primitive(
+                    "frag_trans",
+                    tuple(atom - 1 for atom in source_primitive.atoms),
+                    mode=int(source_primitive.mode),
+                    ref=tuple(atom - 1 for atom in source_primitive.ref_atoms),
+                ),
+                1.0,
+            ),
+        )
+    if source_primitive.function == "FROT":
+        return (
+            (
+                Primitive(
+                    "frag_rot",
+                    tuple(atom - 1 for atom in source_primitive.atoms),
+                    mode=int(source_primitive.mode),
+                    ref=tuple(atom - 1 for atom in source_primitive.ref_atoms),
+                ),
+                1.0,
+            ),
         )
     return ((_survibfit_primitive_from_gic_primitive(source_primitive), 1.0),)
 
