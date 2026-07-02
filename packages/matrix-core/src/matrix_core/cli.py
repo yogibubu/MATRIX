@@ -778,6 +778,27 @@ def build_parser(
     semiexp.add_argument("--sensitivity-angle-sigma", type=float, default=0.3)
     semiexp.add_argument("--sensitivity-torsion-sigma", type=float, default=0.5)
     semiexp.add_argument(
+        "--sensitivity-soft-predicate-scale",
+        type=float,
+        default=1.0,
+        help="Scale predicates for non-selected soft/intermolecular GICs.",
+    )
+    semiexp.add_argument(
+        "--sensitivity-null-predicate-scale",
+        type=float,
+        default=1.0,
+        help="Additional scale for nearly null non-selected GIC predicates.",
+    )
+    semiexp.add_argument(
+        "--sensitivity-fit-regularization-scale",
+        type=float,
+        default=0.0,
+        help=(
+            "Weak predicate scale for selected soft/intermolecular GICs; "
+            "use 0 to leave them fully unregularized."
+        ),
+    )
+    semiexp.add_argument(
         "--parameter-class",
         action="append",
         default=[],
@@ -2602,6 +2623,9 @@ def main(
                 distance_sigma_angstrom=args.sensitivity_distance_sigma,
                 angle_sigma_degree=args.sensitivity_angle_sigma,
                 torsion_sigma_degree=args.sensitivity_torsion_sigma,
+                soft_predicate_scale=args.sensitivity_soft_predicate_scale,
+                null_predicate_scale=args.sensitivity_null_predicate_scale,
+                fit_regularization_scale=args.sensitivity_fit_regularization_scale,
             )
             fixed = _merge_unique(fixed, advisor.fixed_patterns)
             qm_predicates = _merge_unique(qm_predicates, advisor.predicates)

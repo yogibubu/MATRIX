@@ -550,6 +550,46 @@ def test_semiexp_sensitivity_advisor_prefers_soft_inter_coordinates():
     assert selected == {"GIC002", "GIC003", "GIC004"}
 
 
+def test_semiexp_sensitivity_advisor_scales_soft_gic_predicates():
+    from matrix_morpheus.report import (
+        _sensitivity_fit_regularization_sigma,
+        _sensitivity_predicate_sigma,
+    )
+
+    soft = "GIC001 NEO APsAn0001 irrep=A NONE"
+    hard = "GIC002 NEO AStr0001 irrep=A R(1,2)"
+    soft_sigma = _sensitivity_predicate_sigma(
+        soft,
+        relative=0.01,
+        fit_relative_threshold=0.5,
+        distance_sigma_angstrom=0.003,
+        angle_sigma_degree=0.3,
+        torsion_sigma_degree=0.5,
+        soft_predicate_scale=0.5,
+        null_predicate_scale=0.25,
+    )
+    hard_fit_sigma = _sensitivity_fit_regularization_sigma(
+        hard,
+        relative=1.0,
+        fit_regularization_scale=2.0,
+        distance_sigma_angstrom=0.003,
+        angle_sigma_degree=0.3,
+        torsion_sigma_degree=0.5,
+    )
+    soft_fit_sigma = _sensitivity_fit_regularization_sigma(
+        soft,
+        relative=1.0,
+        fit_regularization_scale=2.0,
+        distance_sigma_angstrom=0.003,
+        angle_sigma_degree=0.3,
+        torsion_sigma_degree=0.5,
+    )
+
+    assert soft_sigma == pytest.approx(np.deg2rad(0.5) * 0.5 * 0.25)
+    assert hard_fit_sigma == 0.0
+    assert soft_fit_sigma == pytest.approx(np.deg2rad(0.5) * 4.0)
+
+
 def test_oracle_semiexp_cli_runs_water_gic(tmp_path):
     from matrix_core.cli import main
     from matrix_morpheus import read_morpheus_section

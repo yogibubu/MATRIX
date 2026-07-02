@@ -382,6 +382,9 @@ def advise_semiexperimental_gic_sensitivity(
     distance_sigma_angstrom: float = 0.003,
     angle_sigma_degree: float = 0.3,
     torsion_sigma_degree: float = 0.5,
+    soft_predicate_scale: float = 1.0,
+    null_predicate_scale: float = 1.0,
+    fit_regularization_scale: float = 0.0,
 ) -> SemiexperimentalSensitivityAdvisor:
     """Partition non-redundant GICs from rotational-constant sensitivity.
 
@@ -495,19 +498,39 @@ def advise_semiexperimental_gic_sensitivity(
             fixed_patterns.append(label_id)
         elif label_id in selected_labels:
             decision = "fit"
-            sigma = 0.0
+            sigma = _sensitivity_fit_regularization_sigma(
+                label,
+                relative=relative,
+                fit_regularization_scale=fit_regularization_scale,
+                distance_sigma_angstrom=distance_sigma_angstrom,
+                angle_sigma_degree=angle_sigma_degree,
+                torsion_sigma_degree=torsion_sigma_degree,
+            )
             reason = (
                 "experiment_sensitive"
                 if relative >= fit_relative_threshold
                 else _sensitivity_fit_reason(label)
             )
+            if sigma > 0.0:
+                predicates.append(
+                    QMParameterPredicate(
+                        label_id,
+                        value,
+                        sigma,
+                        "morpheus_sensitivity_advisor_fit_regularization",
+                    )
+                )
         else:
             decision = "predicate"
             sigma = _sensitivity_predicate_sigma(
                 label,
+                relative=relative,
+                fit_relative_threshold=fit_relative_threshold,
                 distance_sigma_angstrom=distance_sigma_angstrom,
                 angle_sigma_degree=angle_sigma_degree,
                 torsion_sigma_degree=torsion_sigma_degree,
+                soft_predicate_scale=soft_predicate_scale,
+                null_predicate_scale=null_predicate_scale,
             )
             reason = (
                 "below_fit_threshold"
@@ -633,6 +656,53 @@ def _sensitivity_min_fit_count(
 def _sensitivity_predicate_sigma(
     label: str,
     *,
+    relative: float = 1.0,
+    fit_relative_threshold: float = 0.15,
+    distance_sigma_angstrom: float,
+    angle_sigma_degree: float,
+    torsion_sigma_degree: float,
+    soft_predicate_scale: float = 0.5,
+    null_predicate_scale: float = 0.25,
+) -> float:
+    scale = 1.0
+    if _is_soft_gic(label) or _is_inter_or_special_gic(label):
+        scale *= max(float(soft_predicate_scale), 1.0e-12)
+    if relative < max(float(fit_relative_threshold), 1.0e-12) * 0.1:
+        scale *= max(float(null_predicate_scale), 1.0e-12)
+    return scale * _sensitivity_base_sigma(
+        label,
+        distance_sigma_angstrom=distance_sigma_angstrom,
+        angle_sigma_degree=angle_sigma_degree,
+        torsion_sigma_degree=torsion_sigma_degree,
+    )
+
+
+def _sensitivity_fit_regularization_sigma(
+    label: str,
+    *,
+    relative: float,
+    fit_regularization_scale: float,
+    distance_sigma_angstrom: float,
+    angle_sigma_degree: float,
+    torsion_sigma_degree: float,
+) -> float:
+    if fit_regularization_scale <= 0.0:
+        return 0.0
+    if not (_is_soft_gic(label) or _is_inter_or_special_gic(label)):
+        return 0.0
+    base = _sensitivity_base_sigma(
+        label,
+        distance_sigma_angstrom=distance_sigma_angstrom,
+        angle_sigma_degree=angle_sigma_degree,
+        torsion_sigma_degree=torsion_sigma_degree,
+    )
+    sensitivity_factor = 1.0 + max(float(relative), 0.0)
+    return float(base) * float(fit_regularization_scale) * sensitivity_factor
+
+
+def _sensitivity_base_sigma(
+    label: str,
+    *,
     distance_sigma_angstrom: float,
     angle_sigma_degree: float,
     torsion_sigma_degree: float,
@@ -640,7 +710,7 @@ def _sensitivity_predicate_sigma(
     kind = _gic_kind(label)
     if kind == "distance":
         return float(distance_sigma_angstrom)
-    if kind in {"torsion", "ring"}:
+    if kind in {"torsion", "ring"} or _is_soft_gic(label):
         return float(np.deg2rad(torsion_sigma_degree))
     return float(np.deg2rad(angle_sigma_degree))
 
