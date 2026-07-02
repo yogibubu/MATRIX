@@ -396,6 +396,20 @@ PRIMITIVE_CLASS_BUDGET = auto
     assert config.primitive_class_budget == "auto"
 
 
+def test_morpheus_xyzin_config_normalizes_rotational_component_lists():
+    from matrix_morpheus import parse_morpheus_input_config
+
+    config = parse_morpheus_input_config(
+        [
+            "COORDINATE_MODEL = gic",
+            "OBSERVABLE = rotational_constants",
+            "COMPONENTS = A,B,C",
+        ]
+    )
+
+    assert config.components == "ABC"
+
+
 def test_initial_geometry_predicates_separate_xy_and_xh_bonds():
     from matrix_morpheus import initial_geometry_predicates
 

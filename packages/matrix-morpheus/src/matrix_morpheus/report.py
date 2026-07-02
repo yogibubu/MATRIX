@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import csv
 from html import escape
+import io
 from pathlib import Path
 import re
 
@@ -141,16 +143,32 @@ class SemiexperimentalSensitivityAdvisor:
 
     @property
     def csv(self) -> str:
-        lines = [
-            "label,value,sensitivity,relative_sensitivity,decision,predicate_sigma,reason"
-        ]
-        lines.extend(
-            f"{row.label},{row.value:.12g},{row.sensitivity:.12g},"
-            f"{row.relative_sensitivity:.12g},{row.decision},"
-            f"{row.predicate_sigma:.12g},{row.reason}"
-            for row in self.rows
+        stream = io.StringIO()
+        writer = csv.writer(stream)
+        writer.writerow(
+            [
+                "label",
+                "value",
+                "sensitivity",
+                "relative_sensitivity",
+                "decision",
+                "predicate_sigma",
+                "reason",
+            ]
         )
-        return "\n".join(lines) + "\n"
+        for row in self.rows:
+            writer.writerow(
+                [
+                    row.label,
+                    f"{row.value:.12g}",
+                    f"{row.sensitivity:.12g}",
+                    f"{row.relative_sensitivity:.12g}",
+                    row.decision,
+                    f"{row.predicate_sigma:.12g}",
+                    row.reason,
+                ]
+            )
+        return stream.getvalue()
 
     @property
     def text(self) -> str:
@@ -422,20 +440,51 @@ def advise_semiexperimental_gic_sensitivity(
     if not np.isfinite(max_sensitivity) or max_sensitivity <= 0.0:
         max_sensitivity = 1.0
     q_values = _gic_values(prims, u_matrix, coords_arr)
-    rows: list[SemiexperimentalSensitivityAdvisorRow] = []
-    predicates: list[QMParameterPredicate] = []
-    fixed_patterns: list[str] = []
+    candidates: list[tuple[str, float, float, float, str]] = []
     for column, label_index in enumerate(active_indices):
         label = labels[int(label_index)]
         sensitivity = float(sensitivities[column])
         relative = sensitivity / max_sensitivity
         label_id = _gic_id(label)
         if relative < fixed_relative_threshold:
+            candidates.append(
+                (
+                    label,
+                    float(q_values[int(label_index)]),
+                    sensitivity,
+                    relative,
+                    "below_fixed_threshold",
+                )
+            )
+        else:
+            candidates.append(
+                (
+                    label,
+                    float(q_values[int(label_index)]),
+                    sensitivity,
+                    relative,
+                    "",
+                )
+            )
+    candidates.sort(key=lambda item: item[2], reverse=True)
+    free_budget = max(1, int(measurement.n_experimental_rows))
+    fitted_so_far = 0
+    rows: list[SemiexperimentalSensitivityAdvisorRow] = []
+    predicates: list[QMParameterPredicate] = []
+    fixed_patterns: list[str] = []
+    for label, value, sensitivity, relative, fixed_reason in candidates:
+        label_id = _gic_id(label)
+        if fixed_reason:
             decision = "fixed"
             sigma = 0.0
-            reason = "below_fixed_threshold"
+            reason = fixed_reason
             fixed_patterns.append(label_id)
-        elif relative < fit_relative_threshold:
+        elif relative >= fit_relative_threshold and fitted_so_far < free_budget:
+            decision = "fit"
+            sigma = 0.0
+            reason = "experiment_sensitive"
+            fitted_so_far += 1
+        else:
             decision = "predicate"
             sigma = _sensitivity_predicate_sigma(
                 label,
@@ -443,23 +492,23 @@ def advise_semiexperimental_gic_sensitivity(
                 angle_sigma_degree=angle_sigma_degree,
                 torsion_sigma_degree=torsion_sigma_degree,
             )
-            reason = "below_fit_threshold"
+            reason = (
+                "below_fit_threshold"
+                if relative < fit_relative_threshold
+                else "outside_experimental_budget"
+            )
             predicates.append(
                 QMParameterPredicate(
                     label_id,
-                    float(q_values[int(label_index)]),
+                    value,
                     sigma,
                     "morpheus_sensitivity_advisor",
                 )
             )
-        else:
-            decision = "fit"
-            sigma = 0.0
-            reason = "experiment_sensitive"
         rows.append(
             SemiexperimentalSensitivityAdvisorRow(
                 label,
-                float(q_values[int(label_index)]),
+                value,
                 sensitivity,
                 relative,
                 decision,
@@ -467,7 +516,6 @@ def advise_semiexperimental_gic_sensitivity(
                 reason,
             )
         )
-    rows.sort(key=lambda item: item.sensitivity, reverse=True)
     return SemiexperimentalSensitivityAdvisor(
         tuple(rows), tuple(predicates), tuple(fixed_patterns), measurement.components
     )

@@ -399,13 +399,13 @@ def _normalize_input_components(raw: str | None) -> str | None:
     if text is None:
         return None
     low = text.lower().replace(" ", "")
-    if low in {"ia,ib,ic", "iaibic"}:
+    if low in {"a,b,c", "abc", "ia,ib,ic", "iaibic"}:
         return "ABC"
-    if low in {"ia,ib", "iaib"}:
+    if low in {"a,b", "ab", "ia,ib", "iaib"}:
         return "AB"
-    if low in {"ia,ic", "iaic"}:
+    if low in {"a,c", "ac", "ia,ic", "iaic"}:
         return "AC"
-    if low in {"ib,ic", "ibic"}:
+    if low in {"b,c", "bc", "ib,ic", "ibic"}:
         return "BC"
     return text
 
