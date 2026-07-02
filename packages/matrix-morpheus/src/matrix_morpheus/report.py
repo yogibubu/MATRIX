@@ -9,7 +9,12 @@ import numpy as np
 
 from matrix_core.numerics import rank_condition
 
-from .contracts import IsotopologueObservation, ParameterClassConstraint, SemiexperimentalFitRequest
+from .contracts import (
+    IsotopologueObservation,
+    ParameterClassConstraint,
+    QMParameterPredicate,
+    SemiexperimentalFitRequest,
+)
 from .fit import (
     SemiexperimentalFitResult,
     _active_mask,
@@ -17,6 +22,7 @@ from .fit import (
     _build_measurement_model,
     _gic_model,
     _gic_fixed_patterns,
+    _gic_values,
     _gicforge_a1_mask,
     _jacobian_constants_wrt_gics,
     _combined_fixed_parameters,
@@ -100,6 +106,65 @@ class SemiexperimentalConditioningPreview:
         ]
         if self.warnings:
             lines.extend(["Warnings:", *[f"  {item}" for item in self.warnings]])
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class SemiexperimentalSensitivityAdvisorRow:
+    label: str
+    value: float
+    sensitivity: float
+    relative_sensitivity: float
+    decision: str
+    predicate_sigma: float
+    reason: str
+
+
+@dataclass(frozen=True)
+class SemiexperimentalSensitivityAdvisor:
+    rows: tuple[SemiexperimentalSensitivityAdvisorRow, ...]
+    predicates: tuple[QMParameterPredicate, ...]
+    fixed_patterns: tuple[str, ...]
+    components: tuple[str, ...]
+
+    @property
+    def fit_count(self) -> int:
+        return sum(1 for row in self.rows if row.decision == "fit")
+
+    @property
+    def predicate_count(self) -> int:
+        return sum(1 for row in self.rows if row.decision == "predicate")
+
+    @property
+    def fixed_count(self) -> int:
+        return sum(1 for row in self.rows if row.decision == "fixed")
+
+    @property
+    def csv(self) -> str:
+        lines = [
+            "label,value,sensitivity,relative_sensitivity,decision,predicate_sigma,reason"
+        ]
+        lines.extend(
+            f"{row.label},{row.value:.12g},{row.sensitivity:.12g},"
+            f"{row.relative_sensitivity:.12g},{row.decision},"
+            f"{row.predicate_sigma:.12g},{row.reason}"
+            for row in self.rows
+        )
+        return "\n".join(lines) + "\n"
+
+    @property
+    def text(self) -> str:
+        lines = [
+            "MATRIX/MORPHEUS sensitivity advisor",
+            f"components: {','.join(self.components)}",
+            f"fit: {self.fit_count}",
+            f"predicate: {self.predicate_count}",
+            f"fixed: {self.fixed_count}",
+        ]
+        lines.extend(
+            f"  {row.decision:9s} rel={row.relative_sensitivity:.4g} {row.label}"
+            for row in self.rows
+        )
         return "\n".join(lines)
 
 
@@ -287,6 +352,140 @@ def preview_semiexperimental_conditioning(
         measurement.components,
         tuple(warnings),
     )
+
+
+def advise_semiexperimental_gic_sensitivity(
+    request: SemiexperimentalFitRequest,
+    *,
+    step: float = 1.0e-4,
+    fit_relative_threshold: float = 0.15,
+    fixed_relative_threshold: float = 1.0e-6,
+    distance_sigma_angstrom: float = 0.003,
+    angle_sigma_degree: float = 0.3,
+    torsion_sigma_degree: float = 0.5,
+) -> SemiexperimentalSensitivityAdvisor:
+    """Partition non-redundant GICs from rotational-constant sensitivity.
+
+    Large-sensitivity coordinates are left free. Smaller but measurable
+    coordinates receive QM predicates, and numerically null coordinates are
+    fixed. The sensitivities are computed with the same NEO GICs and MORPHEUS
+    measurement model used by the fit, but with any pre-existing predicates
+    removed so that the ranking is driven only by experiment.
+    """
+
+    if request.coordinate_model != "gic":
+        raise ValueError("GIC sensitivity advisor requires coordinate_model='gic'")
+    geometry_input = read_geometry_input(Path(request.initial_geometry))
+    atoms = geometry_input.atoms
+    coords_arr = np.asarray(geometry_input.coordinates_angstrom, dtype=float)
+    z_numbers = np.array([_atomic_number(symbol) for symbol in atoms], dtype=int)
+    prims, u_matrix, labels = _gic_model(coords_arr, z_numbers)
+    experimental_request = SemiexperimentalFitRequest(
+        initial_geometry=request.initial_geometry,
+        observations=request.observations,
+        fixed_parameters=request.fixed_parameters,
+        observable=request.observable,
+        rotational_components=request.rotational_components,
+        qm_predicates=(),
+        parameter_classes=request.parameter_classes,
+        coordinate_model=request.coordinate_model,
+        robust_loss=request.robust_loss,
+        robust_scale=request.robust_scale,
+        leave_one_out=request.leave_one_out,
+    )
+    measurement = _build_measurement_model(
+        experimental_request, atoms, coords_arr, prims, u_matrix, labels
+    )
+    fixed_parameters = _combined_fixed_parameters(
+        request.fixed_parameters, geometry_input.fixed_parameters
+    )
+    active = _active_mask(
+        labels,
+        _gic_fixed_patterns(fixed_parameters),
+        request.parameter_classes,
+    ) & _gicforge_a1_mask(labels)
+    jac = _jacobian_constants_wrt_gics(
+        atoms,
+        coords_arr,
+        experimental_request,
+        prims,
+        u_matrix,
+        active,
+        labels,
+        measurement,
+        step=step,
+    )
+    active_indices = np.where(active)[0]
+    weighted = jac * np.sqrt(measurement.weights)[:, None]
+    sensitivities = np.linalg.norm(weighted, axis=0) if weighted.size else np.zeros(0)
+    max_sensitivity = float(np.max(sensitivities)) if sensitivities.size else 0.0
+    if not np.isfinite(max_sensitivity) or max_sensitivity <= 0.0:
+        max_sensitivity = 1.0
+    q_values = _gic_values(prims, u_matrix, coords_arr)
+    rows: list[SemiexperimentalSensitivityAdvisorRow] = []
+    predicates: list[QMParameterPredicate] = []
+    fixed_patterns: list[str] = []
+    for column, label_index in enumerate(active_indices):
+        label = labels[int(label_index)]
+        sensitivity = float(sensitivities[column])
+        relative = sensitivity / max_sensitivity
+        label_id = _gic_id(label)
+        if relative < fixed_relative_threshold:
+            decision = "fixed"
+            sigma = 0.0
+            reason = "below_fixed_threshold"
+            fixed_patterns.append(label_id)
+        elif relative < fit_relative_threshold:
+            decision = "predicate"
+            sigma = _sensitivity_predicate_sigma(
+                label,
+                distance_sigma_angstrom=distance_sigma_angstrom,
+                angle_sigma_degree=angle_sigma_degree,
+                torsion_sigma_degree=torsion_sigma_degree,
+            )
+            reason = "below_fit_threshold"
+            predicates.append(
+                QMParameterPredicate(
+                    label_id,
+                    float(q_values[int(label_index)]),
+                    sigma,
+                    "morpheus_sensitivity_advisor",
+                )
+            )
+        else:
+            decision = "fit"
+            sigma = 0.0
+            reason = "experiment_sensitive"
+        rows.append(
+            SemiexperimentalSensitivityAdvisorRow(
+                label,
+                float(q_values[int(label_index)]),
+                sensitivity,
+                relative,
+                decision,
+                sigma,
+                reason,
+            )
+        )
+    rows.sort(key=lambda item: item.sensitivity, reverse=True)
+    return SemiexperimentalSensitivityAdvisor(
+        tuple(rows), tuple(predicates), tuple(fixed_patterns), measurement.components
+    )
+
+
+def _sensitivity_predicate_sigma(
+    label: str,
+    *,
+    distance_sigma_angstrom: float,
+    angle_sigma_degree: float,
+    torsion_sigma_degree: float,
+) -> float:
+    kind = _gic_kind(label)
+    if kind == "distance":
+        return float(distance_sigma_angstrom)
+    if kind in {"torsion", "ring"}:
+        return float(np.deg2rad(torsion_sigma_degree))
+    return float(np.deg2rad(angle_sigma_degree))
 
 
 def suggest_parameter_classes(

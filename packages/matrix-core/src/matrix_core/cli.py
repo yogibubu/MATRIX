@@ -755,6 +755,20 @@ def build_parser(
         ),
     )
     semiexp.add_argument(
+        "--sensitivity-advisor",
+        action="store_true",
+        help=(
+            "Rank symmetry-adapted non-redundant GICs by weighted effect on "
+            "rotational constants; optimize sensitive coordinates, add predicates "
+            "to weak coordinates, and fix null coordinates."
+        ),
+    )
+    semiexp.add_argument("--sensitivity-fit-threshold", type=float, default=0.15)
+    semiexp.add_argument("--sensitivity-fixed-threshold", type=float, default=1.0e-6)
+    semiexp.add_argument("--sensitivity-distance-sigma", type=float, default=0.003)
+    semiexp.add_argument("--sensitivity-angle-sigma", type=float, default=0.3)
+    semiexp.add_argument("--sensitivity-torsion-sigma", type=float, default=0.5)
+    semiexp.add_argument(
         "--parameter-class",
         action="append",
         default=[],
@@ -2191,6 +2205,7 @@ def main(
             QMParameterPredicate,
             SemiexperimentalFitRequest,
             SYNTHON_CLASS_LEVELS,
+            advise_semiexperimental_gic_sensitivity,
             derive_primitive_class_plan,
             fit_semiexperimental_geometry,
             initial_geometry_predicates,
@@ -2553,6 +2568,43 @@ def main(
                 )
             for line in primitive_class_decision_lines(class_plan):
                 print(line)
+        if args.sensitivity_advisor:
+            if coordinate_model != "gic":
+                raise ValueError("--sensitivity-advisor is only supported with --coordinate-model gic")
+            advisor_request = SemiexperimentalFitRequest(
+                initial_geometry=geometry_path,
+                observations=observations,
+                fixed_parameters=fixed,
+                observable=observable,
+                rotational_components=rotational_components,
+                qm_predicates=qm_predicates,
+                parameter_classes=parameter_classes,
+                coordinate_model=coordinate_model,
+                robust_loss=robust_loss,
+                robust_scale=robust_scale,
+                leave_one_out=leave_one_out,
+            )
+            advisor = advise_semiexperimental_gic_sensitivity(
+                advisor_request,
+                step=step,
+                fit_relative_threshold=args.sensitivity_fit_threshold,
+                fixed_relative_threshold=args.sensitivity_fixed_threshold,
+                distance_sigma_angstrom=args.sensitivity_distance_sigma,
+                angle_sigma_degree=args.sensitivity_angle_sigma,
+                torsion_sigma_degree=args.sensitivity_torsion_sigma,
+            )
+            fixed = _merge_unique(fixed, advisor.fixed_patterns)
+            qm_predicates = _merge_unique(qm_predicates, advisor.predicates)
+            args.outdir.mkdir(parents=True, exist_ok=True)
+            advisor_path = args.outdir / "semiexp_sensitivity_advisor.csv"
+            advisor_path.write_text(advisor.csv, encoding="utf-8")
+            print(
+                "morpheus_sensitivity_advisor: "
+                f"fit={advisor.fit_count} "
+                f"predicate={advisor.predicate_count} "
+                f"fixed={advisor.fixed_count} "
+                f"csv={advisor_path}"
+            )
         if (
             coordinate_model == "gic"
             and not args.no_auto_stabilize

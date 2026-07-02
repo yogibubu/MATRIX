@@ -462,6 +462,34 @@ def test_kraitchman_seed_predicates_can_use_partial_seed_atoms():
     assert all(item.source.startswith("kraitchman_seed") for item in partial)
 
 
+def test_semiexp_sensitivity_advisor_generates_gic_predicates(tmp_path):
+    from matrix_morpheus import (
+        SemiexperimentalFitRequest,
+        advise_semiexperimental_gic_sensitivity,
+        read_observations_toml,
+    )
+
+    root = Path(__file__).resolve().parents[1]
+    geometry = root / "packages/matrix-morpheus/examples/semiexp/water/parent.xyz"
+    observations = read_observations_toml(
+        root / "packages/matrix-morpheus/examples/semiexp/water/isotopologues.toml"
+    )
+    request = SemiexperimentalFitRequest(geometry, observations)
+
+    advisor = advise_semiexperimental_gic_sensitivity(
+        request,
+        fit_relative_threshold=1.1,
+        fixed_relative_threshold=-1.0,
+    )
+    csv_path = tmp_path / "advisor.csv"
+    csv_path.write_text(advisor.csv, encoding="utf-8")
+
+    assert advisor.predicate_count == len(advisor.predicates) > 0
+    assert advisor.fit_count == 0
+    assert all(item.source == "morpheus_sensitivity_advisor" for item in advisor.predicates)
+    assert "relative_sensitivity,decision" in csv_path.read_text(encoding="utf-8")
+
+
 def test_oracle_semiexp_cli_runs_water_gic(tmp_path):
     from matrix_core.cli import main
     from matrix_morpheus import read_morpheus_section
@@ -518,6 +546,40 @@ def test_oracle_semiexp_cli_runs_water_gic(tmp_path):
     assert (outdir / "semiexp_report.html").is_file()
     assert "base_weight,robust_weight,effective_weight" in weight_diagnostics
     assert "studentized_residual,cooks_distance" in weight_diagnostics
+
+
+def test_semiexp_cli_writes_sensitivity_advisor_csv(tmp_path):
+    from matrix_core.cli import main
+
+    root = Path(__file__).resolve().parents[1]
+    outdir = tmp_path / "run"
+    status = main(
+        [
+            "semiexp",
+            "--xyz",
+            str(root / "packages/matrix-morpheus/examples/semiexp/water/parent.xyz"),
+            "--observations",
+            str(root / "packages/matrix-morpheus/examples/semiexp/water/isotopologues.toml"),
+            "--outdir",
+            str(outdir),
+            "--coordinate-model",
+            "gic",
+            "--sensitivity-advisor",
+            "--sensitivity-fit-threshold",
+            "1.1",
+            "--sensitivity-fixed-threshold",
+            "-1.0",
+            "--max-iter",
+            "1",
+        ],
+        repo_root=root,
+    )
+
+    advisor_csv = (outdir / "semiexp_sensitivity_advisor.csv").read_text(encoding="utf-8")
+
+    assert status == 0
+    assert "below_fit_threshold" in advisor_csv
+    assert ",predicate," in advisor_csv
 
 
 def test_semiexp_cli_accepts_standard_xyzin_morpheus_input(tmp_path):
