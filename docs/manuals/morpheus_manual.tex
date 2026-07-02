@@ -479,7 +479,15 @@ totally symmetric directions.
 \subsection{Model-layer-generated constraints}
 
 The advisor analyzes symmetry, isotopic coverage and reference structural
-information.  Typical actions are:
+information.  It is a conservative tuning layer on top of a chemically valid
+model, not an automatic replacement for that model.  A run requested with
+\texttt{--apply-sensitivity-advisor} is accepted only if the base model already
+passes the MORPHEUS rank and validation checks and the advisor candidate does
+not worsen the rotational residuals, rank, conditioning or fitted geometry
+beyond the configured gate thresholds.  If the base model is underdetermined,
+the advisor report is still written for diagnosis, but its suggestions are not
+applied automatically; the user must first add justified predicates, parameter
+classes or fixed coordinates.  Typical actions are:
 
 \begin{itemize}
   \item freeze hydrogen local geometry when corresponding deuterations are

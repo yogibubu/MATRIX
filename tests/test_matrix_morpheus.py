@@ -728,6 +728,38 @@ def test_semiexp_cli_applies_sensitivity_advisor_only_when_requested(tmp_path):
     assert "morpheus_sensitivity_advisor" in weight_diagnostics
 
 
+def test_semiexp_sensitivity_gate_rejects_invalid_chemical_model(tmp_path):
+    from matrix_core.cli import _sensitivity_safe_apply_gate
+
+    class InvalidChemicalModel(Exception):
+        pass
+
+    def fit_stub(request, **kwargs):
+        raise InvalidChemicalModel("base model is underdetermined")
+
+    gate = _sensitivity_safe_apply_gate(
+        base_request=object(),
+        candidate_request=object(),
+        fit_semiexperimental_geometry=fit_stub,
+        outdir=tmp_path / "gate",
+        max_iter=1,
+        step=1.0e-3,
+        damping=1.0,
+        max_step=0.05,
+        prune_condition=1.0e8,
+        rot_rel_tol=0.02,
+        rot_abs_tol=1.0e-3,
+        condition_factor=10.0,
+        max_bond_delta=0.01,
+        max_angle_delta=1.0,
+    )
+
+    assert gate["accepted"] is False
+    assert gate["reason"] == "chemical_model_invalid"
+    assert "base model is underdetermined" in gate["base_error"]
+    assert "chemical predicates" in gate["action"]
+
+
 def test_semiexp_cli_accepts_standard_xyzin_morpheus_input(tmp_path):
     from matrix_core.cli import main
     from matrix_morpheus import prepare_semiexperimental_xyzin, read_morpheus_section
