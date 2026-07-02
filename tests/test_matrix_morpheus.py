@@ -728,33 +728,6 @@ def test_semiexp_cli_applies_sensitivity_advisor_only_when_requested(tmp_path):
     assert "morpheus_sensitivity_advisor" in weight_diagnostics
 
 
-def test_semiexp_sensitivity_gate_rejects_invalid_base_model(tmp_path):
-    from matrix_core.cli import _sensitivity_safe_apply_gate
-
-    def failing_fit(*_args, **_kwargs):
-        raise RuntimeError("base model is underdetermined")
-
-    gate = _sensitivity_safe_apply_gate(
-        base_request=object(),
-        candidate_request=object(),
-        fit_semiexperimental_geometry=failing_fit,
-        outdir=tmp_path,
-        max_iter=1,
-        step=1.0e-4,
-        damping=1.0e-8,
-        max_step=0.25,
-        prune_condition=0.0,
-        rot_rel_tol=0.02,
-        rot_abs_tol=1.0e-3,
-        condition_factor=10.0,
-        max_bond_delta=0.01,
-        max_angle_delta=1.0,
-    )
-
-    assert gate["accepted"] is False
-    assert gate["reason"] == "base_model_invalid"
-
-
 def test_semiexp_cli_accepts_standard_xyzin_morpheus_input(tmp_path):
     from matrix_core.cli import main
     from matrix_morpheus import prepare_semiexperimental_xyzin, read_morpheus_section

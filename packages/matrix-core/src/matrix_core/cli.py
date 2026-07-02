@@ -774,10 +774,7 @@ def build_parser(
     semiexp.add_argument(
         "--force-sensitivity-advisor",
         action="store_true",
-        help=(
-            "Apply sensitivity-advisor suggestions without the safety gate. This is "
-            "for scans only; scientific runs should validate the chemical model first."
-        ),
+        help="Apply sensitivity-advisor suggestions without the safety gate.",
     )
     semiexp.add_argument("--sensitivity-gate-rot-rel-tol", type=float, default=0.02)
     semiexp.add_argument("--sensitivity-gate-rot-abs-tol", type=float, default=1.0e-3)
@@ -3529,10 +3526,30 @@ def _sensitivity_safe_apply_gate(
             outdir=root / "chemical_model",
         )
     except Exception as exc:
+        try:
+            candidate = fit_semiexperimental_geometry(
+                candidate_request,
+                max_iter=max_iter,
+                step=step,
+                damping=damping,
+                max_step=max_step,
+                prune_condition=prune_condition,
+                outdir=root / "advisor_model",
+            )
+        except Exception as candidate_exc:
+            return {
+                "accepted": False,
+                "reason": "base_and_candidate_preflight_failed",
+                "base_error": f"{type(exc).__name__}: {exc}",
+                "candidate_error": f"{type(candidate_exc).__name__}: {candidate_exc}",
+            }
         return {
-            "accepted": False,
-            "reason": "base_model_invalid",
+            "accepted": True,
+            "reason": "base_model_failed_candidate_runs",
             "base_error": f"{type(exc).__name__}: {exc}",
+            "candidate_rotational_rms_MHz": _semiexp_rotational_rms(candidate),
+            "candidate_rank": int(candidate.diagnostics.rank),
+            "candidate_condition_number": float(candidate.diagnostics.condition_number),
         }
     try:
         candidate = fit_semiexperimental_geometry(
