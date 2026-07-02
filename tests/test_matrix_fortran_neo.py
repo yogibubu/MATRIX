@@ -192,6 +192,7 @@ def test_python_pseudo_bond_hbond_mode_tracks_legacy_fortran_hbond_contract(tmp_
     root = Path(__file__).resolve().parents[1]
     legacy = root / "engines" / "fortran" / "gicforge" / "legacy_merlino"
     mkprim = (legacy / "mkprim.f").read_text(encoding="utf-8")
+    mkcyc = (legacy / "mkcyc.f").read_text(encoding="utf-8")
     coord = (legacy / "coord.f").read_text(encoding="utf-8")
     source = tmp_path / "formic_acid_water.xyz"
     source.write_text(
@@ -219,14 +220,19 @@ def test_python_pseudo_bond_hbond_mode_tracks_legacy_fortran_hbond_contract(tmp_
     write_fragment_build_section(xyzin)
     definition = write_gicforge_build_sections(xyzin, fragment_mode="h-bonds")
 
-    assert definition.pseudo_bonds == ((5, 6),)
-    assert definition.pseudo_bond_kinds == ("HBOND",)
+    assert definition.pseudo_bonds == ((3, 8), (5, 6))
+    assert definition.pseudo_bond_kinds == ("HBOND", "HBOND")
     assert "Subroutine FindHBnd" in mkprim
     assert "Subroutine MkHBnd" in mkprim
     assert "BDPCS3_HB_ANGLE_MIN" in mkprim
     assert "NBond(JAt)=NBond(JAt)+1" in mkprim
     assert "IBond(NBond(JAt),JAt)=KAt" in mkprim
     assert "IBond(NBond(KAt),KAt)=JAt" in mkprim
+    assert "pseudo-cycles exactly like rings: N distances, N-3 angles, N-3" in mkprim
+    assert "No unconditional long-range closure is added here" in mkprim
+    assert "H-bond pseudo-bonds inserted by MkHBnd are ordinary graph edges" in mkcyc
+    assert "CyGNA gives N-3 angle combinations" in mkcyc
+    assert "CyGND gives N-3 intra-cycle torsional/puckering combinations" in mkcyc
     assert "DoHBnd = KWd(17)" in coord
 
 

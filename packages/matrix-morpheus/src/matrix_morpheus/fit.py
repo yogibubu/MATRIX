@@ -19,9 +19,7 @@ from matrix_chem.isotopes_table import get_default_isotope, get_isotope
 from matrix_chem.physical_constants import Phy, get_physical_constants
 from matrix_chem.rotational import rotational_constants_MHz
 from matrix_chem.structure import Structure
-from matrix_neo.runtime import GICDefinition, GICForge, define_gics_from_cartesian, run_gicforge
-from matrix_neo.runtime.gic_symmetry import SYMM_INERTIA_TOL as GIC_SYMM_INERTIA_TOL
-from matrix_neo.runtime.gic_symmetry import SYMM_TOL as GIC_SYMM_TOL
+from matrix_chem import SymmetryThresholds, preprocess_to_enriched_xyz, write_validation_section
 from matrix_chem.geometry_io import write_xyz
 from matrix_chem.topology.covalent_radii import covalent_radius
 from matrix_chem.topology.elements import atomic_number as geometry_atomic_number
@@ -29,6 +27,11 @@ from matrix_chem.topology.elements import atomic_symbol
 from matrix_chem.topology.pipeline import build_topology_objects
 from matrix_core import ScientificValidationError, build_run_manifest
 from matrix_core.numerics import limit_step, objective, rank_condition
+from matrix_neo.definition import _survibfit_primitive_from_gic_primitive
+from matrix_neo.definition import write_gicforge_build_sections
+from matrix_neo.runtime import GICDefinition, GICForge, define_gics_from_cartesian, run_gicforge
+from matrix_neo.runtime.gic_symmetry import SYMM_INERTIA_TOL as GIC_SYMM_INERTIA_TOL
+from matrix_neo.runtime.gic_symmetry import SYMM_TOL as GIC_SYMM_TOL
 from matrix_neo.survibfit.pipeline import b_matrix_analytic
 from matrix_neo.survibfit.primitives import Primitive, build_primitives, eval_primitives
 from matrix_neo.survibfit.symmetry_detector import orient_coords, symmetry_elements_from_geometry
@@ -302,6 +305,8 @@ class TopologyLock:
 class GICForgeSEBackend:
     atoms: tuple[str, ...]
     root: Path
+    mode: str = "gicsym"
+    fragment_mode: str = "none"
     counter: int = 0
     last_workdir: Path | None = None
     point_group: str | None = None
@@ -313,14 +318,23 @@ class GICForgeSEBackend:
         self.counter += 1
         workdir = self.root / f"iter_{self.counter:04d}"
         workdir.mkdir(parents=True, exist_ok=True)
-        computation = GICForge(runner=run_gicforge).compute(
-            self.atoms,
-            coords,
-            workdir=workdir,
-            mode="gicsym",
-        )
-        definition = computation.definition
-        point_group = _gicforge_point_group(workdir / "provout")
+        if self.fragment_mode == "pseudo-bonds":
+            definition = _fragment_aware_gic_definition(
+                self.atoms,
+                coords,
+                workdir=workdir,
+                symmetrize=self.mode == "gicsym",
+            )
+            point_group = definition.point_group
+        else:
+            computation = GICForge().compute(
+                self.atoms,
+                coords,
+                workdir=workdir,
+                mode=self.mode,
+            )
+            definition = computation.definition
+            point_group = _gicforge_point_group(workdir / "provout")
         if self.point_group is None:
             self.point_group = point_group
         elif point_group != self.point_group:
@@ -4134,12 +4148,136 @@ def _validate_observation_budget(
 
 
 def _make_gicforge_backend(atoms: tuple[str, ...], outdir: Path | None) -> GICForgeSEBackend:
+    mode = os.environ.get("MATRIX_MORPHEUS_GICFORGE_MODE", "gicsym").strip().lower() or "gicsym"
+    if mode not in {"gic", "gicsym"}:
+        raise ValueError("MATRIX_MORPHEUS_GICFORGE_MODE must be 'gic' or 'gicsym'")
+    fragment_mode = (
+        os.environ.get("MATRIX_MORPHEUS_FRAGMENT_MODE", "none").strip().lower().replace("_", "-")
+        or "none"
+    )
+    if fragment_mode in {"pseudo", "pseudobonds", "hbond", "hbonds", "h-bonds"}:
+        fragment_mode = "pseudo-bonds"
+    if fragment_mode not in {"none", "pseudo-bonds"}:
+        raise ValueError("MATRIX_MORPHEUS_FRAGMENT_MODE must be 'none' or 'pseudo-bonds'")
     if outdir is None:
         root = Path(tempfile.mkdtemp(prefix="matrix_se_gicforge_"))
     else:
         root = Path(outdir) / "gicforge_iterations"
         root.mkdir(parents=True, exist_ok=True)
-    return GICForgeSEBackend(atoms=atoms, root=root)
+    return GICForgeSEBackend(atoms=atoms, root=root, mode=mode, fragment_mode=fragment_mode)
+
+
+def _fragment_aware_gic_definition(
+    atoms: tuple[str, ...],
+    coords: np.ndarray,
+    *,
+    workdir: Path,
+    symmetrize: bool,
+) -> GICDefinition:
+    source = workdir / "molecule.xyz"
+    xyzin = workdir / "molecule.xyzin"
+    write_xyz(source, atoms, coords, comment="MATRIX/MORPHEUS fragment-aware GIC build")
+    preprocess_to_enriched_xyz(
+        source,
+        xyzin,
+        source_kind="xyz",
+        symmetry_thresholds=SymmetryThresholds(
+            distance_angstrom=GIC_SYMM_TOL,
+            inertia_relative=GIC_SYMM_INERTIA_TOL,
+        ),
+    )
+    write_validation_section(xyzin)
+    from matrix_fragments import write_fragment_build_section
+
+    write_fragment_build_section(xyzin)
+    neo_definition = write_gicforge_build_sections(
+        xyzin,
+        symmetrize=symmetrize,
+        fragment_mode="pseudo-bonds",
+    )
+    primitive_by_id = {primitive.identifier: primitive for primitive in neo_definition.primitives}
+    primitive_index: dict[tuple[str, int], int] = {}
+    primitives: list[Primitive] = []
+    columns: list[np.ndarray] = []
+    for gic in neo_definition.gics:
+        column = np.zeros(len(primitives), dtype=float)
+        coefficients = gic.coefficients or ((gic.primitive_id, 1.0),)
+        for primitive_id, coefficient in coefficients:
+            source_primitive = primitive_by_id[primitive_id]
+            for term_index, (basis_primitive, basis_coefficient) in enumerate(
+                _survibfit_basis_terms_from_gic_primitive(source_primitive)
+            ):
+                key = (primitive_id, term_index)
+                if key not in primitive_index:
+                    primitive_index[key] = len(primitives)
+                    primitives.append(basis_primitive)
+                    column = np.pad(column, (0, 1))
+                    for index, existing in enumerate(columns):
+                        columns[index] = np.pad(existing, (0, 1))
+                column[primitive_index[key]] += float(coefficient) * float(basis_coefficient)
+        columns.append(column)
+    if not columns:
+        raise ScientificValidationError(f"fragment-aware GIC build produced no coordinates in {xyzin}")
+    labels = tuple(
+        f"{gic.identifier} NEO {gic.name} irrep={gic.irrep or 'UNK'} {gic.gaussian_expression}"
+        for gic in neo_definition.gics
+    )
+    return GICDefinition(
+        atom_symbols=atoms,
+        atomic_numbers=tuple(geometry_atomic_number(atom) for atom in atoms),
+        reference_coordinates_angstrom=tuple(tuple(float(value) for value in row) for row in coords),
+        primitives=tuple(primitives),
+        u_matrix=np.column_stack(columns),
+        labels=labels,
+        names=tuple(gic.identifier for gic in neo_definition.gics),
+        irreps=tuple(gic.irrep or "UNK" for gic in neo_definition.gics),
+        point_group=neo_definition.point_group,
+        symmetrized=bool(symmetrize),
+        symmetry_source="matrix-neo-fragment-aware",
+        gaussian_input="\n".join(gic.gaussian_expression for gic in neo_definition.gics),
+        generation_workdir=str(workdir),
+        provenance={"xyzin": str(xyzin), "fragment_mode": "pseudo-bonds"},
+    )
+
+
+def _survibfit_basis_terms_from_gic_primitive(source_primitive) -> tuple[tuple[Primitive, float], ...]:
+    if source_primitive.function == "RPCB":
+        return tuple(
+            (Primitive("angle", tuple(atom - 1 for atom in atoms)), coefficient)
+            for coefficient, atoms in _linear_component_terms_from_refs(
+                source_primitive.refs,
+                arity=3,
+                function="RPCB",
+            )
+        )
+    if source_primitive.function == "RPCK" and source_primitive.refs:
+        return tuple(
+            (Primitive("dihedral", tuple(atom - 1 for atom in atoms)), coefficient)
+            for coefficient, atoms in _linear_component_terms_from_refs(
+                source_primitive.refs,
+                arity=4,
+                function="RPCK",
+            )
+        )
+    return ((_survibfit_primitive_from_gic_primitive(source_primitive), 1.0),)
+
+
+def _linear_component_terms_from_refs(
+    refs: tuple[str, ...],
+    *,
+    arity: int,
+    function: str,
+) -> tuple[tuple[float, tuple[int, ...]], ...]:
+    terms: list[tuple[float, tuple[int, ...]]] = []
+    for ref in refs:
+        if ":" not in ref:
+            raise ScientificValidationError(f"invalid {function} component term: {ref}")
+        coefficient_text, atom_text = ref.split(":", 1)
+        atoms = tuple(int(atom) for atom in atom_text.split("-") if atom)
+        if len(atoms) != arity:
+            raise ScientificValidationError(f"invalid {function} component atom count: {ref}")
+        terms.append((float(coefficient_text), atoms))
+    return tuple(terms)
 
 
 def _gicforge_sycart_coordinates(
@@ -4205,7 +4343,7 @@ def _gicforge_a1_mask(labels: tuple[str, ...]) -> np.ndarray:
     for label in labels:
         match = re.search(r"\birrep=([A-Za-z0-9'\"+-]+)", label)
         irreps.append(match.group(1) if match else None)
-    if not any(irrep is not None for irrep in irreps):
+    if not any(irrep is not None and irrep not in {"UNK", "UNASSIGNED"} for irrep in irreps):
         return np.ones(len(labels), dtype=bool)
     return np.array([irrep in {"A1", "A", "Ag", "A'"} for irrep in irreps], dtype=bool)
 

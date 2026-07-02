@@ -13,6 +13,10 @@
       Dimension EAN(*)
       Logical ReNumb
 C find cycles
+C H-bond pseudo-bonds inserted by MkHBnd are ordinary graph edges here.
+C Therefore intermolecular pseudo-cycles follow the Merlino ring path:
+C CycLen gives N distances, CyGNA gives N-3 angle combinations and
+C CyGND gives N-3 intra-cycle torsional/puckering combinations.
       if(NCyc.lt.NExpCy) call Cy5(IOut,IPrint,MxBnd,MxAtG,MxTrm,NBond,
      $  IBond,NDih,IAtomD,MxAtCy,MxCyc,NCyc,NExpCy,NAtC,ICAt,
      $  IAtCyc)

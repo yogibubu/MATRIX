@@ -8,6 +8,7 @@ import re
 import numpy as np
 
 from matrix_chem.topology.elements import atomic_number
+from matrix_chem.topology.vdw_radii import vdw_radius
 from matrix_chem import read_enriched_xyz
 from matrix_chem.topology.contracts import SUPPORTED_TOPOLOGY_SCHEMAS, schema_line_supported
 from matrix_core.parameters.bdpcs3 import load_bdpcs3_parameters
@@ -32,6 +33,8 @@ from .policy import (
     LOCAL_SYMMETRIZATION_METHOD,
     POINT_GROUP_PROJECTOR_METHOD,
     PRIMITIVE_FAMILY_ORDER,
+    PSEUDO_BOND_EFFECTIVE_ORDER,
+    PSEUDO_CYCLE_CLOSURE_VDW_SCALE,
     PROJECTOR_SYMMETRIZATION_POLICY,
     RANK_METHOD,
     RANK_TOLERANCE,
@@ -300,6 +303,7 @@ def construct_gic_definition_from_xyzin(
         improper_dihedrals=improper_dihedrals,
         fragment_records=candidate_fragment_records,
         interaction_centers=candidate_interaction_centers,
+        pseudo_bonds=pseudo_bonds,
         bond_orders=bond_orders,
     )
     target_rank = _vibrational_rank(coords)
@@ -1454,9 +1458,17 @@ def _primitive_candidates(
     improper_dihedrals: bool = False,
     fragment_records: tuple[object, ...] = (),
     interaction_centers: object | None = None,
+    pseudo_bonds: tuple[tuple[int, int], ...] = (),
     bond_orders: dict[tuple[int, int], float] | None = None,
 ) -> tuple[GICPrimitive, ...]:
     adjacency = _adjacency(bonds, natoms=natoms)
+    pseudo_bond_set = {tuple(sorted(pair)) for pair in pseudo_bonds}
+    pseudo_cycles = _pseudo_cycles_from_pseudo_bonds(
+        bonds,
+        pseudo_bonds=tuple(pseudo_bond_set),
+        natoms=natoms,
+    )
+    pseudo_cycle_angle_set = _cycle_angle_triplet_set(pseudo_cycles)
     counters: dict[str, int] = {family: 0 for family in PRIMITIVE_FAMILY_ORDER}
     candidates: list[GICPrimitive] = []
 
@@ -1480,6 +1492,8 @@ def _primitive_candidates(
 
     for center in range(1, natoms + 1):
         for i, k in combinations(sorted(adjacency[center]), 2):
+            if (i, center, k) in pseudo_cycle_angle_set:
+                continue
             angle = _angle_value(coords, (i, center, k))
             if np.degrees(angle) >= LINEAR_ANGLE_DEGREES:
                 candidates.append(
@@ -1496,10 +1510,15 @@ def _primitive_candidates(
                 )
                 candidates.append(_make_primitive(family, "A", (i, center, k), counters))
 
+    candidates.extend(
+        _pseudo_cycle_bend_component_candidates(pseudo_cycles, counters=counters)
+    )
+
     seen_torsions: set[tuple[int, int, int, int]] = set()
-    butterfly_torsions: list[tuple[str, tuple[int, int, int, int]]] = []
-    condensed_torsions: list[tuple[str, tuple[int, int, int, int]]] = []
-    ordinary_torsions: list[tuple[str, tuple[int, int, int, int]]] = []
+    torsion_candidate = tuple[str, tuple[int, int, int, int], tuple[str, ...]]
+    butterfly_torsions: list[torsion_candidate] = []
+    condensed_torsions: list[torsion_candidate] = []
+    ordinary_torsions: list[torsion_candidate] = []
     for j, k in bonds:
         for i in sorted(adjacency[j] - {k}):
             for ell in sorted(adjacency[k] - {j}):
@@ -1512,21 +1531,30 @@ def _primitive_candidates(
                 if family == "CYCLIC_TORSION":
                     continue
                 if family == "BUTTERFLY":
-                    butterfly_torsions.append((family, canonical))
+                    butterfly_torsions.append((family, canonical, ()))
                 elif family == "CONDENSED_RING_TORSION":
-                    condensed_torsions.append((family, canonical))
+                    condensed_torsions.append((family, canonical, ()))
                 else:
-                    ordinary_torsions.append((family, canonical))
+                    ordinary_torsions.append((family, canonical, ()))
 
-    for family, torsion in butterfly_torsions:
-        candidates.append(_make_primitive(family, "D", torsion, counters))
+    for family, torsion, refs in butterfly_torsions:
+        candidates.append(_make_primitive(family, "D", torsion, counters, refs=refs))
     candidates.extend(
         _ring_pucker_component_candidates(rings, counters=counters, bond_orders=bond_orders or {})
     )
-    for family, torsion in condensed_torsions:
-        candidates.append(_make_primitive(family, "D", torsion, counters))
-    for family, torsion in ordinary_torsions:
-        candidates.append(_make_primitive(family, "D", torsion, counters))
+    candidates.extend(
+        _pseudo_cycle_torsion_component_candidates(
+            pseudo_cycles,
+            counters=counters,
+            pseudo_bonds=pseudo_bond_set,
+            bond_orders=bond_orders or {},
+        )
+    )
+    for family, torsion, refs in condensed_torsions:
+        candidates.append(_make_primitive(family, "D", torsion, counters, refs=refs))
+    for family, torsion, refs in ordinary_torsions:
+        function = "RPCK" if refs else "D"
+        candidates.append(_make_primitive(family, function, torsion, counters, refs=refs))
 
     cyclic_atoms = _cyclic_atom_set(rings)
     out_of_plane_family = "IMPROPER_DIHEDRAL" if improper_dihedrals else "OUT_OF_PLANE"
@@ -1562,6 +1590,170 @@ def _torsion_family(
     if component is not None and len(component) > 1:
         return "CONDENSED_RING_TORSION"
     return "TORSION"
+
+
+def _pseudo_cycles_from_pseudo_bonds(
+    bonds: tuple[tuple[int, int], ...],
+    *,
+    pseudo_bonds: tuple[tuple[int, int], ...],
+    natoms: int,
+) -> tuple[tuple[int, ...], ...]:
+    pseudo_set = {tuple(sorted(pair)) for pair in pseudo_bonds}
+    if not pseudo_set:
+        return ()
+    graph_bonds = tuple(tuple(sorted(pair)) for pair in bonds)
+    cycles: list[tuple[int, ...]] = []
+    seen: set[frozenset[int]] = set()
+    for left, right in sorted(pseudo_set):
+        path_bonds = tuple(pair for pair in graph_bonds if pair != (left, right))
+        path = _shortest_graph_path(left, right, _adjacency(path_bonds, natoms=natoms))
+        if len(path) < 4:
+            continue
+        key = frozenset(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        cycles.append(_canonical_cycle_order(path))
+    return tuple(cycles)
+
+
+def _canonical_cycle_order(cycle: tuple[int, ...]) -> tuple[int, ...]:
+    if not cycle:
+        return ()
+    variants: list[tuple[int, ...]] = []
+    ncycle = len(cycle)
+    for base in (cycle, tuple(reversed(cycle))):
+        for shift in range(ncycle):
+            variants.append(base[shift:] + base[:shift])
+    return min(variants)
+
+
+def _cycle_angle_triplet_set(cycles: tuple[tuple[int, ...], ...]) -> set[tuple[int, int, int]]:
+    triplets: set[tuple[int, int, int]] = set()
+    for cycle in cycles:
+        ncycle = len(cycle)
+        for index, center in enumerate(cycle):
+            left = cycle[(index - 1) % ncycle]
+            right = cycle[(index + 1) % ncycle]
+            triplets.add((left, center, right))
+            triplets.add((right, center, left))
+    return triplets
+
+
+def _shortest_graph_path(
+    start: int,
+    stop: int,
+    adjacency: dict[int, set[int]],
+) -> tuple[int, ...]:
+    queue: list[tuple[int, ...]] = [(int(start),)]
+    seen = {int(start)}
+    while queue:
+        path = queue.pop(0)
+        node = path[-1]
+        if node == stop:
+            return path
+        for neighbor in sorted(adjacency.get(node, ())):
+            if neighbor in seen:
+                continue
+            seen.add(neighbor)
+            queue.append(path + (neighbor,))
+    return ()
+
+
+def _pseudo_cycle_bend_component_candidates(
+    cycles: tuple[tuple[int, ...], ...],
+    *,
+    counters: dict[str, int],
+) -> tuple[GICPrimitive, ...]:
+    candidates: list[GICPrimitive] = []
+    for cycle in cycles:
+        for terms in _cycle_angle_component_terms(cycle):
+            candidates.append(
+                _make_primitive(
+                    "PSEUDO_CYCLE_BEND",
+                    "RPCB",
+                    tuple(cycle),
+                    counters,
+                    refs=tuple(
+                        _encode_angle_component_term(coefficient, atoms)
+                        for coefficient, atoms in terms
+                    ),
+                )
+            )
+    return tuple(candidates)
+
+
+def _pseudo_cycle_torsion_component_candidates(
+    cycles: tuple[tuple[int, ...], ...],
+    *,
+    counters: dict[str, int],
+    pseudo_bonds: set[tuple[int, int]],
+    bond_orders: dict[tuple[int, int], float],
+) -> tuple[GICPrimitive, ...]:
+    candidates: list[GICPrimitive] = []
+    effective_orders = dict(bond_orders)
+    for pair in pseudo_bonds:
+        effective_orders[tuple(sorted(pair))] = PSEUDO_BOND_EFFECTIVE_ORDER
+    for cycle in cycles:
+        for terms in _ring_pucker_component_terms(cycle, bond_orders=effective_orders):
+            candidates.append(
+                _make_primitive(
+                    "PSEUDO_CYCLE_TORSION",
+                    "RPCK",
+                    tuple(cycle),
+                    counters,
+                    refs=tuple(
+                        _encode_ring_pucker_term(coefficient, atoms) for coefficient, atoms in terms
+                    ),
+                )
+            )
+    return tuple(candidates)
+
+
+def _cycle_angle_component_terms(
+    cycle_atoms: tuple[int, ...],
+) -> tuple[tuple[tuple[float, tuple[int, int, int]], ...], ...]:
+    ncycle = len(cycle_atoms)
+    if ncycle <= 3:
+        return ()
+    components: list[tuple[tuple[float, tuple[int, int, int]], ...]] = []
+    for terms in _cyclic_component_coefficients(ncycle):
+        components.append(
+            tuple(
+                (
+                    coefficient,
+                    (
+                        cycle_atoms[(index - 1) % ncycle],
+                        cycle_atoms[index],
+                        cycle_atoms[(index + 1) % ncycle],
+                    ),
+                )
+                for index, coefficient in enumerate(terms)
+            )
+        )
+    return tuple(components)
+
+
+def _cyclic_component_coefficients(ncycle: int) -> tuple[tuple[float, ...], ...]:
+    basis = []
+    for mode in range(1, ncycle):
+        angle = 2.0 * np.pi * float(mode) * np.arange(ncycle, dtype=float) / float(ncycle)
+        basis.append(np.cos(angle))
+        basis.append(np.sin(angle))
+    accepted: list[np.ndarray] = []
+    ones = np.ones(ncycle, dtype=float)
+    for vector in basis:
+        residual = np.asarray(vector, dtype=float)
+        residual = residual - float(np.dot(residual, ones) / np.dot(ones, ones)) * ones
+        for previous in accepted:
+            residual = residual - float(np.dot(residual, previous)) * previous
+        norm = float(np.linalg.norm(residual))
+        if norm <= 1.0e-10:
+            continue
+        accepted.append(residual / norm)
+        if len(accepted) == ncycle - 3:
+            break
+    return tuple(tuple(float(value) for value in vector) for vector in accepted)
 
 
 def _ring_pucker_component_candidates(
@@ -1720,6 +1912,39 @@ def _encode_ring_pucker_term(
 ) -> str:
     atom_text = "-".join(str(atom) for atom in atoms)
     return f"{float(coefficient):.17g}:{atom_text}"
+
+
+def _encode_angle_component_term(
+    coefficient: float,
+    atoms: tuple[int, int, int],
+) -> str:
+    atom_text = "-".join(str(atom) for atom in atoms)
+    return f"{float(coefficient):.17g}:{atom_text}"
+
+
+def _angle_component_terms_from_refs(
+    primitive: GICPrimitive,
+) -> tuple[tuple[float, tuple[int, int, int]], ...]:
+    terms: list[tuple[float, tuple[int, int, int]]] = []
+    for ref in primitive.refs:
+        if ":" not in ref:
+            raise GICForgeContractError(
+                f"invalid RPCB term {ref!r} in primitive {primitive.identifier}"
+            )
+        coefficient_text, atom_text = ref.split(":", 1)
+        try:
+            coefficient = float(coefficient_text)
+            atoms = tuple(int(atom) for atom in atom_text.split("-") if atom)
+        except ValueError as exc:
+            raise GICForgeContractError(
+                f"invalid RPCB term {ref!r} in primitive {primitive.identifier}"
+            ) from exc
+        if len(atoms) != 3:
+            raise GICForgeContractError(
+                f"invalid RPCB angle term {ref!r} in primitive {primitive.identifier}"
+            )
+        terms.append((coefficient, atoms))
+    return tuple(terms)
 
 
 def _ring_pucker_terms_from_refs(
@@ -3216,6 +3441,16 @@ def _operation_primitive_transform(
         for primitive in primitives
     ):
         return _operation_ring_pucker_transform(primitives, operation=operation)
+    if all(
+        primitive.family == "PSEUDO_CYCLE_BEND" and primitive.function == "RPCB"
+        for primitive in primitives
+    ):
+        return _operation_angle_component_transform(primitives, operation=operation)
+    if all(
+        primitive.family == "PSEUDO_CYCLE_TORSION" and primitive.function == "RPCK"
+        for primitive in primitives
+    ):
+        return _operation_ring_pucker_transform(primitives, operation=operation)
 
     matrix = np.zeros((len(primitives), len(primitives)), dtype=float)
     for source_index, primitive in enumerate(primitives):
@@ -3264,6 +3499,45 @@ def _operation_ring_pucker_transform(
     matrix = np.zeros((len(primitives), len(primitives)), dtype=float)
     for source_index, coeffs in enumerate(mapped_coeffs):
         target = np.array([coeffs.get(key, 0.0) for key in torsion_keys], dtype=float)
+        values, *_ = np.linalg.lstsq(basis, target, rcond=1.0e-10)
+        residual = float(np.linalg.norm(basis @ values - target))
+        if residual > 1.0e-8:
+            return None
+        matrix[:, source_index] = values
+    return matrix
+
+
+def _operation_angle_component_transform(
+    primitives: tuple[GICPrimitive, ...],
+    *,
+    operation: GICPointGroupOperation,
+) -> np.ndarray | None:
+    source_coeffs = [
+        _angle_component_canonical_coefficients(_angle_component_terms_from_refs(primitive))
+        for primitive in primitives
+    ]
+    mapped_coeffs = []
+    for primitive in primitives:
+        mapped_terms = []
+        for coefficient, atoms in _angle_component_terms_from_refs(primitive):
+            mapped_atoms = tuple(_mapped_atom(operation, atom) for atom in atoms)
+            if any(atom < 1 for atom in mapped_atoms):
+                return None
+            mapped_terms.append((coefficient, mapped_atoms))
+        mapped_coeffs.append(_angle_component_canonical_coefficients(tuple(mapped_terms)))
+
+    angle_keys = sorted({key for coeffs in (*source_coeffs, *mapped_coeffs) for key in coeffs})
+    if not angle_keys:
+        return None
+    basis = np.array(
+        [[coeffs.get(key, 0.0) for coeffs in source_coeffs] for key in angle_keys],
+        dtype=float,
+    )
+    if np.linalg.matrix_rank(basis, tol=1.0e-10) == 0:
+        return None
+    matrix = np.zeros((len(primitives), len(primitives)), dtype=float)
+    for source_index, coeffs in enumerate(mapped_coeffs):
+        target = np.array([coeffs.get(key, 0.0) for key in angle_keys], dtype=float)
         values, *_ = np.linalg.lstsq(basis, target, rcond=1.0e-10)
         residual = float(np.linalg.norm(basis @ values - target))
         if residual > 1.0e-8:
@@ -3362,6 +3636,15 @@ def _primitive_projector_key(primitive: GICPrimitive) -> tuple[object, ...] | No
             return None
         key, _sign = signature
         return ("RING_PUCKER_COMPONENT", key)
+    if primitive.family == "PSEUDO_CYCLE_BEND" and primitive.function == "RPCB":
+        key = _angle_component_projector_key(primitive)
+        return ("PSEUDO_CYCLE_BEND", key) if key is not None else None
+    if primitive.family == "PSEUDO_CYCLE_TORSION" and primitive.function == "RPCK":
+        signature = _ring_pucker_projector_signature(primitive)
+        if signature is None:
+            return None
+        key, _sign = signature
+        return ("PSEUDO_CYCLE_TORSION", key)
     if primitive.family in {"OUT_OF_PLANE", "IMPROPER_DIHEDRAL"} and len(primitive.atoms) == 4:
         return (
             primitive.family,
@@ -3623,6 +3906,43 @@ def _ring_pucker_canonical_torsion_coefficients(
     return {
         atoms: coefficient
         for atoms, coefficient in by_torsion.items()
+        if abs(float(coefficient)) > 1.0e-12
+    }
+
+
+def _angle_component_projector_key(
+    primitive: GICPrimitive,
+) -> tuple[tuple[tuple[object, ...], float], ...] | None:
+    coefficients = _angle_component_canonical_coefficients(
+        _angle_component_terms_from_refs(primitive)
+    )
+    compact = {
+        key: coefficient
+        for key, coefficient in coefficients.items()
+        if abs(float(coefficient)) > 1.0e-12
+    }
+    if not compact:
+        return None
+    _first_key, first_coefficient = next(iter(sorted(compact.items())))
+    overall_sign = -1.0 if first_coefficient < 0.0 else 1.0
+    return tuple(
+        (key, round(float(coefficient) * overall_sign, 12))
+        for key, coefficient in sorted(compact.items())
+    )
+
+
+def _angle_component_canonical_coefficients(
+    terms: tuple[tuple[float, tuple[int, ...]], ...],
+) -> dict[tuple[object, ...], float]:
+    by_angle: dict[tuple[object, ...], float] = {}
+    for coefficient, atoms in terms:
+        if len(atoms) != 3:
+            continue
+        key = (atoms[1], tuple(sorted((atoms[0], atoms[2]))))
+        by_angle[key] = by_angle.get(key, 0.0) + float(coefficient)
+    return {
+        key: coefficient
+        for key, coefficient in by_angle.items()
         if abs(float(coefficient)) > 1.0e-12
     }
 
@@ -4043,6 +4363,8 @@ def _analytic_b_row(primitive: GICPrimitive, coords: np.ndarray) -> np.ndarray:
             primitive.ref_atoms,
             mode=primitive.mode,
         )
+    if primitive.function == "RPCB":
+        return _angle_component_b_row(primitive, coords)
     if primitive.function == "RPCK":
         return _ring_pucker_component_b_row(primitive, coords)
     return _dual_b_row(primitive, coords)
@@ -4152,6 +4474,18 @@ def _ring_pucker_component_b_row(
             atoms=atoms,
         )
         row += coefficient * _dual_b_row(term, coords)
+    return row
+
+
+def _angle_component_b_row(
+    primitive: GICPrimitive,
+    coords: np.ndarray,
+) -> np.ndarray:
+    row = np.zeros(coords.size, dtype=float)
+    for coefficient, atoms in _angle_component_terms_from_refs(primitive):
+        if coefficient == 0.0:
+            continue
+        row += coefficient * _angle_b_row(coords, atoms)
     return row
 
 
@@ -4543,6 +4877,8 @@ def _primitive_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
             primitive.ref_atoms,
             mode=primitive.mode,
         )
+    if primitive.function == "RPCB":
+        return _angle_component_value(primitive, coords)
     if primitive.function == "RPCK":
         return _ring_pucker_component_value(primitive, coords)
     if primitive.function == "FROT":
@@ -4561,6 +4897,13 @@ def _ring_pucker_component_value(primitive: GICPrimitive, coords: np.ndarray) ->
     value = 0.0
     for coefficient, atoms in _ring_pucker_terms_from_refs(primitive):
         value += coefficient * _dihedral_value(coords, atoms)
+    return float(value)
+
+
+def _angle_component_value(primitive: GICPrimitive, coords: np.ndarray) -> float:
+    value = 0.0
+    for coefficient, atoms in _angle_component_terms_from_refs(primitive):
+        value += coefficient * _angle_value(coords, atoms)
     return float(value)
 
 
@@ -4819,7 +5162,7 @@ def _pseudo_bonds_for_fragments(
         covalent=covalent,
         fragment_index_by_atom=fragment_index_by_atom,
     )
-    hbond_by_fragment_pair: dict[tuple[int, int], tuple[float, tuple[int, int], str]] = {}
+    hbond_edges: list[tuple[int, float, int, int, tuple[int, int], str]] = []
     for distance, pair, kind in hbond_contacts:
         key = tuple(
             sorted(
@@ -4831,31 +5174,29 @@ def _pseudo_bonds_for_fragments(
         )
         if key[0] == key[1]:
             continue
-        current = hbond_by_fragment_pair.get(key)
-        if current is None or (distance, pair) < (current[0], current[1]):
-            hbond_by_fragment_pair[key] = (distance, pair, kind)
+        hbond_edges.append((0, distance, key[0], key[1], pair, kind))
     fragment_edges: list[tuple[int, float, int, int, tuple[int, int], str]] = []
+    closure_edges: list[tuple[int, float, int, int, tuple[int, int], str]] = []
     for left_index, left in enumerate(records):
         left_atoms = tuple(int(atom) for atom in getattr(left, "atoms"))
         for right_index, right in enumerate(records[left_index + 1 :], start=left_index + 1):
             right_atoms = tuple(int(atom) for atom in getattr(right, "atoms"))
-            contact = hbond_by_fragment_pair.get((left_index, right_index))
-            if contact is None:
-                closest = _closest_interfragment_atom_pair(
-                    left_atoms,
-                    right_atoms,
-                    covalent=covalent,
-                    coords=coords,
-                )
-                if closest is None:
-                    continue
-                distance, pair = closest
-                fragment_edges.append(
-                    (1, distance, left_index, right_index, pair, "INTERFRAGMENT_CLOSEST")
-                )
-            else:
-                distance, pair, kind = contact
-                fragment_edges.append((0, distance, left_index, right_index, pair, kind))
+            candidates = _interfragment_atom_pair_candidates(
+                left_atoms,
+                right_atoms,
+                covalent=covalent,
+                coords=coords,
+            )
+            if not candidates:
+                continue
+            distance, pair = candidates[0]
+            fragment_edges.append(
+                (1, distance, left_index, right_index, pair, "INTERFRAGMENT_CLOSEST")
+            )
+            closure_edges.extend(
+                (2, distance, left_index, right_index, candidate_pair, "PSEUDO_CYCLE_CLOSURE")
+                for distance, candidate_pair in candidates
+            )
     parent = list(range(len(records)))
 
     def find(index: int) -> int:
@@ -4865,6 +5206,12 @@ def _pseudo_bonds_for_fragments(
         return index
 
     selected: list[tuple[int, int, str]] = []
+    for _priority, _distance, left_index, right_index, pair, kind in sorted(hbond_edges):
+        selected.append((pair[0], pair[1], kind))
+        left_root = find(left_index)
+        right_root = find(right_index)
+        if left_root != right_root:
+            parent[right_root] = left_root
     for _priority, _distance, left_index, right_index, pair, kind in sorted(fragment_edges):
         left_root = find(left_index)
         right_root = find(right_index)
@@ -4874,11 +5221,55 @@ def _pseudo_bonds_for_fragments(
         selected.append((pair[0], pair[1], kind))
         if len(selected) == len(records) - 1:
             break
-    if len(selected) != len(records) - 1:
+    roots = {find(index) for index in range(len(records))}
+    if len(roots) != 1:
         raise GICForgeContractError(
             "cannot connect all fragments with pseudo-bonds from H-bonds/closest atom pairs"
         )
+    selected_set = {tuple(sorted((left, right))) for left, right, _kind in selected}
+    graph_bonds = tuple(sorted(covalent | selected_set))
+    if not _pseudo_cycles_from_pseudo_bonds(
+        graph_bonds,
+        pseudo_bonds=tuple(selected_set),
+        natoms=coords.shape[0],
+    ):
+        for _priority, _distance, _left_index, _right_index, pair, kind in sorted(closure_edges):
+            if pair in selected_set:
+                continue
+            if not _pseudo_cycle_closure_allowed(pair, distance=_distance, atom_symbols=atom_symbols):
+                continue
+            trial_selected = selected_set | {pair}
+            graph_bonds = tuple(sorted(covalent | trial_selected))
+            if _pseudo_cycles_from_pseudo_bonds(
+                graph_bonds,
+                pseudo_bonds=tuple(trial_selected),
+                natoms=coords.shape[0],
+            ):
+                selected.append((pair[0], pair[1], kind))
+                selected_set = trial_selected
+                break
     return tuple(sorted(set(selected)))
+
+
+def _pseudo_cycle_closure_allowed(
+    pair: tuple[int, int],
+    *,
+    distance: float,
+    atom_symbols: tuple[str, ...],
+) -> bool:
+    left, right = pair
+    if left < 1 or right < 1 or left > len(atom_symbols) or right > len(atom_symbols):
+        return False
+    try:
+        z_left = atomic_number(atom_symbols[left - 1])
+        z_right = atomic_number(atom_symbols[right - 1])
+    except Exception:
+        return False
+    r_left = vdw_radius(z_left)
+    r_right = vdw_radius(z_right)
+    if r_left is None or r_right is None:
+        return False
+    return float(distance) <= PSEUDO_CYCLE_CLOSURE_VDW_SCALE * (float(r_left) + float(r_right))
 
 
 def _closest_interfragment_atom_pair(
@@ -4898,6 +5289,24 @@ def _closest_interfragment_atom_pair(
             if best is None or (distance, pair) < best:
                 best = (distance, pair)
     return best
+
+
+def _interfragment_atom_pair_candidates(
+    left_atoms: tuple[int, ...],
+    right_atoms: tuple[int, ...],
+    *,
+    covalent: set[tuple[int, int]],
+    coords: np.ndarray,
+) -> tuple[tuple[float, tuple[int, int]], ...]:
+    candidates: list[tuple[float, tuple[int, int]]] = []
+    for left in left_atoms:
+        for right in right_atoms:
+            pair = tuple(sorted((int(left), int(right))))
+            if pair in covalent:
+                continue
+            distance = float(np.linalg.norm(coords[pair[0] - 1] - coords[pair[1] - 1]))
+            candidates.append((distance, pair))
+    return tuple(sorted(candidates))
 
 
 def _fragment_index_by_atom(records: tuple[object, ...]) -> dict[int, int]:
@@ -5847,6 +6256,12 @@ def _gaussian_expression_for_primitive(primitive: GICPrimitive) -> str | None:
         frag_id, ref_id = primitive.refs
         axis = ("x", "y", "z")[primitive.mode]
         return f"E{axis}{frag_id}{ref_id}"
+    if primitive.function == "RPCB":
+        terms: list[str] = []
+        for coefficient, atoms in _angle_component_terms_from_refs(primitive):
+            expression = "A(" + ",".join(str(atom) for atom in atoms) + ")"
+            terms.append(_gaussian_linear_term(coefficient, expression, first=not terms))
+        return "".join(terms) if terms else None
     if primitive.function == "RPCK":
         terms: list[str] = []
         for coefficient, atoms in _ring_pucker_terms_from_refs(primitive):

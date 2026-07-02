@@ -2,7 +2,7 @@
 # X-H...Y contacts are detected on a non-covalent interaction graph.
 # They are used for BDPCS3 geometry correction and constraints, not for
 # covalent GIC/ring topology.
-angle_threshold_deg = 150.0
+angle_threshold_deg = 130.0
 distance_cutoff_ang = 3.0
 distance_width_ang = 0.15
 search_cutoff_ang = 3.8

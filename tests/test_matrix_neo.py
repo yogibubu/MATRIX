@@ -1640,28 +1640,53 @@ def test_gicforge_pseudo_bond_fragment_mode_uses_standard_internal_coordinates(t
     gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
 
     assert definition.fragment_mode == "PSEUDO_BONDS"
-    assert definition.pseudo_bonds == ((5, 6),)
-    assert definition.pseudo_bond_kinds == ("HBOND",)
+    assert definition.pseudo_bonds == ((3, 8), (5, 6))
+    assert definition.pseudo_bond_kinds == ("HBOND", "HBOND")
     assert definition.target_rank == 18
     assert definition.rank == 18
     assert np.linalg.matrix_rank(rows, tol=1.0e-8) == 18
-    assert {gic.family for gic in definition.gics} == {"STRETCH", "BEND", "TORSION"}
+    gic_families = {gic.family for gic in definition.gics}
+    assert gic_families.issubset(
+        {"STRETCH", "BEND", "TORSION", "PSEUDO_CYCLE_BEND", "PSEUDO_CYCLE_TORSION"}
+    )
+    assert {"STRETCH", "BEND", "PSEUDO_CYCLE_BEND", "PSEUDO_CYCLE_TORSION"}.issubset(
+        gic_families
+    )
     assert not any(gic.family.startswith("FRAG_") for gic in definition.gics)
     assert any(
         primitive.family == "STRETCH" and primitive.atoms == (5, 6)
         for primitive in definition.primitives
     )
+    assert any(
+        primitive.family == "PSEUDO_CYCLE_TORSION"
+        for primitive in definition.primitives
+    )
+    assert any(
+        primitive.family == "PSEUDO_CYCLE_BEND"
+        for primitive in definition.primitives
+    )
+    assert all(
+        primitive.function == "RPCB" and primitive.refs
+        for primitive in definition.primitives
+        if primitive.family == "PSEUDO_CYCLE_BEND"
+    )
+    assert all(
+        primitive.function == "RPCK" and primitive.refs
+        for primitive in definition.primitives
+        if primitive.family == "PSEUDO_CYCLE_TORSION"
+    )
     assert "FRAGMENT_MODE PSEUDO_BONDS" in gic
-    assert "PSEUDO_BOND_COUNT 1" in gic
+    assert "PSEUDO_BOND_COUNT 2" in gic
     assert "[PSEUDO_BONDS]" in gic
-    assert "1 5 6 KIND=HBOND" in gic
+    assert "1 3 8 KIND=HBOND" in gic
+    assert "2 5 6 KIND=HBOND" in gic
     report_lines = gic_report_from_xyzin(xyzin)
     assert "Mode: PSEUDO_BONDS" in report_lines
     assert (
         "Policy: explicit graph-joining mode; do not build protected fragment coordinates."
         in report_lines
     )
-    assert "Pseudo-bonds: 5-6:HBOND" in report_lines
+    assert "Pseudo-bonds: 3-8:HBOND, 5-6:HBOND" in report_lines
 
 
 def test_gicforge_non_covalent_probe_runs_fragment_and_hbond_coordinate_models(tmp_path):
@@ -1710,12 +1735,191 @@ def test_gicforge_non_covalent_probe_runs_fragment_and_hbond_coordinate_models(t
     hbond_definition = results["pseudo-bonds"]
     hbond_families = {gic.family for gic in hbond_definition.gics}
     assert hbond_definition.fragment_mode == "PSEUDO_BONDS"
-    assert hbond_definition.pseudo_bonds == ((5, 6),)
-    assert hbond_definition.pseudo_bond_kinds == ("HBOND",)
-    assert hbond_families == {"STRETCH", "BEND", "TORSION"}
+    assert hbond_definition.pseudo_bonds == ((3, 8), (5, 6))
+    assert hbond_definition.pseudo_bond_kinds == ("HBOND", "HBOND")
+    assert hbond_families.issubset(
+        {"STRETCH", "BEND", "TORSION", "PSEUDO_CYCLE_BEND", "PSEUDO_CYCLE_TORSION"}
+    )
+    assert {"STRETCH", "BEND", "PSEUDO_CYCLE_BEND", "PSEUDO_CYCLE_TORSION"}.issubset(
+        hbond_families
+    )
     assert not any(
         primitive.family.startswith(("FRAG_", "RING_", "CYCLIC_"))
         for primitive in hbond_definition.primitives
+    )
+
+
+def test_gicforge_pseudo_bond_mode_keeps_bifurcated_hbonds(tmp_path):
+    source = tmp_path / "formamide_water.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "9",
+                "formamide-water bifurcated probe",
+                "N       -0.700127      -1.128742      -0.015445",
+                "H       -1.321756      -1.912711       0.014357",
+                "H        0.301187      -1.264892      -0.043617",
+                "C       -1.189037       0.122238       0.008679",
+                "H       -2.285085       0.166223       0.042991",
+                "O       -0.510300       1.136274      -0.006758",
+                "O        1.970971      -0.100951       0.043015",
+                "H        2.709891       0.208354      -0.479510",
+                "H        1.299330       0.599360       0.001634",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "formamide_water.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    write_fragment_build_section(xyzin)
+    definition = write_gicforge_build_sections(xyzin, fragment_mode="pseudo-bonds")
+    gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
+
+    assert definition.fragment_mode == "PSEUDO_BONDS"
+    assert definition.pseudo_bonds == ((3, 7), (6, 9))
+    assert definition.pseudo_bond_kinds == ("HBOND", "HBOND")
+    assert any(gic.family == "PSEUDO_CYCLE_BEND" for gic in definition.gics)
+    assert any(gic.family == "PSEUDO_CYCLE_TORSION" for gic in definition.gics)
+    assert "PSEUDO_BOND_COUNT 2" in gic
+    assert "1 3 7 KIND=HBOND" in gic
+    assert "2 6 9 KIND=HBOND" in gic
+
+
+def test_gicforge_symmetrizes_pseudo_bond_interfragment_coordinates(tmp_path):
+    source = tmp_path / "formic_acid_water.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "8",
+                "formic acid-water non-covalent probe",
+                "6    -1.171727   -0.018999   -0.001370",
+                "1    -2.256869    0.130369   -0.015107",
+                "8    -0.651376   -1.113045    0.004964",
+                "8    -0.533544    1.143228    0.007603",
+                "1     0.435203    0.960633    0.019343",
+                "8     1.930145   -0.025976   -0.052269",
+                "1     2.594643   -0.128917    0.633345",
+                "1     1.351317   -0.802634    0.008831",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "formic_acid_water.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    write_fragment_build_section(xyzin)
+    definition = write_gicforge_build_sections(
+        xyzin, fragment_mode="pseudo-bonds", symmetrize=True
+    )
+    matrix = build_gic_b_matrix_from_xyzin(xyzin)
+    gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
+
+    assert definition.symmetrize is True
+    assert definition.fragment_mode == "PSEUDO_BONDS"
+    assert definition.pseudo_bonds == ((3, 8), (5, 6))
+    assert definition.symmetry_diagnostics is not None
+    assert any(gic.family == "PSEUDO_CYCLE_TORSION" for gic in definition.gics)
+    assert any(
+        primitive.family == "PSEUDO_CYCLE_BEND"
+        and primitive.function == "RPCB"
+        and primitive.refs
+        for primitive in definition.primitives
+    )
+    assert any(
+        primitive.family == "PSEUDO_CYCLE_TORSION"
+        and primitive.function == "RPCK"
+        and primitive.refs
+        and 0.0 < abs(float(primitive.refs[0].split(":", 1)[0])) < 1.0
+        for primitive in definition.primitives
+    )
+    assert "TOTAL_SYMMETRIC_IRREP A" in gic
+    assert any(name.startswith("A") for name in total_symmetric_gic_names(definition))
+    assert len(matrix.rows) == definition.rank
+
+
+def test_gicforge_symmetrizes_hcooh_nh3_pseudo_cycle_as_cs(tmp_path):
+    source = tmp_path / "hcooh_nh3.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "9",
+                "HCOOH--NH3 Cs non-covalent probe",
+                "1  2.259057 1.251445  0.814639",
+                "1  2.259057 1.251445 -0.814639",
+                "1  1.803014 -0.092345 0.000000",
+                "7  1.760374 0.920924 0.000000",
+                "6 -1.127166 -0.587218 0.000000",
+                "1 -2.186981 -0.860473 0.000000",
+                "8 -0.976020 0.726058 0.000000",
+                "1  0.000000 0.929044 0.000000",
+                "8 -0.235701 -1.401342 0.000000",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "hcooh_nh3.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    write_fragment_build_section(xyzin)
+    definition = write_gicforge_build_sections(
+        xyzin, fragment_mode="pseudo-bonds", symmetrize=True
+    )
+    matrix = build_gic_b_matrix_from_xyzin(xyzin)
+    gic = section_content(xyzin.read_text(encoding="utf-8").splitlines(), "GIC")
+
+    assert definition.fragment_mode == "PSEUDO_BONDS"
+    assert definition.point_group == "Cs"
+    assert definition.pseudo_bonds == ((3, 9), (4, 8))
+    assert definition.pseudo_bond_kinds == ("PSEUDO_CYCLE_CLOSURE", "HBOND")
+    assert definition.symmetry_diagnostics is not None
+    assert any(primitive.family == "PSEUDO_CYCLE_BEND" for primitive in definition.primitives)
+    assert any(primitive.family == "PSEUDO_CYCLE_TORSION" for primitive in definition.primitives)
+    assert "TOTAL_SYMMETRIC_IRREP A'" in gic
+    assert any(name.startswith("A") for name in total_symmetric_gic_names(definition))
+    assert len(matrix.rows) == definition.rank
+
+
+def test_gicforge_does_not_close_long_range_pseudo_cycle(tmp_path):
+    source = tmp_path / "far_water_methane.xyz"
+    source.write_text(
+        "\n".join(
+            [
+                "8",
+                "far non-covalent fragments",
+                "O 0.0 0.0 0.0",
+                "H 0.0 0.8 0.6",
+                "H 0.0 -0.8 0.6",
+                "C 8.0 0.0 0.0",
+                "H 9.0 0.0 0.0",
+                "H 8.0 1.0 0.0",
+                "H 8.0 0.0 1.0",
+                "H 8.0 -1.0 0.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    xyzin = tmp_path / "far_water_methane.xyzin"
+
+    preprocess_to_enriched_xyz(source, xyzin)
+    write_validation_section(xyzin)
+    write_fragment_build_section(xyzin)
+    definition = write_gicforge_build_sections(
+        xyzin, fragment_mode="pseudo-bonds", symmetrize=True
+    )
+
+    assert definition.fragment_mode == "PSEUDO_BONDS"
+    assert definition.pseudo_bond_kinds == ("INTERFRAGMENT_CLOSEST",)
+    assert not any(primitive.family == "PSEUDO_CYCLE_BEND" for primitive in definition.primitives)
+    assert not any(
+        primitive.family == "PSEUDO_CYCLE_TORSION" for primitive in definition.primitives
     )
 
 

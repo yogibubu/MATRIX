@@ -627,6 +627,12 @@ C only 1 H-bond for each Hydrogen atom
       Dimension IAn(*),IFrag(*),NBond(*),IBond(MxBnd,*)
 C Local
       Dimension IDn(100),ICc(100),IHAt(100)
+C The contacts added below are pseudo-bonds.  They deliberately enter
+C NBond/IBond before MkCyc so the Fortran path treats intermolecular
+C pseudo-cycles exactly like rings: N distances, N-3 angles, N-3
+C intra-cycle torsions.
+C No unconditional long-range closure is added here; closure contacts are
+C valid only when they are real near-van-der-Waals contacts.
       Call FindHBnd(IOut,IPrint,MxBnd,AllHB,NAtoms,NFrag,NHB,IAn,
      $  NBond,IBond,IFrag,C,IDn,IHAt,ICc)
       if(NHB.gt.0) then
