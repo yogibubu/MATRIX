@@ -2668,6 +2668,9 @@ def _geometry_parameters(
                     )
                 )
 
+    if fit_prims is not None:
+        _append_fit_primitive_geometry_specs(specs, fit_prims, atoms)
+
     primitives = [item[4] for item in specs]
     values = eval_primitives(primitives, coords) if primitives else np.array(())
     sigmas = _geometry_parameter_sigmas(
@@ -2680,7 +2683,7 @@ def _geometry_parameters(
     for idx, (kind, label, atom_indices, symbols, _primitive, angular_scale) in enumerate(specs):
         value = float(values[idx])
         sigma = sigmas[idx] if sigmas is not None and idx < len(sigmas) else None
-        if kind == "bond":
+        if kind in {"bond", "neo_bond"}:
             rows.append(
                 SemiexperimentalGeometryParameter(
                     kind,
@@ -2712,6 +2715,46 @@ def _geometry_parameters(
         )
     )
     return tuple(rows)
+
+
+def _append_fit_primitive_geometry_specs(
+    specs: list[tuple[str, str, tuple[int, ...], tuple[str, ...], Primitive, float]],
+    fit_prims: object,
+    atoms: list[str] | tuple[str, ...],
+) -> None:
+    """Append NEO primitives absent from the covalent topology report.
+
+    Non-covalent MORPHEUS fits may use pseudo-bond GICs.  Those primitives are
+    intentionally absent from the ordinary covalent graph, but they are the
+    chemically relevant coordinates for the fit and must appear in the final
+    geometry table and uncertainty diagnostics.
+    """
+
+    seen = {_primitive_constraint_key(item[4]) for item in specs}
+    for primitive in tuple(fit_prims):
+        if primitive.kind not in {"bond", "angle", "dihedral", "out_of_plane", "linear_bend"}:
+            continue
+        key = _primitive_constraint_key(primitive)
+        if key in seen:
+            continue
+        seen.add(key)
+        atom_indices = tuple(int(atom) + 1 for atom in primitive.atoms)
+        symbols = tuple(str(atoms[int(atom)]) for atom in primitive.atoms)
+        label = f"NEO:{_primitive_text(primitive)}"
+        if primitive.kind == "bond":
+            specs.append(("neo_bond", label, atom_indices, symbols, primitive, 1.0))
+        elif primitive.kind == "angle":
+            specs.append(("neo_angle", label, atom_indices, symbols, primitive, 180.0 / np.pi))
+        elif primitive.kind == "dihedral":
+            specs.append(("neo_dihedral", label, atom_indices, symbols, primitive, 180.0 / np.pi))
+        elif primitive.kind == "out_of_plane":
+            specs.append(
+                ("neo_out_of_plane", label, atom_indices, symbols, primitive, 180.0 / np.pi)
+            )
+        elif primitive.kind == "linear_bend":
+            specs.append(
+                ("neo_linear_bend", label, atom_indices, symbols, primitive, 180.0 / np.pi)
+            )
 
 
 def _geometry_parameter_sigmas(
@@ -8400,19 +8443,17 @@ def _parameters(
 def _covariance(jac: np.ndarray, residual: np.ndarray) -> np.ndarray:
     if jac.size == 0:
         return np.zeros((0, 0), dtype=float)
-    dof = max(jac.shape[0] - jac.shape[1], 1)
-    sigma2 = float(residual @ residual) / dof
     try:
         _u, singular, vh = np.linalg.svd(jac, full_matrices=False)
     except np.linalg.LinAlgError:
-        return sigma2 * np.linalg.pinv(jac.T @ jac, rcond=1.0e-10)
+        return np.linalg.pinv(jac.T @ jac, rcond=1.0e-10)
     if not singular.size:
         return np.zeros((jac.shape[1], jac.shape[1]), dtype=float)
     tol = max(jac.shape) * np.finfo(float).eps * max(float(singular[0]), 1.0) * 100.0
     inv_s2 = np.zeros_like(singular)
     keep = singular > tol
     inv_s2[keep] = 1.0 / (singular[keep] * singular[keep])
-    return sigma2 * ((vh.T * inv_s2) @ vh)
+    return (vh.T * inv_s2) @ vh
 
 
 def _diagnostics(

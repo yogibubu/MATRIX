@@ -119,6 +119,37 @@ def test_semiexp_rejects_underdetermined_free_refinement():
         _validate_observation_budget(model, 4, coordinate_model="gic")
 
 
+def test_semiexp_covariance_uses_declared_weights_not_residual_rescaling():
+    from matrix_morpheus.fit import _covariance
+
+    jac = np.eye(2)
+    small_residual = np.array([0.1, 0.2])
+    large_residual = np.array([100.0, -50.0])
+
+    expected = np.eye(2)
+    assert np.allclose(_covariance(jac, small_residual), expected)
+    assert np.allclose(_covariance(jac, large_residual), expected)
+
+
+def test_semiexp_geometry_report_includes_neo_primitives_outside_covalent_graph():
+    from matrix_morpheus.fit import _geometry_parameters
+    from matrix_neo.survibfit.primitives import Primitive
+
+    atoms = ("H", "O", "H")
+    coords = np.array(
+        [
+            [-0.75, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.75, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+
+    rows = _geometry_parameters(atoms, coords, fit_prims=(Primitive("bond", (0, 2)),))
+
+    assert any(row.kind == "neo_bond" and row.label == "NEO:R(1,3)" for row in rows)
+
+
 def test_legacy_msr_zmatrix_constraints_import_for_p_ebn():
     from matrix_morpheus.msr_legacy import read_msr_legacy_input
 
