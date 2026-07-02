@@ -529,6 +529,27 @@ def test_semiexp_sensitivity_advisor_keeps_isotopologue_coverage():
     assert any(row.reason == "minimum_isotopologue_coverage" for row in advisor.rows)
 
 
+def test_semiexp_sensitivity_advisor_prefers_soft_inter_coordinates():
+    from matrix_morpheus.report import _sensitivity_selected_fit_labels
+
+    candidates = [
+        ("GIC001 NEO AStr0001 irrep=A R(1,2)", 1.0, 100.0, 1.0, ""),
+        ("GIC002 NEO APsAn0001 irrep=A NONE", 0.0, 10.0, 0.1, ""),
+        ("GIC003 NEO APsTo0001 irrep=A NONE", 0.0, 9.0, 0.09, ""),
+        ("GIC004 NEO AStrD001 irrep=A LINEAR_COMBINATION", 0.0, 8.0, 0.08, ""),
+        ("GIC005 NEO ABendD001 irrep=A LINEAR_COMBINATION", 0.0, 7.0, 0.07, ""),
+    ]
+
+    selected = _sensitivity_selected_fit_labels(
+        candidates,
+        free_budget=3,
+        required_fit=3,
+        fit_relative_threshold=0.5,
+    )
+
+    assert selected == {"GIC002", "GIC003", "GIC004"}
+
+
 def test_oracle_semiexp_cli_runs_water_gic(tmp_path):
     from matrix_core.cli import main
     from matrix_morpheus import read_morpheus_section

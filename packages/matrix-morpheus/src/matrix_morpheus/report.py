@@ -477,7 +477,12 @@ def advise_semiexperimental_gic_sensitivity(
         n_active=len(candidates),
         n_isotopologues=len(request.observations),
     )
-    fitted_so_far = 0
+    selected_labels = _sensitivity_selected_fit_labels(
+        candidates,
+        free_budget=free_budget,
+        required_fit=required_fit,
+        fit_relative_threshold=fit_relative_threshold,
+    )
     rows: list[SemiexperimentalSensitivityAdvisorRow] = []
     predicates: list[QMParameterPredicate] = []
     fixed_patterns: list[str] = []
@@ -488,18 +493,14 @@ def advise_semiexperimental_gic_sensitivity(
             sigma = 0.0
             reason = fixed_reason
             fixed_patterns.append(label_id)
-        elif (
-            (relative >= fit_relative_threshold or fitted_so_far < required_fit)
-            and fitted_so_far < free_budget
-        ):
+        elif label_id in selected_labels:
             decision = "fit"
             sigma = 0.0
             reason = (
                 "experiment_sensitive"
                 if relative >= fit_relative_threshold
-                else "minimum_isotopologue_coverage"
+                else _sensitivity_fit_reason(label)
             )
-            fitted_so_far += 1
         else:
             decision = "predicate"
             sigma = _sensitivity_predicate_sigma(
@@ -535,6 +536,84 @@ def advise_semiexperimental_gic_sensitivity(
     return SemiexperimentalSensitivityAdvisor(
         tuple(rows), tuple(predicates), tuple(fixed_patterns), measurement.components
     )
+
+
+def _sensitivity_selected_fit_labels(
+    candidates: list[tuple[str, float, float, float, str]],
+    *,
+    free_budget: int,
+    required_fit: int,
+    fit_relative_threshold: float,
+) -> set[str]:
+    eligible = [item for item in candidates if not item[4]]
+    selected: list[str] = []
+    inter_soft = [item for item in eligible if _sensitivity_priority(item[0]) == 0]
+    inter_min = min(
+        len(inter_soft),
+        int(free_budget),
+        max(0, min(6, max(3, int(np.ceil(required_fit / 2.0))))),
+    )
+    for item in _sensitivity_selection_order(inter_soft):
+        if len(selected) >= inter_min:
+            break
+        selected.append(_gic_id(item[0]))
+    for item in _sensitivity_selection_order(eligible):
+        if len(selected) >= free_budget:
+            break
+        label_id = _gic_id(item[0])
+        if label_id in selected:
+            continue
+        relative = item[3]
+        if relative >= fit_relative_threshold or len(selected) < required_fit:
+            selected.append(label_id)
+    return set(selected)
+
+
+def _sensitivity_selection_order(
+    candidates: list[tuple[str, float, float, float, str]]
+) -> list[tuple[str, float, float, float, str]]:
+    return sorted(candidates, key=lambda item: (_sensitivity_priority(item[0]), -item[2]))
+
+
+def _sensitivity_priority(label: str) -> int:
+    text = str(label)
+    if _is_inter_or_special_gic(text):
+        return 0
+    if _is_soft_gic(text):
+        return 1
+    return 2
+
+
+def _is_inter_or_special_gic(label: str) -> bool:
+    text = label.upper()
+    if " NEO " not in text:
+        return False
+    special_markers = (
+        "PSAN",
+        "PSTO",
+        "STRD",
+        "BENDD",
+        "FC_",
+        "FRAG",
+        "LINEAR_COMBINATION",
+    )
+    return any(marker in text for marker in special_markers)
+
+
+def _is_soft_gic(label: str) -> bool:
+    kind = _gic_kind(label)
+    if kind in {"dihedral", "out_of_plane", "linear_bend", "ring", "mixed"}:
+        return True
+    text = str(label).upper()
+    return any(marker in text for marker in ("PSAN", "PSTO", "TORS", "OOP", "PUCK"))
+
+
+def _sensitivity_fit_reason(label: str) -> str:
+    if _is_inter_or_special_gic(label):
+        return "intermolecular_soft_priority"
+    if _is_soft_gic(label):
+        return "soft_coordinate_priority"
+    return "minimum_isotopologue_coverage"
 
 
 def _sensitivity_min_fit_count(
