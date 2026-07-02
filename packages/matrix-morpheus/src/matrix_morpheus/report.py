@@ -117,7 +117,9 @@ class SemiexperimentalSensitivityAdvisorRow:
     value: float
     sensitivity: float
     relative_sensitivity: float
-    decision: str
+    chemical_role: str
+    current_state: str
+    suggested_state: str
     predicate_sigma: float
     reason: str
 
@@ -131,15 +133,15 @@ class SemiexperimentalSensitivityAdvisor:
 
     @property
     def fit_count(self) -> int:
-        return sum(1 for row in self.rows if row.decision == "fit")
+        return sum(1 for row in self.rows if row.suggested_state == "fit")
 
     @property
     def predicate_count(self) -> int:
-        return sum(1 for row in self.rows if row.decision == "predicate")
+        return sum(1 for row in self.rows if row.suggested_state == "predicate")
 
     @property
     def fixed_count(self) -> int:
-        return sum(1 for row in self.rows if row.decision == "fixed")
+        return sum(1 for row in self.rows if row.suggested_state == "fixed")
 
     @property
     def csv(self) -> str:
@@ -151,7 +153,9 @@ class SemiexperimentalSensitivityAdvisor:
                 "value",
                 "sensitivity",
                 "relative_sensitivity",
-                "decision",
+                "chemical_role",
+                "current_state",
+                "suggested_state",
                 "predicate_sigma",
                 "reason",
             ]
@@ -163,7 +167,9 @@ class SemiexperimentalSensitivityAdvisor:
                     f"{row.value:.12g}",
                     f"{row.sensitivity:.12g}",
                     f"{row.relative_sensitivity:.12g}",
-                    row.decision,
+                    row.chemical_role,
+                    row.current_state,
+                    row.suggested_state,
                     f"{row.predicate_sigma:.12g}",
                     row.reason,
                 ]
@@ -180,7 +186,8 @@ class SemiexperimentalSensitivityAdvisor:
             f"fixed: {self.fixed_count}",
         ]
         lines.extend(
-            f"  {row.decision:9s} rel={row.relative_sensitivity:.4g} {row.label}"
+            f"  {row.current_state}->{row.suggested_state:9s} "
+            f"role={row.chemical_role} rel={row.relative_sensitivity:.4g} {row.label}"
             for row in self.rows
         )
         return "\n".join(lines)
@@ -491,13 +498,15 @@ def advise_semiexperimental_gic_sensitivity(
     fixed_patterns: list[str] = []
     for label, value, sensitivity, relative, fixed_reason in candidates:
         label_id = _gic_id(label)
+        chemical_role = _sensitivity_chemical_role(label)
+        current_state = _sensitivity_current_state(request, label_id, label)
         if fixed_reason:
-            decision = "fixed"
+            suggested_state = "fixed"
             sigma = 0.0
             reason = fixed_reason
             fixed_patterns.append(label_id)
         elif label_id in selected_labels:
-            decision = "fit"
+            suggested_state = "fit"
             sigma = _sensitivity_fit_regularization_sigma(
                 label,
                 relative=relative,
@@ -521,7 +530,7 @@ def advise_semiexperimental_gic_sensitivity(
                     )
                 )
         else:
-            decision = "predicate"
+            suggested_state = "predicate"
             sigma = _sensitivity_predicate_sigma(
                 label,
                 relative=relative,
@@ -551,7 +560,9 @@ def advise_semiexperimental_gic_sensitivity(
                 value,
                 sensitivity,
                 relative,
-                decision,
+                chemical_role,
+                current_state,
+                suggested_state,
                 sigma,
                 reason,
             )
@@ -559,6 +570,31 @@ def advise_semiexperimental_gic_sensitivity(
     return SemiexperimentalSensitivityAdvisor(
         tuple(rows), tuple(predicates), tuple(fixed_patterns), measurement.components
     )
+
+
+def _sensitivity_current_state(
+    request: SemiexperimentalFitRequest,
+    label_id: str,
+    label: str,
+) -> str:
+    low_label = str(label).lower()
+    low_id = str(label_id).lower()
+    if any(pattern.lower() in low_label or pattern.lower() == low_id for pattern in request.fixed_parameters):
+        return "fixed"
+    if any(pattern.lower() in low_label or pattern.lower() == low_id for pattern in (predicate.label_pattern for predicate in request.qm_predicates)):
+        return "predicate"
+    for parameter_class in request.parameter_classes:
+        if any(pattern.lower() in low_label or pattern.lower() == low_id for pattern in parameter_class.patterns):
+            return f"class:{parameter_class.mode}"
+    return "free"
+
+
+def _sensitivity_chemical_role(label: str) -> str:
+    if _is_inter_or_special_gic(label):
+        return "inter_soft"
+    if _is_soft_gic(label):
+        return "soft"
+    return "intra_hard"
 
 
 def _sensitivity_selected_fit_labels(

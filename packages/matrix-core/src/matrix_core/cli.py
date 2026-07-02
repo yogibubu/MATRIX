@@ -759,8 +759,16 @@ def build_parser(
         action="store_true",
         help=(
             "Rank symmetry-adapted non-redundant GICs by weighted effect on "
-            "rotational constants; optimize sensitive coordinates, add predicates "
-            "to weak coordinates, and fix null coordinates."
+            "rotational constants and write tuning suggestions for the current "
+            "chemical model."
+        ),
+    )
+    semiexp.add_argument(
+        "--apply-sensitivity-advisor",
+        action="store_true",
+        help=(
+            "Apply sensitivity-advisor predicates/fixed patterns to the fit. "
+            "Without this flag the advisor is diagnostic only."
         ),
     )
     semiexp.add_argument("--sensitivity-fit-threshold", type=float, default=0.15)
@@ -2627,8 +2635,9 @@ def main(
                 null_predicate_scale=args.sensitivity_null_predicate_scale,
                 fit_regularization_scale=args.sensitivity_fit_regularization_scale,
             )
-            fixed = _merge_unique(fixed, advisor.fixed_patterns)
-            qm_predicates = _merge_unique(qm_predicates, advisor.predicates)
+            if args.apply_sensitivity_advisor:
+                fixed = _merge_unique(fixed, advisor.fixed_patterns)
+                qm_predicates = _merge_unique(qm_predicates, advisor.predicates)
             args.outdir.mkdir(parents=True, exist_ok=True)
             advisor_path = args.outdir / "semiexp_sensitivity_advisor.csv"
             advisor_path.write_text(advisor.csv, encoding="utf-8")
@@ -2637,6 +2646,7 @@ def main(
                 f"fit={advisor.fit_count} "
                 f"predicate={advisor.predicate_count} "
                 f"fixed={advisor.fixed_count} "
+                f"applied={bool(args.apply_sensitivity_advisor)} "
                 f"csv={advisor_path}"
             )
         if (

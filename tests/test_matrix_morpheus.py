@@ -502,7 +502,9 @@ def test_semiexp_sensitivity_advisor_generates_gic_predicates(tmp_path):
     assert advisor.predicate_count == len(advisor.predicates) > 0
     assert advisor.fit_count == 0
     assert all(item.source == "morpheus_sensitivity_advisor" for item in advisor.predicates)
-    assert "relative_sensitivity,decision" in csv_path.read_text(encoding="utf-8")
+    assert "relative_sensitivity,chemical_role,current_state,suggested_state" in (
+        csv_path.read_text(encoding="utf-8")
+    )
 
 
 def test_semiexp_sensitivity_advisor_keeps_isotopologue_coverage():
@@ -678,10 +680,52 @@ def test_semiexp_cli_writes_sensitivity_advisor_csv(tmp_path):
     )
 
     advisor_csv = (outdir / "semiexp_sensitivity_advisor.csv").read_text(encoding="utf-8")
+    weight_diagnostics = (outdir / "semiexp_weight_diagnostics.csv").read_text(
+        encoding="utf-8"
+    )
 
     assert status == 0
     assert "below_fit_threshold" in advisor_csv
     assert ",predicate," in advisor_csv
+    assert "morpheus_sensitivity_advisor" not in weight_diagnostics
+
+
+def test_semiexp_cli_applies_sensitivity_advisor_only_when_requested(tmp_path):
+    from matrix_core.cli import main
+
+    root = Path(__file__).resolve().parents[1]
+    outdir = tmp_path / "run"
+    status = main(
+        [
+            "semiexp",
+            "--xyz",
+            str(root / "packages/matrix-morpheus/examples/semiexp/water/parent.xyz"),
+            "--observations",
+            str(root / "packages/matrix-morpheus/examples/semiexp/water/isotopologues.toml"),
+            "--outdir",
+            str(outdir),
+            "--coordinate-model",
+            "gic",
+            "--sensitivity-advisor",
+            "--apply-sensitivity-advisor",
+            "--sensitivity-fit-threshold",
+            "1.1",
+            "--sensitivity-fixed-threshold",
+            "-1.0",
+            "--sensitivity-min-fit",
+            "none",
+            "--max-iter",
+            "1",
+        ],
+        repo_root=root,
+    )
+
+    weight_diagnostics = (outdir / "semiexp_weight_diagnostics.csv").read_text(
+        encoding="utf-8"
+    )
+
+    assert status == 0
+    assert "morpheus_sensitivity_advisor" in weight_diagnostics
 
 
 def test_semiexp_cli_accepts_standard_xyzin_morpheus_input(tmp_path):
