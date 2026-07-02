@@ -104,14 +104,15 @@ detected X-H...Y hydrogen bonds when chemically available, using the
 Merlino/BDPCS3 donor, acceptor, distance and angular criteria. If no chemically
 valid hydrogen bond connects fragments, the closest inter-fragment atom pair is
 used as a fallback. Once the pseudo-bond is added, standard internal coordinates
-are generated and reduced as for an ordinary molecule. Pseudo-bonds do not
-create artificial rings.
+are generated and reduced as for an ordinary molecule. Pseudo-cycle coordinates
+are generated only when the selected weak contacts and one short closure give a
+chemically admissible closed path; long-range closures are rejected.
 
 For the formic-acid--water probe, the fragment model gives protected fragment
 distance/translation/orientation coordinates, while the pseudo-bond model
-detects the O-H...O contact and builds only ordinary stretches, bends and
-torsions. Both models reach the full rank of the same 18-dimensional
-vibrational space.
+detects the O-H...O contacts and completes the inter-fragment span with
+pseudo-cycle angular and torsional components. Both models reach the full rank
+of the same 18-dimensional vibrational space.
 
 ## Proposed Figures
 

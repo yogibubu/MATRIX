@@ -289,8 +289,6 @@ def construct_gic_definition_from_xyzin(
         pseudo_bonds = tuple((left, right) for left, right, _kind in pseudo_contacts)
         pseudo_bond_kinds = tuple(kind for _left, _right, kind in pseudo_contacts)
         bonds = tuple(sorted(set(bonds + pseudo_bonds)))
-        candidate_fragment_records = ()
-        candidate_interaction_centers = None
     candidates = _primitive_candidates(
         bonds,
         rings=rings,
@@ -2144,25 +2142,81 @@ def _select_ranked_primitives_with_diagnostics(
     basis: list[np.ndarray] = []
     rank = 0
 
-    special_candidates = [primitive for primitive in candidates if _is_special_primitive(primitive)]
-    ordinary_candidates = [
-        primitive for primitive in candidates if not _is_special_primitive(primitive)
+    pseudo_cycle_candidates = [
+        primitive for primitive in candidates if _is_pseudo_cycle_primitive(primitive)
     ]
-    for index, primitive in enumerate(special_candidates):
-        if rank == target_rank:
-            singular, dependent, singular_details, dependent_details = (
-                _raise_if_remaining_special_independent(
-                    tuple(special_candidates[index:]),
-                    coords,
-                    basis,
-                    rank,
-                    rank_tolerance=rank_tolerance,
-                )
+    special_candidates = [
+        primitive
+        for primitive in candidates
+        if _is_special_primitive(primitive) and not _is_pseudo_cycle_primitive(primitive)
+    ]
+    ordinary_candidates = [
+        primitive
+        for primitive in candidates
+        if not _is_special_primitive(primitive) and not _is_pseudo_cycle_primitive(primitive)
+    ]
+    def select_candidates(
+        group: tuple[GICPrimitive, ...],
+        *,
+        protected: bool,
+    ) -> tuple[bool, int]:
+        nonlocal rank
+        for index, primitive in enumerate(group):
+            if rank == target_rank:
+                if protected:
+                    singular, dependent, singular_details, dependent_details = (
+                        _raise_if_remaining_special_independent(
+                            tuple(group[index:]),
+                            coords,
+                            basis,
+                            rank,
+                            rank_tolerance=rank_tolerance,
+                        )
+                    )
+                    skipped_singular.extend(singular)
+                    skipped_dependent.extend(dependent)
+                    skipped_singular_details.extend(singular_details)
+                    skipped_dependent_details.extend(dependent_details)
+                    return True, rank
+                return False, rank
+            rank, status = _try_select_ranked_primitive(
+                primitive,
+                coords,
+                selected,
+                basis,
+                rank,
+                rank_tolerance=rank_tolerance,
             )
-            skipped_singular.extend(singular)
-            skipped_dependent.extend(dependent)
-            skipped_singular_details.extend(singular_details)
-            skipped_dependent_details.extend(dependent_details)
+            _record_skip(
+                primitive,
+                status,
+                skipped_singular,
+                skipped_dependent,
+                skipped_singular_details,
+                skipped_dependent_details,
+            )
+        return False, rank
+
+    should_return, rank = select_candidates(tuple(pseudo_cycle_candidates), protected=True)
+    if should_return:
+        return (
+            tuple(selected),
+            rank,
+            _make_reduction_diagnostics(
+                selected,
+                skipped_singular=skipped_singular,
+                skipped_dependent=skipped_dependent,
+                skipped_singular_details=skipped_singular_details,
+                skipped_dependent_details=skipped_dependent_details,
+            ),
+        )
+
+    if pseudo_cycle_candidates:
+        select_candidates(tuple(ordinary_candidates), protected=False)
+        select_candidates(tuple(special_candidates), protected=False)
+    else:
+        should_return, rank = select_candidates(tuple(special_candidates), protected=True)
+        if should_return:
             return (
                 tuple(selected),
                 rank,
@@ -2174,42 +2228,7 @@ def _select_ranked_primitives_with_diagnostics(
                     skipped_dependent_details=skipped_dependent_details,
                 ),
             )
-        rank, status = _try_select_ranked_primitive(
-            primitive,
-            coords,
-            selected,
-            basis,
-            rank,
-            rank_tolerance=rank_tolerance,
-        )
-        _record_skip(
-            primitive,
-            status,
-            skipped_singular,
-            skipped_dependent,
-            skipped_singular_details,
-            skipped_dependent_details,
-        )
-
-    for primitive in ordinary_candidates:
-        if rank == target_rank:
-            break
-        rank, status = _try_select_ranked_primitive(
-            primitive,
-            coords,
-            selected,
-            basis,
-            rank,
-            rank_tolerance=rank_tolerance,
-        )
-        _record_skip(
-            primitive,
-            status,
-            skipped_singular,
-            skipped_dependent,
-            skipped_singular_details,
-            skipped_dependent_details,
-        )
+        select_candidates(tuple(ordinary_candidates), protected=False)
     return (
         tuple(selected),
         rank,
@@ -2227,8 +2246,16 @@ def _is_special_primitive(primitive: GICPrimitive) -> bool:
     return primitive.reduction_class == SPECIAL_REDUCTION_CLASS
 
 
+def _is_pseudo_cycle_primitive(primitive: GICPrimitive) -> bool:
+    return primitive.family in {"PSEUDO_CYCLE_BEND", "PSEUDO_CYCLE_TORSION"}
+
+
 def _protected_gic_count(primitives: tuple[GICPrimitive, ...]) -> int:
-    return sum(1 for primitive in primitives if _is_special_primitive(primitive))
+    return sum(
+        1
+        for primitive in primitives
+        if _is_special_primitive(primitive) or _is_pseudo_cycle_primitive(primitive)
+    )
 
 
 def _skipped_singular_count(definition: GICDefinition) -> int:

@@ -63,8 +63,13 @@ recorded in `#GIC` and printed by `matrix neo report`.
 - `PSEUDO_BONDS` is an explicit graph-joining mode. The contact is selected by
   the Merlino/BDPCS3 H-bond rule first and by the closest inter-fragment pair as
   a fallback. NEO then builds ordinary stretch/bend/torsion primitives on the
-  augmented construction graph. This mode does not build protected fragment
-  coordinates and does not create artificial rings from the added contacts.
+  augmented construction graph. When the weak contacts plus one admissible
+  near-van-der-Waals closure define a physical pseudo-cycle, NEO adds the
+  corresponding pseudo-cycle coordinates: for a cycle of size `N`, `N`
+  distances, `N-3` angular combinations and `N-3` intra-cycle
+  torsional/puckering combinations are available to the non-redundant rank
+  selection. Protected fragment-frame coordinates remain fallback candidates
+  rather than replacing the pseudo-cycle model.
 
 Use `SPECIAL_COORDINATES` when fragment identity and relative rotations must be
 kept visible, for example molecular clusters or metal/ring-center descriptions.

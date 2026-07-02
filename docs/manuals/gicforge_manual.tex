@@ -578,9 +578,14 @@ coordinate bases for the same geometry.  The fragment model keeps
 inter-fragment rigid-body coordinates protected.  The pseudo-bond model removes
 fragment coordinates from the selected basis and lets the standard
 stretch/bend/torsion/OOP generator operate on the graph augmented by the
-selected weak contact.  Primitive candidates are still reduced by analytic
-B-matrix rank; the pseudo-bond is an internal-coordinate edge, not a request to
-keep every primitive generated around it.
+selected weak contact.  If the weak-contact graph plus one short admissible
+closure defines a physical pseudo-cycle, \program{} adds the same number of
+intra-cycle components used for ordinary rings: for a cycle of size \(N\), \(N\)
+distances, \(N-3\) angular combinations and \(N-3\) torsional/puckering
+combinations.  Long-range closures are rejected.  Primitive candidates are
+still reduced by analytic B-matrix rank; the pseudo-bond is an
+internal-coordinate edge, not a request to keep every primitive generated around
+it.
 
 The frozen \xyzin{} schema records this distinction explicitly.  Ordinary
 coordinates are written with \texttt{CLASS=ORDINARY}.  Fragment and

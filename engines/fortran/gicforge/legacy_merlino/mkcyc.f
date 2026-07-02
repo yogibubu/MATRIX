@@ -13,7 +13,9 @@
       Dimension EAN(*)
       Logical ReNumb
 C find cycles
-C H-bond pseudo-bonds inserted by MkHBnd are ordinary graph edges here.
+C H-bond pseudo-bonds inserted by MkHBnd are graph edges; when they
+C form a chemically accepted pseudo-cycle, MkCyc treats that cycle
+C like a ring source for N-3 angle and N-3 torsional components.
 C Therefore intermolecular pseudo-cycles follow the Merlino ring path:
 C CycLen gives N distances, CyGNA gives N-3 angle combinations and
 C CyGND gives N-3 intra-cycle torsional/puckering combinations.

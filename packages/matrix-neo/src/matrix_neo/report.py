@@ -312,10 +312,10 @@ def _fragment_policy_lines(definition: GICDefinition) -> list[str]:
         )
         lines.extend(
             [
-                "Policy: explicit graph-joining mode; do not build protected fragment coordinates.",
+                "Policy: explicit graph-joining mode with protected pseudo-cycle coordinates.",
                 "Selection: Merlino/BDPCS3 H-bonds first, closest inter-fragment fallback otherwise.",
                 "Pseudo-bonds: " + _list_or_none(contacts),
-                "Rationale: use ordinary stretch/bend/torsion coordinates on the augmented construction graph.",
+                "Rationale: use ordinary stretch/bend/torsion coordinates on the augmented construction graph and complete the inter-fragment span with pseudo-cycle bending/torsional components.",
             ]
         )
     else:

@@ -1609,7 +1609,7 @@ def test_gicforge_build_uses_built_fragments_for_relative_coordinates(tmp_path):
     assert any("family=FRAG_DISTANCE" in line for line in report_lines)
 
 
-def test_gicforge_pseudo_bond_fragment_mode_uses_standard_internal_coordinates(tmp_path):
+def test_gicforge_pseudo_bond_fragment_mode_keeps_interfragment_coordinates(tmp_path):
     source = tmp_path / "formic_acid_water.xyz"
     source.write_text(
         "\n".join(
@@ -1683,7 +1683,7 @@ def test_gicforge_pseudo_bond_fragment_mode_uses_standard_internal_coordinates(t
     report_lines = gic_report_from_xyzin(xyzin)
     assert "Mode: PSEUDO_BONDS" in report_lines
     assert (
-        "Policy: explicit graph-joining mode; do not build protected fragment coordinates."
+        "Policy: explicit graph-joining mode with protected pseudo-cycle coordinates."
         in report_lines
     )
     assert "Pseudo-bonds: 3-8:HBOND, 5-6:HBOND" in report_lines

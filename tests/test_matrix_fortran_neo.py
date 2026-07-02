@@ -230,7 +230,8 @@ def test_python_pseudo_bond_hbond_mode_tracks_legacy_fortran_hbond_contract(tmp_
     assert "IBond(NBond(KAt),KAt)=JAt" in mkprim
     assert "pseudo-cycles exactly like rings: N distances, N-3 angles, N-3" in mkprim
     assert "No unconditional long-range closure is added here" in mkprim
-    assert "H-bond pseudo-bonds inserted by MkHBnd are ordinary graph edges" in mkcyc
+    assert "when they" in mkcyc
+    assert "form a chemically accepted pseudo-cycle" in mkcyc
     assert "CyGNA gives N-3 angle combinations" in mkcyc
     assert "CyGND gives N-3 intra-cycle torsional/puckering combinations" in mkcyc
     assert "DoHBnd = KWd(17)" in coord
